@@ -396,13 +396,21 @@ balanced <code>rexpr</code> bound are invisible; an open interval
 <code>]0, Inf[</code> never unbalances anything.</li>
 <li>
 <strong>Bound classification (ordered choice).</strong> A bound is
-matched by ordered choice: <code>-Inf</code>/<code>Inf</code> sentinel
-first, then a <code>signed_number</code> (maximal munch of
+matched by ordered choice: a bare <code>-Inf</code>/<code>Inf</code> is
+<strong>always</strong> lexed as the sentinel token (before
+<code>rexpr</code>), then a <code>signed_number</code> (maximal munch of
 <code>-?digit+(.digit+)?</code> with nothing trailing before the
-comma/close), then any other <code>rexpr</code>. A bound that lexes
-fully as a sentinel or <code>signed_number</code> is a literal (subject
-to S2/S4); anything else is an opaque <code>rexpr</code>, trusted
-(S2).</li>
+comma/close), then any other <code>rexpr</code>. The sentinel is
+<strong>side-gated</strong> — <code>-Inf</code> only in the low slot,
+<code>Inf</code> only in the high — so a wrong-side bare sentinel
+(<code>[Inf, 0]</code>, <code>]a, -Inf]</code>) has no production and is
+a genuine parse error; because a bare <code>±Inf</code> always lexes as
+the sentinel it cannot fall through to <code>rexpr</code>. (An
+<code>rexpr</code> that merely <em>evaluates</em> to <code>±Inf</code>
+is opaque and, if it makes the interval degenerate, is caught by S4.) A
+bound that lexes as a sentinel or <code>signed_number</code> is a
+literal (subject to S2/S4); anything else is a trusted
+<code>rexpr</code> (S2).</li>
 <li>
 <strong>Set dispatch after <code>in</code>.</strong> If the next
 char is <code>[</code> or <code>]</code>, parse an interval. Otherwise
@@ -496,13 +504,16 @@ field-set would they describe?).</li>
 interval bound and set element is an R expression <strong>emitted
 verbatim</strong> — roxyassert never coerces. For an inline literal the
 generator checks it matches the atom’s type: a number for
-<code>numeric</code>; a whole number written with the <code>L</code>
-suffix for <code>integer</code> (a bare <code>c(1, 2, 3)</code> for an
-<code>integer</code> atom is rejected — no coercion); a
-<strong>character literal</strong> for both <code>character</code> and
-<code>factor</code> sets (a <code>factor</code> set is given by its
-character labels, matched via <code>as.character(x)</code>, footnote 2).
-For <code>Date</code>/<code>POSIXct</code> “type” means the S3 class
+<code>numeric</code>; for <code>integer</code>, an interval
+<em>bound</em> is a bare whole number (<code>[1, 5]</code>, per
+<code>int_lo</code>/<code>int_hi</code>) while a <em>set</em> element
+carries the <code>L</code> suffix (<code>c(1L, 2L, 3L)</code>; a bare
+<code>c(1, 2, 3)</code> for an <code>integer</code> set is rejected — no
+coercion); a <strong>character literal</strong> for both
+<code>character</code> and <code>factor</code> sets (a
+<code>factor</code> set is given by its character labels, matched via
+<code>as.character(x)</code>, footnote 2). For
+<code>Date</code>/<code>POSIXct</code> “type” means the S3 class
 (<code>inherits(x, "Date")</code>), not <code>typeof</code>; the bound
 is a class-matching expression the user supplies
 (<code>as.Date(...)</code>, <code>as.POSIXct(..., tz = ...)</code>,

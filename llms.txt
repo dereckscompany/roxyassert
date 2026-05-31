@@ -136,8 +136,9 @@ a **type union**.
 
 The type token in an annotation or a column/field bullet (subject to the
 per-category rules — `scalar<>`/`vector<>` wrap only atomics and `any`;
-`function`/`R6`/`data.table`/`data.frame` are written bare; `list` is
-written bare, refined by bullets, or parameterised as `list<T>`):
+`function`/`R6` are reference types written bare;
+`list`/`data.table`/`data.frame` are composites written bare or refined
+by nested bullets, and `list` additionally as `list<T>`):
 
 | Type | R meaning |
 |----|----|

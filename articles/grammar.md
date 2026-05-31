@@ -199,11 +199,17 @@ Tokenizing rules (so the grammar is deterministic in practice):
   the interval. Commas/brackets inside a balanced `rexpr` bound are
   invisible; an open interval `]0, Inf[` never unbalances anything.
 - **Bound classification (ordered choice).** A bound is matched by
-  ordered choice: `-Inf`/`Inf` sentinel first, then a `signed_number`
-  (maximal munch of `-?digit+(.digit+)?` with nothing trailing before
-  the comma/close), then any other `rexpr`. A bound that lexes fully as
-  a sentinel or `signed_number` is a literal (subject to S2/S4);
-  anything else is an opaque `rexpr`, trusted (S2).
+  ordered choice: a bare `-Inf`/`Inf` is **always** lexed as the
+  sentinel token (before `rexpr`), then a `signed_number` (maximal munch
+  of `-?digit+(.digit+)?` with nothing trailing before the comma/close),
+  then any other `rexpr`. The sentinel is **side-gated** — `-Inf` only
+  in the low slot, `Inf` only in the high — so a wrong-side bare
+  sentinel (`[Inf, 0]`, `]a, -Inf]`) has no production and is a genuine
+  parse error; because a bare `±Inf` always lexes as the sentinel it
+  cannot fall through to `rexpr`. (An `rexpr` that merely *evaluates* to
+  `±Inf` is opaque and, if it makes the interval degenerate, is caught
+  by S4.) A bound that lexes as a sentinel or `signed_number` is a
+  literal (subject to S2/S4); anything else is a trusted `rexpr` (S2).
 - **Set dispatch after `in`.** If the next char is `[` or `]`, parse an
   interval. Otherwise scan an R expression: a lone maximal-munch `ident`
   with nothing trailing before `| , ) > ?` is a `name_set`; anything
@@ -264,23 +270,24 @@ are *specified rules*, not stylistic suggestions.
 - **S2 — bound/set element type and lowering.** Every interval bound and
   set element is an R expression **emitted verbatim** — roxyassert never
   coerces. For an inline literal the generator checks it matches the
-  atom’s type: a number for `numeric`; a whole number written with the
-  `L` suffix for `integer` (a bare `c(1, 2, 3)` for an `integer` atom is
-  rejected — no coercion); a **character literal** for both `character`
-  and `factor` sets (a `factor` set is given by its character labels,
-  matched via `as.character(x)`, footnote 2). For `Date`/`POSIXct`
-  “type” means the S3 class (`inherits(x, "Date")`), not `typeof`; the
-  bound is a class-matching expression the user supplies
-  (`as.Date(...)`, `as.POSIXct(..., tz = ...)`,
-  `lubridate::ymd_hms(...)`), so the user owns constructor/format/tz,
-  and a class/tz mismatch compares silently wrong. `Inf`/`-Inf` are
-  open-end **sentinels** — `-Inf` only the low bound, `Inf` only the
-  high — denoting “no bound that side” (the comparison is omitted), not
-  values. **With `| NA`** an interval is lowered NA-aware —
-  `all((x in range) | is.na(x))`, equivalently checked on `x[!is.na(x)]`
-  — parallel to the set form in footnote 2; the default (no `| NA`)
-  rejects NA. An opaque `name_set` or any other `rexpr` is taken on
-  trust — prefer an inline literal where it matters.
+  atom’s type: a number for `numeric`; for `integer`, an interval
+  *bound* is a bare whole number (`[1, 5]`, per `int_lo`/`int_hi`) while
+  a *set* element carries the `L` suffix (`c(1L, 2L, 3L)`; a bare
+  `c(1, 2, 3)` for an `integer` set is rejected — no coercion); a
+  **character literal** for both `character` and `factor` sets (a
+  `factor` set is given by its character labels, matched via
+  `as.character(x)`, footnote 2). For `Date`/`POSIXct` “type” means the
+  S3 class (`inherits(x, "Date")`), not `typeof`; the bound is a
+  class-matching expression the user supplies (`as.Date(...)`,
+  `as.POSIXct(..., tz = ...)`, `lubridate::ymd_hms(...)`), so the user
+  owns constructor/format/tz, and a class/tz mismatch compares silently
+  wrong. `Inf`/`-Inf` are open-end **sentinels** — `-Inf` only the low
+  bound, `Inf` only the high — denoting “no bound that side” (the
+  comparison is omitted), not values. **With `| NA`** an interval is
+  lowered NA-aware — `all((x in range) | is.na(x))`, equivalently
+  checked on `x[!is.na(x)]` — parallel to the set form in footnote 2;
+  the default (no `| NA`) rejects NA. An opaque `name_set` or any other
+  `rexpr` is taken on trust — prefer an inline literal where it matters.
 - **S3 — named composite fields, homogeneous lists, and list-columns.**
   A bulleted `list`/`data.table`/`data.frame` asserts the presence of
   the **named** fields/columns listed (`all(<names> %in% names(x))`,
