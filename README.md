@@ -19,6 +19,24 @@ then drifts from them. `roxyassert` makes the **documentation the single
 source of truth**: the same annotations render for humans *and* generate
 the checks, so they cannot disagree.
 
+## Key ideas
+
+- **One source of truth.** The typed `@param`/`@return` you write for
+  humans *is* what generates the runtime checks — they can never drift.
+- **No magic, no coercion.** Value constraints (ranges, sets) are plain
+  R expressions **copied verbatim** into the generated check. You write
+  `as.POSIXct("2024-01-01", tz = "America/New_York")` and roxyassert
+  pastes it — it never guesses a format, a constructor, or a time zone
+  on your behalf.
+- **An open type universe.** Because those bounds and set elements are
+  arbitrary R, *any* type with a constructor works — `Date`, `POSIXct`,
+  [`lubridate`](https://lubridate.tidyverse.org/), `bit64`, your own
+  S4/R6 — not a fixed built-in list. roxyassert never has to “know
+  about” your type to range-check it.
+- **Readable, debuggable output.** The generated helpers are ordinary
+  `assert` calls in a committed file you can open, read, and step
+  through.
+
 ## How it works
 
       R/*.R  (your code + typed roxygen tags)
