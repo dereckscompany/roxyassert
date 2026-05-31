@@ -69,12 +69,39 @@ A type annotation is a parenthesised token at the **start** of a
 are ignored, so adoption is incremental and opt-in.
 
 **Default arity follows R: a bare type is a *vector* of any length.** A
-scalar (length 1) is declared explicitly.
+scalar (length 1) is declared explicitly with `scalar<...>`.
+
+The `<>` generic sets the **shape**; everything else attaches to the
+type expression:
+
+- **Shape (`<>`):** `scalar<...>`, `vector<..., length>`, `R6<...>`. A
+  **bare type is already a vector**, so you only reach for `<>` when you
+  need length 1 (`scalar`), an explicit length, or an R6 class.
+- **Element constraints:** `in <interval-or-set>` and `| NA` attach to
+  the *element type* — **bare or wrapped**. `(numeric in [0, Inf[)` is a
+  non-negative numeric vector; `(scalar<numeric in [0, Inf[>)` is a
+  single non-negative number.
+- **Slot (whole argument):** a trailing `?` (may be `NULL`) and `|`
+  type-unions.
+
+| Bracket / token | Meaning |
+|----|----|
+| `< >` | generics — **shape only**: `scalar`, `vector`, `R6` |
+| `[ ] / ] [` | a numeric **interval** — `[`/`]` closed, `]`/`[` open (ISO/Bourbaki) |
+| `in` | a value-constraint on the element type: an interval, or an R set |
+| `c(...)` / a name | a **set** of allowed values (an enum) |
+| `,` | a vector **length** (inside `<>`) |
+| `\| NA` | elements may be `NA` (bare or wrapped) — default: **not** allowed |
+| `?` / `\| NULL` | the whole argument may be `NULL` (slot level) |
+| `\| <type>` | a union with another type, e.g. `numeric \| character` |
+
+The `\|` operator is read by what follows it: **`NA`** = elements may be
+missing, **`NULL`** = the whole argument may be `NULL`, anything else =
+a **type union**.
 
 ### Base types
 
-Every type below is valid wherever a `<type>` appears (inline or in a
-column/field bullet):
+Valid wherever a `<type>` appears (inline, or in a column/field bullet):
 
 | Type         | R meaning                           |
 |--------------|-------------------------------------|
@@ -93,23 +120,28 @@ column/field bullet):
 | `data.frame` | a `data.frame` (see composite form) |
 | `R6<Class>`  | an R6 instance inheriting `Class`   |
 
-### Inline forms (generics)
+### Inline forms
 
 | Intent | Annotation |
 |----|----|
 | vector of any length (default) | `(character)` |
 | scalar — length 1 | `(scalar<character>)` |
 | exactly *n* | `(vector<numeric, 10>)` |
-| length range | `(vector<numeric, 1..10>)` |
-| length at least *n* | `(vector<numeric, 2..>)` |
-| nullable / optional (`NULL` or missing passes) | `(numeric?)` |
-| enum — inline literals | `(enum<character, "BUY" \| "SELL">)` |
-| enum — from a constant/object | `(enum<character, ORDER_SIDE>)` |
+| length range / at least *n* | `(vector<numeric, 1..10>)` / `(vector<numeric, 2..>)` |
+| between 1 and 5 (inclusive) | `(scalar<numeric in [1, 5]>)` |
+| greater than 0 | `(scalar<numeric in ]0, Inf[>)` |
+| at most 1 | `(scalar<numeric in ]-Inf, 1]>)` |
+| every element of a vector in a range | `(numeric in [1, 5])` |
+| enum — inline set (scalar) | `(scalar<character in c("BUY", "SELL")>)` |
+| enum — vector from a constant | `(character in ORDER_SIDE)` |
+| `NA` elements allowed | `(numeric \| NA)` |
+| nullable slot | `(scalar<numeric>?)` ≡ `(scalar<numeric> \| NULL)` |
+| union of types | `(numeric \| character)` |
 | R6 instance | `(R6<Engine>)` |
 
-The generic style is the explicit, uniform spelling: everything is
-`kind<type, ...>` (the same shape as C++ templates or TypeScript’s
-`Array<T>`). The `?` modifier composes, e.g. `(scalar<numeric>?)`.
+Everything composes. For example `(vector<numeric in ]0, 1] | NA, 10>)`
+means: a numeric vector of length 10, every element in `(0, 1]`, `NA`
+allowed.
 
 ### Composite types — nested bullets
 
@@ -124,10 +156,10 @@ you can compose tables inside lists inside lists. Each bullet is
 #' - ok (scalar<logical>): whether the query succeeded.
 #' - rows (data.table): matched rows:
 #'   - id (character): row identifier.
-#'   - value (numeric): the value.
+#'   - value (numeric in [0, Inf[): the (non-negative) value.
 #' - meta (list): pagination metadata:
-#'   - page (scalar<integer>): current page.
-#'   - cursor (character?): next-page cursor, or NULL at the end.
+#'   - page (scalar<integer in [1, Inf[>): current page.
+#'   - cursor (scalar<character>?): next-page cursor, or NULL at the end.
 ```
 
 Because each leaf is checked for an atomic type, **list-columns are
@@ -140,9 +172,9 @@ list fails.
 #' Submit an order.
 #'
 #' @param symbol (scalar<character>) normalised `BASE/QUOTE` pair.
-#' @param side (enum<character, "BUY" | "SELL">) order side.
-#' @param quantity (scalar<numeric>) order size in the base asset.
-#' @param price_limit (scalar<numeric>?) limit price; `NULL` for market orders.
+#' @param side (scalar<character in c("BUY", "SELL")>) order side.
+#' @param quantity (scalar<numeric in ]0, Inf[>) order size (positive).
+#' @param price_limit (scalar<numeric in ]0, Inf[>?) limit price; `NULL` for market orders.
 #' @return (data.table) the accepted order:
 #' - order_id (character): exchange order id.
 #' - status (character): order status.
@@ -158,28 +190,32 @@ submit_order <- function(symbol, side, quantity, price_limit = NULL) {
 
 ## Demos
 
-### Composed list with a nested table
+### Deeply nested composition
 
 ``` r
-#' Run a screen and return results plus diagnostics.
+#' Run a report.
 #'
 #' @param symbols (character) one or more `BASE/QUOTE` pairs.
-#' @param top_n (scalar<integer>) how many rows to keep.
-#' @param weights (vector<numeric, 1..>?) optional per-symbol weights.
-#' @return (list) the screen output:
-#' - matched (data.table): ranked matches:
-#'   - symbol (character): the pair.
-#'   - score (numeric): rank score.
-#'   - tags (character): label(s) on the match.
-#' - summary (list): run summary:
-#'   - n_in (scalar<integer>): symbols screened.
-#'   - n_out (scalar<integer>): rows returned.
-#'   - ran_at (scalar<POSIXct>): run timestamp.
+#' @param top_n (scalar<integer in [1, Inf[>) how many rows to keep.
+#' @return (list) the report:
+#' - status (scalar<character in c("ok", "partial", "failed")>): outcome.
+#' - result (list): the payload:
+#'   - rows (data.table): ranked rows:
+#'     - symbol (character): the pair.
+#'     - score (numeric in [0, Inf[): rank score.
+#'   - pagination (list): cursor state:
+#'     - page (scalar<integer in [1, Inf[>): current page.
+#'     - cursor (scalar<character>?): next cursor, or NULL at the end.
+#' - diagnostics (list): run diagnostics:
+#'   - warnings (character): messages (possibly length 0).
+#'   - timings (list): millisecond timings:
+#'     - parse_ms (scalar<numeric in [0, Inf[>): parse time.
+#'     - run_ms (scalar<numeric in [0, Inf[>): run time.
 #' @export
-screen <- function(symbols, top_n, weights = NULL) {
-  assert_args_screen(symbols, top_n, weights)
+report <- function(symbols, top_n) {
+  assert_args_report(symbols, top_n)
   result <- ...
-  return(assert_return_screen(result))
+  return(assert_return_report(result))
 }
 ```
 
@@ -189,11 +225,11 @@ screen <- function(symbols, top_n, weights = NULL) {
 #' Open orders for a symbol.
 #'
 #' @param symbol (scalar<character>) the pair.
-#' @param statuses (enum<character, "OPEN" | "PARTIALLY_FILLED">) statuses to include.
+#' @param statuses (character in c("OPEN", "PARTIALLY_FILLED")) statuses to include.
 #' @return (data.table) the open orders, newest first:
 #' - order_id (character): exchange id.
 #' - side (factor): BUY or SELL.
-#' - quantity (numeric): remaining size.
+#' - quantity (numeric in ]0, Inf[): remaining size.
 #' - reduce_only (logical): reduce-only flag.
 #' - created_at (POSIXct): submission time.
 #' @export
@@ -231,9 +267,8 @@ inputs and outputs from the docs.
   `R/contracts-generated.R` (with a do-not-edit banner) that you commit
   like `NAMESPACE`. Each package generates and uses its own.
 - **Using them is optional.** The helpers are generated for you
-  regardless; *calling* them is opt-in. You can adopt them in one
-  function, a few, or all — and a function with no typed tags is simply
-  left alone.
+  regardless; *calling* them is opt-in. Adopt them in one function, a
+  few, or all — a function with no typed tags is simply left alone.
 
 ## Why annotations, not in-code types
 
