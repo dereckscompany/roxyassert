@@ -13,6 +13,7 @@
 <script src="deps/headroom-0.11.0/headroom.min.js"></script><script src="deps/headroom-0.11.0/jQuery.headroom.min.js"></script><script src="deps/bootstrap-toc-1.0.1/bootstrap-toc.min.js"></script><script src="deps/clipboard.js-2.0.11/clipboard.min.js"></script><script src="deps/search-1.0.0/autocomplete.jquery.min.js"></script><script src="deps/search-1.0.0/fuse.min.js"></script><script src="deps/search-1.0.0/mark.min.js"></script><!-- pkgdown --><script src="pkgdown.js"></script><meta property="og:title" content="Generate Runtime Assertions from roxygen2 Documentation">
 <meta name="description" content="A roxygen2 roclet that turns structured type annotations in @param and @return documentation into per-function argument and return assertion helpers, generated at document() time. The generated checks are calls to the assert package, so a function's documented contract and its runtime validation come from a single source and cannot drift apart.">
 <meta property="og:description" content="A roxygen2 roclet that turns structured type annotations in @param and @return documentation into per-function argument and return assertion helpers, generated at document() time. The generated checks are calls to the assert package, so a function's documented contract and its runtime validation come from a single source and cannot drift apart.">
+<meta property="og:image" content="https://dereckscompany.github.io/roxyassert/logo.png">
 </head>
 <body>
     <a href="#main" class="visually-hidden-focusable">Skip to contents</a>
@@ -22,7 +23,7 @@
 
     <a class="navbar-brand me-2" href="index.html">roxyassert</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.0.0.9000</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.1.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -53,8 +54,10 @@
 </nav><div class="container template-home">
 <div class="row">
   <main id="main" class="col-md-9"><div class="section level1">
-<div class="page-header"><h1 id="roxyassert">roxyassert<a class="anchor" aria-label="anchor" href="#roxyassert"></a>
-</h1></div>
+<div class="page-header">
+<img src="logo.png" class="logo" alt=""><h1 id="roxyassert">roxyassert<a class="anchor" aria-label="anchor" href="#roxyassert"></a>
+</h1>
+</div>
 <blockquote>
 <p>Write the contract once — in your roxygen2 docs — and generate the runtime checks.</p>
 </blockquote>
@@ -121,11 +124,19 @@
 <span><span class="co"># or: remotes::install_github("dereckscompany/roxyassert")</span></span></code></pre></div>
 </div>
 <div class="section level2">
-<h2 id="setup-one-line">Setup (one line)<a class="anchor" aria-label="anchor" href="#setup-one-line"></a>
+<h2 id="setup">Setup<a class="anchor" aria-label="anchor" href="#setup"></a>
 </h2>
 <p>Register the roclet in your package’s <code>DESCRIPTION</code>:</p>
 <pre class="dcf"><code><span><span class="va">Roxygen</span><span class="op">:</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>markdown <span class="op">=</span> <span class="cn">TRUE</span>, roclets <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"namespace"</span>, <span class="st">"rd"</span>, <span class="st">"roxyassert::contract_roclet"</span><span class="op">)</span><span class="op">)</span></span></code></pre>
+<p>The generated helpers call <code>assert::*</code> functions by their bare names, so make <code>assert</code> an import of your package — add it to <code>Imports</code> and bring its namespace in once (e.g. a package-level <code>#' @import assert</code>):</p>
+<pre class="dcf"><code><span><span class="va">Imports</span><span class="op">:</span> <span class="va">assert</span></span></code></pre>
+<div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="co">#' @import assert</span></span>
+<span><span class="cn">NULL</span></span></code></pre></div>
 <p><code>devtools::document()</code> then runs <code>roxyassert</code> alongside the built-in roclets and (re)writes <code>R/contracts-generated.R</code>.</p>
+<blockquote>
+<p><strong>Note — a harmless markdown warning.</strong> With <code>markdown = TRUE</code>, roxygen2’s link resolver sees the <code>[ ]</code> of an interval (<code>[0, 1]</code>) or a <code>[[ ]]</code> subscript bound in a <code>@param</code>/<code>@return</code> description and reports a “could not resolve link” <strong>warning</strong> during <code>document()</code>. It is cosmetic: the <code>.Rd</code> still builds and the generated checks are unaffected — <code>roxyassert</code> reads each tag’s untouched <strong>raw</strong> text, never the markdown-rendered version. You can ignore the warning, or avoid it by escaping the bracket (<code>\[0, 1\]</code>) in the description if your help pages must be warning-clean.</p>
+</blockquote>
 </div>
 <div class="section level2">
 <h2 id="the-annotation-grammar">The annotation grammar<a class="anchor" aria-label="anchor" href="#the-annotation-grammar"></a>
@@ -285,7 +296,7 @@
 <h3 id="composite-types--nested-bullets">Composite types — nested bullets<a class="anchor" aria-label="anchor" href="#composite-types--nested-bullets"></a>
 </h3>
 <p><code>list</code>, <code>data.table</code>, and <code>data.frame</code> describe their contents as a <strong>markdown bullet list</strong> beneath the tag. Bullets nest arbitrarily, so you can compose tables inside lists inside lists. Each bullet is <code>- name (type) description</code>; a <code>:</code> after the <code>)</code> is tolerated but optional, and <strong>bold around the name is optional</strong> (<code>- **name** (type) ...</code> also works).</p>
-<div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co">#' @return (list) the query result:</span></span>
 <span><span class="co">#' - ok (scalar&lt;logical&gt;) whether the query succeeded.</span></span>
 <span><span class="co">#' - rows (data.table) matched rows:</span></span>
@@ -295,7 +306,7 @@
 <span><span class="co">#'   - page (scalar&lt;integer in [1, Inf[&gt;) current page.</span></span>
 <span><span class="co">#'   - cursor (scalar&lt;character&gt;?) next-page cursor, or NULL at the end.</span></span></code></pre></div>
 <p>A column declared with an <strong>atomic</strong> type is checked for that type, so a column declared <code>(numeric)</code> that actually holds a list <strong>fails</strong> — the intended way to catch an accidental list-column. To declare one <em>on purpose</em>, type it <code>list&lt;T&gt;</code> (each cell a <code>T</code>) or <code>list&lt;any&gt;</code> (arbitrary cells). <code>list&lt;T&gt;</code> is also how you write any homogeneous list — <code>list&lt;function&gt;</code> (callbacks), <code>list&lt;R6&lt;Model&gt;&gt;</code> (model objects):</p>
-<div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co">#' @return (data.table) rows:</span></span>
 <span><span class="co">#' - id (character) identifier.</span></span>
 <span><span class="co">#' - tags (list&lt;character&gt;) a list-column; each cell a character vector.</span></span>
@@ -305,7 +316,7 @@
 <div class="section level2">
 <h2 id="quick-example">Quick example<a class="anchor" aria-label="anchor" href="#quick-example"></a>
 </h2>
-<div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co">#' Submit an order.</span></span>
 <span><span class="co">#'</span></span>
 <span><span class="co">#' @param symbol (scalar&lt;character&gt;) normalised `BASE/QUOTE` pair.</span></span>
@@ -330,7 +341,7 @@
 <div class="section level3">
 <h3 id="deeply-nested-composition">Deeply nested composition<a class="anchor" aria-label="anchor" href="#deeply-nested-composition"></a>
 </h3>
-<div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb9"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co">#' Run a report.</span></span>
 <span><span class="co">#'</span></span>
 <span><span class="co">#' @param symbols (character) one or more `BASE/QUOTE` pairs.</span></span>
@@ -359,7 +370,7 @@
 <div class="section level3">
 <h3 id="a-datatable-with-mixed-column-types">A data.table with mixed column types<a class="anchor" aria-label="anchor" href="#a-datatable-with-mixed-column-types"></a>
 </h3>
-<div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb10"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co">#' Open orders for a symbol.</span></span>
 <span><span class="co">#'</span></span>
 <span><span class="co">#' @param symbol (scalar&lt;character&gt;) the pair.</span></span>
@@ -417,7 +428,7 @@
 <div class="section level2">
 <h2 id="citation">Citation<a class="anchor" aria-label="anchor" href="#citation"></a>
 </h2>
-<div class="sourceCode" id="cb9"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb11"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/utils/citation.html" class="external-link">citation</a></span><span class="op">(</span><span class="st">"roxyassert"</span><span class="op">)</span></span></code></pre></div>
 </div>
 </div>

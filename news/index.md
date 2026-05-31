@@ -1,0 +1,43 @@
+# Changelog
+
+## roxyassert 0.1.0
+
+Initial release.
+
+`roxyassert` is a roxygen2 roclet: at `document()` time it reads
+structured type annotations in your `@param` / `@return` documentation
+and writes per-function assertion helpers (calls to the
+[`assert`](https://github.com/dereckscompany/assert) package) into
+`R/contracts-generated.R`, so a function’s documented contract and its
+runtime validation come from a single source.
+
+### Features
+
+- [`contract_roclet()`](https://dereckscompany.github.io/roxyassert/reference/contract_roclet.md)
+  — register it in `DESCRIPTION`
+  (`Roxygen: list(roclets = c("namespace", "rd", "roxyassert::contract_roclet"))`)
+  to generate `assert_args_<fn>()` and `assert_return_<fn>()` for every
+  documented function with a typed `(...)` annotation; untyped tags are
+  left untouched, so adoption is incremental.
+- A bespoke, self-contained annotation grammar (see
+  [`vignette("grammar")`](https://dereckscompany.github.io/roxyassert/articles/grammar.md)):
+  - bare atomics as vectors, `scalar<>` / `vector<..., length>` shapes,
+    and the `any` wildcard;
+  - `in [interval]` (ISO/Bourbaki open/closed brackets, `±Inf`
+    sentinels) and `in c(set)` / bare-constant sets, with values copied
+    **verbatim** — no coercion;
+  - `| NA` (element-level) and `?` / `| NULL` (whole-argument)
+    modifiers, and `|` type unions;
+  - composite records and typed `data.table` / `data.frame` columns via
+    nested `- name (type)` bullets, and homogeneous `list<T>`;
+  - reference types `function` and `R6<Class>`.
+- R6 method contracts: methods documented inline generate
+  `assert_args_<Class>__<method>()` /
+  `assert_return_<Class>__<method>()`.
+- Annotation text is read from each tag’s raw source, so the grammar’s
+  `<...>` and `[...]` survive roxygen2’s `markdown = TRUE` processing.
+
+### Notes
+
+- The generated helpers call `assert::*` by bare name; make `assert` an
+  import of your package (see the README).

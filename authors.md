@@ -8,7 +8,7 @@
 ## Citation
 
 Source:
-[`inst/CITATION`](https://github.com/dereckscompany/roxyassert/blob/master/inst/CITATION)
+[`inst/CITATION`](https://github.com/dereckscompany/roxyassert/blob/v0.1.0/inst/CITATION)
 
 Mezquita, D. (2026). roxyassert: Generate Runtime Assertions from
 roxygen2 Documentation. R package version 0.0.0.9000. Available at

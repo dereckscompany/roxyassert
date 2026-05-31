@@ -38,10 +38,12 @@ itself — it must agree with itself everywhere.
     expression bound on `integer` (integer bounds are literal whole
     numbers or `±Inf`), a `vector` of `function`, `| NA` on `raw`, a
     constraint on `any`. `Inf`/`-Inf` are side-specific sentinels
-    (`-Inf` low only, `Inf` high only). A `numeric`/`Date`/`POSIXct`
-    bound, by contrast, is an opaque expression — `0` and `as.Date(...)`
-    both parse — so whether it is of the atom’s class is a static check
-    (S2), not a grammatical one.
+    (`-Inf` low only, `Inf` high only). A `numeric` bound, by contrast,
+    is an opaque expression — a number (`0`) or any R expression —
+    checked only for being valid R. A `Date`/`POSIXct` bound must be a
+    class-matching expression (`as.Date(...)`): a bare number is
+    rejected as a type error (S2), and any other expression is taken on
+    trust.
 
 ## 2. Type categories
 
@@ -611,11 +613,12 @@ AbstractStore <- R6::R6Class(
 
 ``` r
 # union mixing a constrained vector, NA permission, and NULL
-(numeric in [0, 1] | NA | character)?
+(numeric in [0, 1] | NA | character?)
 # read: NULL, OR (a numeric vector in [0,1], NAs allowed) OR (a character vector)
+# (the `?` is the slot tail, INSIDE the parens — never `(...)?`)
 
 # scalar union, nullable
-(scalar<integer in [1, 6]> | scalar<character in c("d6")>)?
+(scalar<integer in [1, 6]> | scalar<character in c("d6")>?)
 
 # length-pinned, NA-allowed, range-constrained, nullable
 (vector<numeric in [-1, 1] | NA, 3>?)
@@ -646,10 +649,15 @@ AbstractStore <- R6::R6Class(
 # (scalar<numeric, 1>)            # scalar takes no length
 # (scalar<numeric> | NA)          # | NA must be inside <>: use (scalar<numeric | NA>)
 # (numeric | NULL?)               # pick one nullability marker, not both
+# (numeric)?                      # '?' goes inside the parens: write (numeric?)
 # (complex in [0, 1])             # interval on a non-ordered type
 # (character in [0, 1])           # interval on a non-ordered type (use a set)
 # (integer in [0.5, 2.5])         # fractional bounds on integer
+# (integer in c(1, 2, 3))         # S2: integer set needs the L suffix: c(1L, 2L, 3L)
+# (character in c(1, 2))          # S2: character set elements must be string literals
+# (Date in [0, 1])                # S2: a Date bound must be of class Date, not a bare number
 # (numeric in [Inf, 0])           # Inf is the HIGH sentinel only; -Inf the low
+# (numeric in ]-Inf, Inf[)        # both-sentinel: imposes no bound (drop the `in [..]`)
 # (numeric in ]1, 1[)             # S4: empty / reversed interval (never satisfiable)
 # (logical in c(TRUE, FALSE))     # logical takes no set (degenerate)
 # (complex in c(0+0i, 1+0i))      # complex takes no set
@@ -694,10 +702,11 @@ Every base type sits in exactly one category (§2); every modifier it
 carries is a ✅ in that category’s row — no per-type exceptions.
 
 `in [interval]` appears only on `integer`/`numeric`/`Date`/`POSIXct`;
-integer bounds are literal whole numbers / `±Inf` (no expression);
-`numeric`/`Date`/`POSIXct` bounds are expressions whose class S2 checks
-(so `Date in [0, 1]` parses but S2 rejects it); `-Inf` only as the low
-bound, `Inf` only as the high.
+integer bounds are literal whole numbers / `±Inf` (no expression); a
+`numeric` bound is a number or any expression; a `Date`/`POSIXct` bound
+must be a class-matching expression, so a bare-number bound
+(`Date in [0, 1]`) is rejected as a type error (S2); `-Inf` only as the
+low bound, `Inf` only as the high.
 
 `in c(set)` appears only on ordered + enumerable atomics; never on
 `complex`/`logical`/`raw`/`any`; exact on `integer`/whole-day `Date`,

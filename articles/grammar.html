@@ -20,7 +20,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">roxyassert</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.0.0.9000</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.1.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -55,11 +55,10 @@
 
 <div class="row">
   <main id="main" class="col-md-9"><div class="page-header">
-
-      <h1>The roxyassert annotation grammar — complete reference</h1>
+      <img src="../logo.png" class="logo" alt=""><h1>The roxyassert annotation grammar — complete reference</h1>
             
       
-      <small class="dont-index">Source: <a href="https://github.com/dereckscompany/roxyassert/blob/master/vignettes/grammar.Rmd" class="external-link"><code>vignettes/grammar.Rmd</code></a></small>
+      <small class="dont-index">Source: <a href="https://github.com/dereckscompany/roxyassert/blob/v0.1.0/vignettes/grammar.Rmd" class="external-link"><code>vignettes/grammar.Rmd</code></a></small>
       <div class="d-none name"><code>grammar.Rmd</code></div>
     </div>
 
@@ -118,10 +117,12 @@ on <code>integer</code> (integer bounds are literal whole numbers or
 <code>| NA</code> on <code>raw</code>, a constraint on <code>any</code>.
 <code>Inf</code>/<code>-Inf</code> are side-specific sentinels
 (<code>-Inf</code> low only, <code>Inf</code> high only). A
-<code>numeric</code>/<code>Date</code>/<code>POSIXct</code> bound, by
-contrast, is an opaque expression — <code>0</code> and
-<code>as.Date(...)</code> both parse — so whether it is of the atom’s
-class is a static check (S2), not a grammatical one.</li>
+<code>numeric</code> bound, by contrast, is an opaque expression — a
+number (<code>0</code>) or any R expression — checked only for being
+valid R. A <code>Date</code>/<code>POSIXct</code> bound must be a
+class-matching expression (<code>as.Date(...)</code>): a bare number is
+rejected as a type error (S2), and any other expression is taken on
+trust.</li>
 </ol>
 </div>
 <div class="section level2">
@@ -972,59 +973,65 @@ list-column) whose every element is <code>T</code>
 <h2 id="demo-4-corner-cases-and-tricky-combinations">11. Demo 4 — corner cases and tricky combinations<a class="anchor" aria-label="anchor" href="#demo-4-corner-cases-and-tricky-combinations"></a>
 </h2>
 <div class="sourceCode" id="cb6"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb6-1"><a href="#cb6-1" tabindex="-1"></a><span class="co"># union mixing a constrained vector, NA permission, and NULL</span></span>
-<span id="cb6-2"><a href="#cb6-2" tabindex="-1"></a>(numeric <span class="cf">in</span> [<span class="dv">0</span>, <span class="dv">1</span>] <span class="sc">|</span> <span class="cn">NA</span> <span class="sc">|</span> character)?</span>
+<span id="cb6-2"><a href="#cb6-2" tabindex="-1"></a>(numeric <span class="cf">in</span> [<span class="dv">0</span>, <span class="dv">1</span>] <span class="sc">|</span> <span class="cn">NA</span> <span class="sc">|</span> character?)</span>
 <span id="cb6-3"><a href="#cb6-3" tabindex="-1"></a><span class="co"># read: NULL, OR (a numeric vector in [0,1], NAs allowed) OR (a character vector)</span></span>
-<span id="cb6-4"><a href="#cb6-4" tabindex="-1"></a></span>
-<span id="cb6-5"><a href="#cb6-5" tabindex="-1"></a><span class="co"># scalar union, nullable</span></span>
-<span id="cb6-6"><a href="#cb6-6" tabindex="-1"></a>(scalar<span class="sc">&lt;</span>integer <span class="cf">in</span> [<span class="dv">1</span>, <span class="dv">6</span>]<span class="sc">&gt;</span> <span class="er">|</span> scalar<span class="sc">&lt;</span>character <span class="cf">in</span> <span class="fu">c</span>(<span class="st">"d6"</span>)<span class="sc">&gt;</span>)?</span>
-<span id="cb6-7"><a href="#cb6-7" tabindex="-1"></a></span>
-<span id="cb6-8"><a href="#cb6-8" tabindex="-1"></a><span class="co"># length-pinned, NA-allowed, range-constrained, nullable</span></span>
-<span id="cb6-9"><a href="#cb6-9" tabindex="-1"></a>(vector<span class="sc">&lt;</span>numeric <span class="cf">in</span> [<span class="sc">-</span><span class="dv">1</span>, <span class="dv">1</span>] <span class="sc">|</span> <span class="cn">NA</span>, <span class="dv">3</span><span class="sc">&gt;</span>?)</span>
-<span id="cb6-10"><a href="#cb6-10" tabindex="-1"></a></span>
-<span id="cb6-11"><a href="#cb6-11" tabindex="-1"></a><span class="co"># set from a bare constant, as a vector</span></span>
-<span id="cb6-12"><a href="#cb6-12" tabindex="-1"></a>(character <span class="cf">in</span> CURRENCIES)</span>
-<span id="cb6-13"><a href="#cb6-13" tabindex="-1"></a></span>
-<span id="cb6-14"><a href="#cb6-14" tabindex="-1"></a><span class="co"># reference / wildcard, nullable / unioned</span></span>
-<span id="cb6-15"><a href="#cb6-15" tabindex="-1"></a>(<span class="cf">function</span>?)                       <span class="co"># a function, or NULL</span></span>
-<span id="cb6-16"><a href="#cb6-16" tabindex="-1"></a>(R6<span class="sc">&lt;</span>Engine<span class="sc">&gt;</span> <span class="er">|</span> <span class="cn">NULL</span>)               <span class="co"># an Engine, or NULL</span></span>
-<span id="cb6-17"><a href="#cb6-17" tabindex="-1"></a>(R6<span class="sc">&lt;</span>Reader<span class="sc">&gt;</span> <span class="er">|</span> R6<span class="sc">&lt;</span>Writer<span class="sc">&gt;</span>)         <span class="co"># either class</span></span>
-<span id="cb6-18"><a href="#cb6-18" tabindex="-1"></a>(any)                             <span class="co"># truly polymorphic argument, unchecked</span></span>
-<span id="cb6-19"><a href="#cb6-19" tabindex="-1"></a></span>
-<span id="cb6-20"><a href="#cb6-20" tabindex="-1"></a><span class="co"># a data.table with list-columns (type the column list&lt;T&gt;)</span></span>
-<span id="cb6-21"><a href="#cb6-21" tabindex="-1"></a>(data.table)</span>
-<span id="cb6-22"><a href="#cb6-22" tabindex="-1"></a><span class="co"># - id (character) identifier.</span></span>
-<span id="cb6-23"><a href="#cb6-23" tabindex="-1"></a><span class="co"># - tags (list&lt;character&gt;) a list-column; each cell a character vector.</span></span>
-<span id="cb6-24"><a href="#cb6-24" tabindex="-1"></a><span class="co"># - blob (list&lt;any&gt;) a list-column of arbitrary cells (no per-cell check).</span></span>
-<span id="cb6-25"><a href="#cb6-25" tabindex="-1"></a></span>
-<span id="cb6-26"><a href="#cb6-26" tabindex="-1"></a><span class="co"># nested list whose only field is a nullable nested table</span></span>
-<span id="cb6-27"><a href="#cb6-27" tabindex="-1"></a>(list)</span>
-<span id="cb6-28"><a href="#cb6-28" tabindex="-1"></a><span class="co"># - page (scalar&lt;integer in [1, Inf[&gt;) page number.</span></span>
-<span id="cb6-29"><a href="#cb6-29" tabindex="-1"></a><span class="co"># - rows (data.table | NULL) the page, or NULL when empty:</span></span>
-<span id="cb6-30"><a href="#cb6-30" tabindex="-1"></a><span class="co">#   - id (character) identifier.</span></span>
-<span id="cb6-31"><a href="#cb6-31" tabindex="-1"></a><span class="co">#   - amount (numeric in ]0, Inf[ | NA) positive amount, NA if pending.</span></span>
-<span id="cb6-32"><a href="#cb6-32" tabindex="-1"></a></span>
-<span id="cb6-33"><a href="#cb6-33" tabindex="-1"></a><span class="co"># --- intentionally INVALID ---</span></span>
-<span id="cb6-34"><a href="#cb6-34" tabindex="-1"></a><span class="co"># (scalar&lt;numeric, 1&gt;)            # scalar takes no length</span></span>
-<span id="cb6-35"><a href="#cb6-35" tabindex="-1"></a><span class="co"># (scalar&lt;numeric&gt; | NA)          # | NA must be inside &lt;&gt;: use (scalar&lt;numeric | NA&gt;)</span></span>
-<span id="cb6-36"><a href="#cb6-36" tabindex="-1"></a><span class="co"># (numeric | NULL?)               # pick one nullability marker, not both</span></span>
-<span id="cb6-37"><a href="#cb6-37" tabindex="-1"></a><span class="co"># (complex in [0, 1])             # interval on a non-ordered type</span></span>
-<span id="cb6-38"><a href="#cb6-38" tabindex="-1"></a><span class="co"># (character in [0, 1])           # interval on a non-ordered type (use a set)</span></span>
-<span id="cb6-39"><a href="#cb6-39" tabindex="-1"></a><span class="co"># (integer in [0.5, 2.5])         # fractional bounds on integer</span></span>
-<span id="cb6-40"><a href="#cb6-40" tabindex="-1"></a><span class="co"># (numeric in [Inf, 0])           # Inf is the HIGH sentinel only; -Inf the low</span></span>
-<span id="cb6-41"><a href="#cb6-41" tabindex="-1"></a><span class="co"># (numeric in ]1, 1[)             # S4: empty / reversed interval (never satisfiable)</span></span>
-<span id="cb6-42"><a href="#cb6-42" tabindex="-1"></a><span class="co"># (logical in c(TRUE, FALSE))     # logical takes no set (degenerate)</span></span>
-<span id="cb6-43"><a href="#cb6-43" tabindex="-1"></a><span class="co"># (complex in c(0+0i, 1+0i))      # complex takes no set</span></span>
-<span id="cb6-44"><a href="#cb6-44" tabindex="-1"></a><span class="co"># (raw in OPCODES)                # raw takes no set</span></span>
-<span id="cb6-45"><a href="#cb6-45" tabindex="-1"></a><span class="co"># (raw | NA)                      # raw has no NA representation</span></span>
-<span id="cb6-46"><a href="#cb6-46" tabindex="-1"></a><span class="co"># (any in c(1, 2))                # any takes no constraint</span></span>
-<span id="cb6-47"><a href="#cb6-47" tabindex="-1"></a><span class="co"># (any | NA)                      # any takes no | NA</span></span>
-<span id="cb6-48"><a href="#cb6-48" tabindex="-1"></a><span class="co"># (scalar&lt;function&gt;)              # function is bare: write (function)</span></span>
-<span id="cb6-49"><a href="#cb6-49" tabindex="-1"></a><span class="co"># (vector&lt;function, 3&gt;)           # function is a length-1 reference (scope choice, §12)</span></span>
-<span id="cb6-50"><a href="#cb6-50" tabindex="-1"></a><span class="co"># (R6 | NULL)                     # R6 must name a class: R6&lt;Class&gt;</span></span>
-<span id="cb6-51"><a href="#cb6-51" tabindex="-1"></a><span class="co"># (data.table | NA)               # | NA is element-level; not valid on a composite</span></span>
-<span id="cb6-52"><a href="#cb6-52" tabindex="-1"></a><span class="co"># (data.table | data.frame): ...  # S1: bullets need a single bare composite</span></span>
-<span id="cb6-53"><a href="#cb6-53" tabindex="-1"></a><span class="co"># (vector&lt;numeric&gt;)               # vector&lt;&gt; requires a length — use bare (numeric)</span></span>
-<span id="cb6-54"><a href="#cb6-54" tabindex="-1"></a><span class="co"># (list&lt;numeric&gt;): ...            # S1: list&lt;T&gt; is a leaf and takes no bullets</span></span></code></pre></div>
+<span id="cb6-4"><a href="#cb6-4" tabindex="-1"></a><span class="co"># (the `?` is the slot tail, INSIDE the parens — never `(...)?`)</span></span>
+<span id="cb6-5"><a href="#cb6-5" tabindex="-1"></a></span>
+<span id="cb6-6"><a href="#cb6-6" tabindex="-1"></a><span class="co"># scalar union, nullable</span></span>
+<span id="cb6-7"><a href="#cb6-7" tabindex="-1"></a>(scalar<span class="sc">&lt;</span>integer <span class="cf">in</span> [<span class="dv">1</span>, <span class="dv">6</span>]<span class="sc">&gt;</span> <span class="er">|</span> scalar<span class="sc">&lt;</span>character <span class="cf">in</span> <span class="fu">c</span>(<span class="st">"d6"</span>)<span class="sc">&gt;</span>?)</span>
+<span id="cb6-8"><a href="#cb6-8" tabindex="-1"></a></span>
+<span id="cb6-9"><a href="#cb6-9" tabindex="-1"></a><span class="co"># length-pinned, NA-allowed, range-constrained, nullable</span></span>
+<span id="cb6-10"><a href="#cb6-10" tabindex="-1"></a>(vector<span class="sc">&lt;</span>numeric <span class="cf">in</span> [<span class="sc">-</span><span class="dv">1</span>, <span class="dv">1</span>] <span class="sc">|</span> <span class="cn">NA</span>, <span class="dv">3</span><span class="sc">&gt;</span>?)</span>
+<span id="cb6-11"><a href="#cb6-11" tabindex="-1"></a></span>
+<span id="cb6-12"><a href="#cb6-12" tabindex="-1"></a><span class="co"># set from a bare constant, as a vector</span></span>
+<span id="cb6-13"><a href="#cb6-13" tabindex="-1"></a>(character <span class="cf">in</span> CURRENCIES)</span>
+<span id="cb6-14"><a href="#cb6-14" tabindex="-1"></a></span>
+<span id="cb6-15"><a href="#cb6-15" tabindex="-1"></a><span class="co"># reference / wildcard, nullable / unioned</span></span>
+<span id="cb6-16"><a href="#cb6-16" tabindex="-1"></a>(<span class="cf">function</span>?)                       <span class="co"># a function, or NULL</span></span>
+<span id="cb6-17"><a href="#cb6-17" tabindex="-1"></a>(R6<span class="sc">&lt;</span>Engine<span class="sc">&gt;</span> <span class="er">|</span> <span class="cn">NULL</span>)               <span class="co"># an Engine, or NULL</span></span>
+<span id="cb6-18"><a href="#cb6-18" tabindex="-1"></a>(R6<span class="sc">&lt;</span>Reader<span class="sc">&gt;</span> <span class="er">|</span> R6<span class="sc">&lt;</span>Writer<span class="sc">&gt;</span>)         <span class="co"># either class</span></span>
+<span id="cb6-19"><a href="#cb6-19" tabindex="-1"></a>(any)                             <span class="co"># truly polymorphic argument, unchecked</span></span>
+<span id="cb6-20"><a href="#cb6-20" tabindex="-1"></a></span>
+<span id="cb6-21"><a href="#cb6-21" tabindex="-1"></a><span class="co"># a data.table with list-columns (type the column list&lt;T&gt;)</span></span>
+<span id="cb6-22"><a href="#cb6-22" tabindex="-1"></a>(data.table)</span>
+<span id="cb6-23"><a href="#cb6-23" tabindex="-1"></a><span class="co"># - id (character) identifier.</span></span>
+<span id="cb6-24"><a href="#cb6-24" tabindex="-1"></a><span class="co"># - tags (list&lt;character&gt;) a list-column; each cell a character vector.</span></span>
+<span id="cb6-25"><a href="#cb6-25" tabindex="-1"></a><span class="co"># - blob (list&lt;any&gt;) a list-column of arbitrary cells (no per-cell check).</span></span>
+<span id="cb6-26"><a href="#cb6-26" tabindex="-1"></a></span>
+<span id="cb6-27"><a href="#cb6-27" tabindex="-1"></a><span class="co"># nested list whose only field is a nullable nested table</span></span>
+<span id="cb6-28"><a href="#cb6-28" tabindex="-1"></a>(list)</span>
+<span id="cb6-29"><a href="#cb6-29" tabindex="-1"></a><span class="co"># - page (scalar&lt;integer in [1, Inf[&gt;) page number.</span></span>
+<span id="cb6-30"><a href="#cb6-30" tabindex="-1"></a><span class="co"># - rows (data.table | NULL) the page, or NULL when empty:</span></span>
+<span id="cb6-31"><a href="#cb6-31" tabindex="-1"></a><span class="co">#   - id (character) identifier.</span></span>
+<span id="cb6-32"><a href="#cb6-32" tabindex="-1"></a><span class="co">#   - amount (numeric in ]0, Inf[ | NA) positive amount, NA if pending.</span></span>
+<span id="cb6-33"><a href="#cb6-33" tabindex="-1"></a></span>
+<span id="cb6-34"><a href="#cb6-34" tabindex="-1"></a><span class="co"># --- intentionally INVALID ---</span></span>
+<span id="cb6-35"><a href="#cb6-35" tabindex="-1"></a><span class="co"># (scalar&lt;numeric, 1&gt;)            # scalar takes no length</span></span>
+<span id="cb6-36"><a href="#cb6-36" tabindex="-1"></a><span class="co"># (scalar&lt;numeric&gt; | NA)          # | NA must be inside &lt;&gt;: use (scalar&lt;numeric | NA&gt;)</span></span>
+<span id="cb6-37"><a href="#cb6-37" tabindex="-1"></a><span class="co"># (numeric | NULL?)               # pick one nullability marker, not both</span></span>
+<span id="cb6-38"><a href="#cb6-38" tabindex="-1"></a><span class="co"># (numeric)?                      # '?' goes inside the parens: write (numeric?)</span></span>
+<span id="cb6-39"><a href="#cb6-39" tabindex="-1"></a><span class="co"># (complex in [0, 1])             # interval on a non-ordered type</span></span>
+<span id="cb6-40"><a href="#cb6-40" tabindex="-1"></a><span class="co"># (character in [0, 1])           # interval on a non-ordered type (use a set)</span></span>
+<span id="cb6-41"><a href="#cb6-41" tabindex="-1"></a><span class="co"># (integer in [0.5, 2.5])         # fractional bounds on integer</span></span>
+<span id="cb6-42"><a href="#cb6-42" tabindex="-1"></a><span class="co"># (integer in c(1, 2, 3))         # S2: integer set needs the L suffix: c(1L, 2L, 3L)</span></span>
+<span id="cb6-43"><a href="#cb6-43" tabindex="-1"></a><span class="co"># (character in c(1, 2))          # S2: character set elements must be string literals</span></span>
+<span id="cb6-44"><a href="#cb6-44" tabindex="-1"></a><span class="co"># (Date in [0, 1])                # S2: a Date bound must be of class Date, not a bare number</span></span>
+<span id="cb6-45"><a href="#cb6-45" tabindex="-1"></a><span class="co"># (numeric in [Inf, 0])           # Inf is the HIGH sentinel only; -Inf the low</span></span>
+<span id="cb6-46"><a href="#cb6-46" tabindex="-1"></a><span class="co"># (numeric in ]-Inf, Inf[)        # both-sentinel: imposes no bound (drop the `in [..]`)</span></span>
+<span id="cb6-47"><a href="#cb6-47" tabindex="-1"></a><span class="co"># (numeric in ]1, 1[)             # S4: empty / reversed interval (never satisfiable)</span></span>
+<span id="cb6-48"><a href="#cb6-48" tabindex="-1"></a><span class="co"># (logical in c(TRUE, FALSE))     # logical takes no set (degenerate)</span></span>
+<span id="cb6-49"><a href="#cb6-49" tabindex="-1"></a><span class="co"># (complex in c(0+0i, 1+0i))      # complex takes no set</span></span>
+<span id="cb6-50"><a href="#cb6-50" tabindex="-1"></a><span class="co"># (raw in OPCODES)                # raw takes no set</span></span>
+<span id="cb6-51"><a href="#cb6-51" tabindex="-1"></a><span class="co"># (raw | NA)                      # raw has no NA representation</span></span>
+<span id="cb6-52"><a href="#cb6-52" tabindex="-1"></a><span class="co"># (any in c(1, 2))                # any takes no constraint</span></span>
+<span id="cb6-53"><a href="#cb6-53" tabindex="-1"></a><span class="co"># (any | NA)                      # any takes no | NA</span></span>
+<span id="cb6-54"><a href="#cb6-54" tabindex="-1"></a><span class="co"># (scalar&lt;function&gt;)              # function is bare: write (function)</span></span>
+<span id="cb6-55"><a href="#cb6-55" tabindex="-1"></a><span class="co"># (vector&lt;function, 3&gt;)           # function is a length-1 reference (scope choice, §12)</span></span>
+<span id="cb6-56"><a href="#cb6-56" tabindex="-1"></a><span class="co"># (R6 | NULL)                     # R6 must name a class: R6&lt;Class&gt;</span></span>
+<span id="cb6-57"><a href="#cb6-57" tabindex="-1"></a><span class="co"># (data.table | NA)               # | NA is element-level; not valid on a composite</span></span>
+<span id="cb6-58"><a href="#cb6-58" tabindex="-1"></a><span class="co"># (data.table | data.frame): ...  # S1: bullets need a single bare composite</span></span>
+<span id="cb6-59"><a href="#cb6-59" tabindex="-1"></a><span class="co"># (vector&lt;numeric&gt;)               # vector&lt;&gt; requires a length — use bare (numeric)</span></span>
+<span id="cb6-60"><a href="#cb6-60" tabindex="-1"></a><span class="co"># (list&lt;numeric&gt;): ...            # S1: list&lt;T&gt; is a leaf and takes no bullets</span></span></code></pre></div>
 </div>
 <div class="section level2">
 <h2 id="non-goals-deliberately-inexpressible">12. Non-goals (deliberately inexpressible)<a class="anchor" aria-label="anchor" href="#non-goals-deliberately-inexpressible"></a>
@@ -1071,10 +1078,11 @@ category (§2); every modifier it carries is a ✅ in that category’s row
 only on
 <code>integer</code>/<code>numeric</code>/<code>Date</code>/<code>POSIXct</code>;
 integer bounds are literal whole numbers / <code>±Inf</code> (no
-expression); <code>numeric</code>/<code>Date</code>/<code>POSIXct</code>
-bounds are expressions whose class S2 checks (so
-<code>Date in [0, 1]</code> parses but S2 rejects it); <code>-Inf</code>
-only as the low bound, <code>Inf</code> only as the high.</label></li>
+expression); a <code>numeric</code> bound is a number or any expression;
+a <code>Date</code>/<code>POSIXct</code> bound must be a class-matching
+expression, so a bare-number bound (<code>Date in [0, 1]</code>) is
+rejected as a type error (S2); <code>-Inf</code> only as the low bound,
+<code>Inf</code> only as the high.</label></li>
 <li><label><input type="checkbox"><code>in c(set)</code> appears only
 on ordered + enumerable atomics; never on
 <code>complex</code>/<code>logical</code>/<code>raw</code>/<code>any</code>;
