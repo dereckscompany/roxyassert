@@ -18,6 +18,24 @@ then drifts from them. `roxyassert` makes the **documentation the single
 source of truth**: the same annotations render for humans *and* generate
 the checks, so they cannot disagree.
 
+## Key ideas
+
+- **One source of truth.** The typed `@param`/`@return` you write for
+  humans *is* what generates the runtime checks — they can never drift.
+- **No magic, no coercion.** Value constraints (ranges, sets) are plain
+  R expressions **copied verbatim** into the generated check. You write
+  `as.POSIXct("2024-01-01", tz = "America/New_York")` and roxyassert
+  pastes it — it never guesses a format, a constructor, or a time zone
+  on your behalf.
+- **An open type universe.** Because those bounds and set elements are
+  arbitrary R, *any* type with a constructor works — `Date`, `POSIXct`,
+  [`lubridate`](https://lubridate.tidyverse.org/), `bit64`, your own
+  S4/R6 — not a fixed built-in list. roxyassert never has to “know
+  about” your type to range-check it.
+- **Readable, debuggable output.** The generated helpers are ordinary
+  `assert` calls in a committed file you can open, read, and step
+  through.
+
 ## How it works
 
 ``` R
@@ -91,18 +109,22 @@ length); the whole-argument modifiers sit outside it:
 - **Slot (whole argument):** a trailing `?` (may be `NULL`) and `|`
   type-unions.
 
-| Bracket / token | Meaning |
-|----|----|
-| `< >` | generics: `scalar` / `vector` wrap the element type (+ length), `R6` names a class |
-| `[ ] / ] [` | a numeric **interval** — `[`/`]` closed, `]`/`[` open (ISO/Bourbaki) |
-| `in` | a value-constraint on the element type: an interval, or an R set |
-| `c(...)` / a name | a **set** of allowed values (an enum) |
-| `,` | a vector **length** (inside `<>`) |
-| `\| NA` | elements may be `NA` (bare or wrapped) — default: **not** allowed |
-| `?` / `\| NULL` | the whole argument may be `NULL` (slot level) |
-| `\| <type>` | a union with another type, e.g. `numeric \| character` |
+The bracket / token reference:
 
-The `\|` operator is read by what follows it: **`NA`** = elements may be
+- `< >` — generics: `scalar` / `vector` wrap the element type (+
+  length), `R6` names a class.
+- `[ ] / ] [` — a numeric **interval** (`[`/`]` closed, `]`/`[` open,
+  ISO/Bourbaki).
+- `in` — a value-constraint on the element type: an interval, or an R
+  set.
+- `c(...)` / a name — a **set** of allowed values (an enum).
+- `,` — a vector **length** (inside `<>`).
+- `| NA` — elements may be `NA` (bare or wrapped); default: **not**
+  allowed.
+- `?` / `| NULL` — the whole argument may be `NULL` (slot level).
+- `| <type>` — a union with another type, e.g. `numeric | character`.
+
+The `|` operator is read by what follows it: **`NA`** = elements may be
 missing, **`NULL`** = the whole argument may be `NULL`, anything else =
 a **type union**.
 
@@ -138,22 +160,21 @@ for the full per-category rules.
 
 ### Inline forms
 
-| Intent | Annotation |
-|----|----|
-| vector of any length (default) | `(character)` |
-| scalar — length 1 | `(scalar<character>)` |
-| exactly *n* | `(vector<numeric, 10>)` |
-| length range / at least *n* | `(vector<numeric, 1..10>)` / `(vector<numeric, 2..>)` |
-| between 1 and 5 (inclusive) | `(scalar<numeric in [1, 5]>)` |
-| greater than 0 | `(scalar<numeric in ]0, Inf[>)` |
-| at most 1 | `(scalar<numeric in ]-Inf, 1]>)` |
-| every element of a vector in a range | `(numeric in [1, 5])` |
-| enum — inline set (scalar) | `(scalar<character in c("BUY", "SELL")>)` |
-| enum — vector from a constant | `(character in ORDER_SIDE)` |
-| `NA` elements allowed | `(numeric \| NA)` |
-| nullable slot | `(scalar<numeric>?)` ≡ `(scalar<numeric> \| NULL)` |
-| union of types | `(numeric \| character)` |
-| R6 instance | `(R6<Engine>)` |
+- vector of any length (default) — `(character)`
+- scalar (length 1) — `(scalar<character>)`
+- exactly *n* — `(vector<numeric, 10>)`
+- length range / at least *n* — `(vector<numeric, 1..10>)` /
+  `(vector<numeric, 2..>)`
+- between 1 and 5 (inclusive) — `(scalar<numeric in [1, 5]>)`
+- greater than 0 — `(scalar<numeric in ]0, Inf[>)`
+- at most 1 — `(scalar<numeric in ]-Inf, 1]>)`
+- every element of a vector in a range — `(numeric in [1, 5])`
+- enum, inline set (scalar) — `(scalar<character in c("BUY", "SELL")>)`
+- enum, vector from a constant — `(character in ORDER_SIDE)`
+- `NA` elements allowed — `(numeric | NA)`
+- nullable slot — `(scalar<numeric>?)` ≡ `(scalar<numeric> | NULL)`
+- union of types — `(numeric | character)`
+- R6 instance — `(R6<Engine>)`
 
 Everything composes. For example `(vector<numeric in ]0, 1] | NA, 10>)`
 means: a numeric vector of length 10, every element in `(0, 1]`, `NA`

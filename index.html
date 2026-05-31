@@ -61,6 +61,20 @@
 <p><code>roxyassert</code> turns <strong>structured type annotations</strong> in your roxygen2 documentation into <strong>per-function assertion helpers</strong>. At <code>document()</code> time it parses your <code>@param</code>/<code>@return</code> tags and generates argument and return checks — plain calls to the <a href="https://github.com/dereckscompany/assert" class="external-link"><code>assert</code></a> package — into a committed source file you can read and debug.</p>
 <p>R is <strong>dynamically typed</strong>: nothing stops a caller from passing a character where you expected a number, or a function from returning the wrong shape. The usual fix is to hand-write a validation function — which repeats, in code, the types you already wrote in your docs, and then drifts from them. <code>roxyassert</code> makes the <strong>documentation the single source of truth</strong>: the same annotations render for humans <em>and</em> generate the checks, so they cannot disagree.</p>
 <div class="section level2">
+<h2 id="key-ideas">Key ideas<a class="anchor" aria-label="anchor" href="#key-ideas"></a>
+</h2>
+<ul>
+<li>
+<strong>One source of truth.</strong> The typed <code>@param</code>/<code>@return</code> you write for humans <em>is</em> what generates the runtime checks — they can never drift.</li>
+<li>
+<strong>No magic, no coercion.</strong> Value constraints (ranges, sets) are plain R expressions <strong>copied verbatim</strong> into the generated check. You write <code>as.POSIXct("2024-01-01", tz = "America/New_York")</code> and roxyassert pastes it — it never guesses a format, a constructor, or a time zone on your behalf.</li>
+<li>
+<strong>An open type universe.</strong> Because those bounds and set elements are arbitrary R, <em>any</em> type with a constructor works — <code>Date</code>, <code>POSIXct</code>, <a href="https://lubridate.tidyverse.org/" class="external-link"><code>lubridate</code></a>, <code>bit64</code>, your own S4/R6 — not a fixed built-in list. roxyassert never has to “know about” your type to range-check it.</li>
+<li>
+<strong>Readable, debuggable output.</strong> The generated helpers are ordinary <code>assert</code> calls in a committed file you can open, read, and step through.</li>
+</ul>
+</div>
+<div class="section level2">
 <h2 id="how-it-works">How it works<a class="anchor" aria-label="anchor" href="#how-it-works"></a>
 </h2>
 <div class="sourceCode" id="cb1"><pre class="sourceCode R"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" tabindex="-1"></a>  R<span class="sc">/</span><span class="er">*</span><span class="fu">.R</span>  (your code <span class="sc">+</span> typed roxygen tags)</span>
@@ -128,55 +142,26 @@
 <li>
 <strong>Slot (whole argument):</strong> a trailing <code>?</code> (may be <code>NULL</code>) and <code>|</code> type-unions.</li>
 </ul>
-<table class="table">
-<colgroup>
-<col width="50%">
-<col width="50%">
-</colgroup>
-<thead><tr>
-<th>Bracket / token</th>
-<th>Meaning</th>
-</tr></thead>
-<tbody>
-<tr>
-<td><code>&lt; &gt;</code></td>
-<td>generics: <code>scalar</code> / <code>vector</code> wrap the element type (+ length), <code>R6</code> names a class</td>
-</tr>
-<tr>
-<td><code>[ ] / ] [</code></td>
-<td>a numeric <strong>interval</strong> — <code>[</code>/<code>]</code> closed, <code>]</code>/<code>[</code> open (ISO/Bourbaki)</td>
-</tr>
-<tr>
-<td><code>in</code></td>
-<td>a value-constraint on the element type: an interval, or an R set</td>
-</tr>
-<tr>
-<td>
-<code>c(...)</code> / a name</td>
-<td>a <strong>set</strong> of allowed values (an enum)</td>
-</tr>
-<tr>
-<td><code>,</code></td>
-<td>a vector <strong>length</strong> (inside <code>&lt;&gt;</code>)</td>
-</tr>
-<tr>
-<td><code>\| NA</code></td>
-<td>elements may be <code>NA</code> (bare or wrapped) — default: <strong>not</strong> allowed</td>
-</tr>
-<tr>
-<td>
-<code>?</code> / <code>\| NULL</code>
-</td>
-<td>the whole argument may be <code>NULL</code> (slot level)</td>
-</tr>
-<tr>
-<td><code>\| &lt;type&gt;</code></td>
-<td>a union with another type, e.g. <code>numeric \| character</code>
-</td>
-</tr>
-</tbody>
-</table>
-<p>The <code>\|</code> operator is read by what follows it: <strong><code>NA</code></strong> = elements may be missing, <strong><code>NULL</code></strong> = the whole argument may be <code>NULL</code>, anything else = a <strong>type union</strong>.</p>
+<p>The bracket / token reference:</p>
+<ul>
+<li>
+<code>&lt; &gt;</code> — generics: <code>scalar</code> / <code>vector</code> wrap the element type (+ length), <code>R6</code> names a class.</li>
+<li>
+<code>[ ] / ] [</code> — a numeric <strong>interval</strong> (<code>[</code>/<code>]</code> closed, <code>]</code>/<code>[</code> open, ISO/Bourbaki).</li>
+<li>
+<code>in</code> — a value-constraint on the element type: an interval, or an R set.</li>
+<li>
+<code>c(...)</code> / a name — a <strong>set</strong> of allowed values (an enum).</li>
+<li>
+<code>,</code> — a vector <strong>length</strong> (inside <code>&lt;&gt;</code>).</li>
+<li>
+<code>| NA</code> — elements may be <code>NA</code> (bare or wrapped); default: <strong>not</strong> allowed.</li>
+<li>
+<code>?</code> / <code>| NULL</code> — the whole argument may be <code>NULL</code> (slot level).</li>
+<li>
+<code>| &lt;type&gt;</code> — a union with another type, e.g. <code>numeric | character</code>.</li>
+</ul>
+<p>The <code>|</code> operator is read by what follows it: <strong><code>NA</code></strong> = elements may be missing, <strong><code>NULL</code></strong> = the whole argument may be <code>NULL</code>, anything else = a <strong>type union</strong>.</p>
 <div class="section level3">
 <h3 id="base-types">Base types<a class="anchor" aria-label="anchor" href="#base-types"></a>
 </h3>
@@ -256,81 +241,37 @@
 <div class="section level3">
 <h3 id="inline-forms">Inline forms<a class="anchor" aria-label="anchor" href="#inline-forms"></a>
 </h3>
-<table class="table">
-<colgroup>
-<col width="50%">
-<col width="50%">
-</colgroup>
-<thead><tr>
-<th>Intent</th>
-<th>Annotation</th>
-</tr></thead>
-<tbody>
-<tr>
-<td>vector of any length (default)</td>
-<td><code>(character)</code></td>
-</tr>
-<tr>
-<td>scalar — length 1</td>
-<td><code>(scalar&lt;character&gt;)</code></td>
-</tr>
-<tr>
-<td>exactly <em>n</em>
-</td>
-<td><code>(vector&lt;numeric, 10&gt;)</code></td>
-</tr>
-<tr>
-<td>length range / at least <em>n</em>
-</td>
-<td>
-<code>(vector&lt;numeric, 1..10&gt;)</code> / <code>(vector&lt;numeric, 2..&gt;)</code>
-</td>
-</tr>
-<tr>
-<td>between 1 and 5 (inclusive)</td>
-<td><code>(scalar&lt;numeric in [1, 5]&gt;)</code></td>
-</tr>
-<tr>
-<td>greater than 0</td>
-<td><code>(scalar&lt;numeric in ]0, Inf[&gt;)</code></td>
-</tr>
-<tr>
-<td>at most 1</td>
-<td><code>(scalar&lt;numeric in ]-Inf, 1]&gt;)</code></td>
-</tr>
-<tr>
-<td>every element of a vector in a range</td>
-<td><code>(numeric in [1, 5])</code></td>
-</tr>
-<tr>
-<td>enum — inline set (scalar)</td>
-<td><code>(scalar&lt;character in c("BUY", "SELL")&gt;)</code></td>
-</tr>
-<tr>
-<td>enum — vector from a constant</td>
-<td><code>(character in ORDER_SIDE)</code></td>
-</tr>
-<tr>
-<td>
-<code>NA</code> elements allowed</td>
-<td><code>(numeric \| NA)</code></td>
-</tr>
-<tr>
-<td>nullable slot</td>
-<td>
-<code>(scalar&lt;numeric&gt;?)</code> ≡ <code>(scalar&lt;numeric&gt; \| NULL)</code>
-</td>
-</tr>
-<tr>
-<td>union of types</td>
-<td><code>(numeric \| character)</code></td>
-</tr>
-<tr>
-<td>R6 instance</td>
-<td><code>(R6&lt;Engine&gt;)</code></td>
-</tr>
-</tbody>
-</table>
+<ul>
+<li>vector of any length (default) — <code>(character)</code>
+</li>
+<li>scalar (length 1) — <code>(scalar&lt;character&gt;)</code>
+</li>
+<li>exactly <em>n</em> — <code>(vector&lt;numeric, 10&gt;)</code>
+</li>
+<li>length range / at least <em>n</em> — <code>(vector&lt;numeric, 1..10&gt;)</code> / <code>(vector&lt;numeric, 2..&gt;)</code>
+</li>
+<li>between 1 and 5 (inclusive) — <code>(scalar&lt;numeric in [1, 5]&gt;)</code>
+</li>
+<li>greater than 0 — <code>(scalar&lt;numeric in ]0, Inf[&gt;)</code>
+</li>
+<li>at most 1 — <code>(scalar&lt;numeric in ]-Inf, 1]&gt;)</code>
+</li>
+<li>every element of a vector in a range — <code>(numeric in [1, 5])</code>
+</li>
+<li>enum, inline set (scalar) — <code>(scalar&lt;character in c("BUY", "SELL")&gt;)</code>
+</li>
+<li>enum, vector from a constant — <code>(character in ORDER_SIDE)</code>
+</li>
+<li>
+<code>NA</code> elements allowed — <code>(numeric | NA)</code>
+</li>
+<li>nullable slot — <code>(scalar&lt;numeric&gt;?)</code> ≡ <code>(scalar&lt;numeric&gt; | NULL)</code>
+</li>
+<li>union of types — <code>(numeric | character)</code>
+</li>
+<li>R6 instance — <code>(R6&lt;Engine&gt;)</code>
+</li>
+</ul>
 <p>Everything composes. For example <code>(vector&lt;numeric in ]0, 1] | NA, 10&gt;)</code> means: a numeric vector of length 10, every element in <code>(0, 1]</code>, <code>NA</code> allowed.</p>
 </div>
 <div class="section level3">
