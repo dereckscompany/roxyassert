@@ -44,6 +44,10 @@
 #' @noRd
 generate_checks <- function(ast, expr) {
   body <- .rg_alternatives(ast$alternatives, expr)
+  # Nothing to check (e.g. `any` / `any?`): emit nothing, not an empty if-block.
+  if (length(body) == 0L) {
+    return(character())
+  }
   if (isTRUE(ast$null_ok)) {
     body <- c(
       sprintf("if (!is.null(%s)) {", expr),
@@ -170,6 +174,10 @@ generate_checks <- function(ast, expr) {
 }
 
 .rg_length <- function(length, expr) {
+  # `0..` (min 0, no max) is no constraint at all — emit nothing.
+  if (length$min == 0L && is.infinite(length$max)) {
+    return(character())
+  }
   if (is.finite(length$max) && length$min == length$max) {
     return(sprintf("assert_length(%s, %dL)", expr, length$min))
   }

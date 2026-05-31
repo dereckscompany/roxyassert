@@ -154,9 +154,9 @@
 
 # Scan an interval's HIGH bound, returning list(text=, open=). The closing
 # delimiter is a top-level `]` (closed) or `[` (open); brackets WITHIN the bound
-# (a subscript `df[["t"]]`, a call) are balanced first. A `[` at depth 0 is the
-# open-interval close only when it has no matching `]` ahead — otherwise it opens
-# a subscript that is part of the bound. p stops ON the closing bracket.
+# (a subscript `df[["t"]]`, a call) are balanced first. A `[` at depth 0 closes an
+# OPEN interval iff what follows it is a structural terminator rather than a
+# subscript index (.ra_high_close_bracket). p stops ON the closing bracket.
 .ra_scan_high <- function(p) {
   start <- p$pos
   depth <- 0L
@@ -169,7 +169,7 @@
     if (depth == 0L && ch == "]") {
       return(list(text = trimws(substr(p$s, start, p$pos - 1L)), open = FALSE))
     }
-    if (depth == 0L && ch == "[" && !.ra_bracket_has_match(p)) {
+    if (depth == 0L && ch == "[" && .ra_high_close_bracket(p)) {
       return(list(text = trimws(substr(p$s, start, p$pos - 1L)), open = TRUE))
     }
     if (ch %in% c("(", "[", "{")) {
@@ -182,47 +182,21 @@
   return(.ra_err(p, "expected ']' or '[' to close the interval"))
 }
 
-# From a `[` at p$pos, is there a matching `]` ahead (nesting- and string-aware)?
-# Tells a subscript (`df[["t"]]`, has a match) from an open-interval close
-# (`]0, Inf[`, whose trailing `[` has none).
-.ra_bracket_has_match <- function(p) {
+# Is the `[` at p$pos the OPEN-interval close rather than a subscript opener? It
+# is when the next non-space character is a structural terminator — a `|` (union),
+# `>` (closing a scalar<>/vector<>), `,` (a vector length separator), or the end —
+# none of which can begin a subscript's index expression. This bounds the decision
+# to the current interval, so `]0, 1[ | numeric in ]2, 3]` does not see the later
+# alternative's `]`. (A subscript bound like `df[["t"]]` is followed by `[`/index.)
+.ra_high_close_bracket <- function(p) {
   i <- p$pos + 1L
-  depth <- 1L
-  while (i <= p$n) {
-    ch <- p$chars[i]
-    if (ch %in% c("\"", "'", "`")) {
-      i <- .ra_string_end(p, i)
-      next
-    }
-    if (ch == "[") {
-      depth <- depth + 1L
-    } else if (ch == "]") {
-      depth <- depth - 1L
-      if (depth == 0L) {
-        return(TRUE)
-      }
-    }
+  while (i <= p$n && p$chars[i] %in% c(" ", "\t", "\n", "\r")) {
     i <- i + 1L
   }
-  return(FALSE)
-}
-
-# Index one past a string literal starting at index `i` (handles `\` escapes).
-.ra_string_end <- function(p, i) {
-  q <- p$chars[i]
-  i <- i + 1L
-  while (i <= p$n) {
-    ch <- p$chars[i]
-    if (ch == "\\") {
-      i <- i + 2L
-      next
-    }
-    i <- i + 1L
-    if (ch == q) {
-      break
-    }
+  if (i > p$n) {
+    return(TRUE)
   }
-  return(i)
+  return(p$chars[i] %in% c("|", ">", ","))
 }
 
 .ra_check_rexpr <- function(txt, p, what) {
@@ -275,8 +249,9 @@ parse_annotation <- function(text) {
   # nested `- name (slot)` field bullets (a composite record / typed columns, S1).
   rest <- if (p$pos < p$n) substr(p$s, p$pos + 1L, p$n) else ""
   # A nullability '?' belongs INSIDE the parens (slot tail); catch the misplaced
-  # `(slot)?` form rather than silently dropping it (which would read as non-null).
-  if (grepl("^\\s*\\?", rest)) {
+  # `(slot)?` form (a '?' immediately after ')') rather than silently dropping it
+  # (which would read as non-null). A '?' later in the prose is just description.
+  if (substr(rest, 1L, 1L) == "?") {
     .ra_err(p, "'?' must sit inside the parentheses: write (slot?), not (slot)?")
   }
   tree <- .ra_collect_bullets(rest)
@@ -335,6 +310,11 @@ parse_annotation <- function(text) {
   inner <- .ra_scan(bp, stops = ")")
   if (.ra_ch(bp) != ")") {
     .ra_err(bp, "unterminated '(' in field bullet")
+  }
+  bp$pos <- bp$pos + 1L # consume ')'
+  # the same misplaced-`?` guard as the top level (a '?' right after ')')
+  if (.ra_ch(bp) == "?") {
+    .ra_err(bp, "'?' must sit inside the parentheses: write (slot?), not (slot)?")
   }
   sp <- .ra_cursor(inner)
   ast <- .ra_parse_slot(sp)
@@ -656,7 +636,8 @@ parse_annotation <- function(text) {
     return(NULL)
   }
   args <- as.list(expr)[-1]
-  return(vapply(args, function(a) paste(deparse(a), collapse = ""), character(1)))
+  elems <- vapply(args, function(a) paste(deparse(a), collapse = ""), character(1))
+  return(elems[nzchar(elems)]) # drop a trailing-comma empty arg, e.g. c(1L,)
 }
 
 .ra_check_set_element <- function(e, base, p) {

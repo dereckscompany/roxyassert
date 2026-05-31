@@ -221,3 +221,32 @@ test_that("S2: inline set element types are checked (no coercion); opaque sets t
 test_that("S: a both-sentinel interval is rejected (it bounds nothing)", {
   expect_error(parse_annotation("(scalar<numeric in ]-Inf, Inf[>)"), "degenerate|bounds nothing")
 })
+
+# ---- re-review regressions (round 2) -----------------------------------------
+
+test_that("unions of open intervals parse (high-bound close is interval-scoped)", {
+  a <- parse_annotation("(numeric in ]0, 1[ | numeric in ]2, 3])")
+  expect_equal(length(a$alternatives), 2L)
+  expect_equal(a$alternatives[[1]]$interval$hi$text, "1")
+  expect_true(a$alternatives[[1]]$interval$hi_open)
+  expect_equal(a$alternatives[[2]]$interval$hi$text, "3")
+  expect_false(a$alternatives[[2]]$interval$hi_open)
+  # three-way, and a subscript whose index contains '>' as a high bound
+  expect_silent(parse_annotation("(numeric in ]0, 1[ | numeric in ]2, 3[ | numeric in ]4, 5[)"))
+  expect_equal(parse_annotation("(scalar<numeric in [0, m[i > 0]]>)")$alternatives[[1]]$interval$hi$text, "m[i > 0]")
+})
+
+test_that("misplaced '?' is rejected inside a field bullet too, not just at top level", {
+  expect_error(parse_annotation("(list)\n- cur (scalar<character>)? next."), "must sit inside")
+  expect_true(parse_annotation("(list)\n- cur (scalar<character>?) next.")$alternatives[[1]]$fields[[1]]$ast$null_ok)
+})
+
+test_that("a free-text description beginning with '?' is allowed (only adjacent '?' is rejected)", {
+  expect_silent(parse_annotation("(numeric) ? semantics still unknown"))
+  expect_error(parse_annotation("(numeric)?"), "must sit inside")
+})
+
+test_that("a trailing-comma inline set does not raise a misleading empty-element error", {
+  expect_silent(parse_annotation("(integer in c(1L,))"))
+  expect_error(parse_annotation("(integer in c(1, ))"), "L") # still requires L suffix
+})
