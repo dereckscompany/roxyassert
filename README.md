@@ -68,11 +68,16 @@ A type annotation is a parenthesised token at the **start** of a
 `@param` or `@return` description. Tags without a leading `(...)` token
 are ignored, so adoption is incremental and opt-in.
 
+This section is the working overview; the [complete grammar
+reference](https://dereckscompany.github.io/roxyassert/articles/grammar.html)
+(formal EBNF, type categories, precedence, and exhaustive demos) is the
+authoritative specification.
+
 **Default arity follows R: a bare type is a *vector* of any length.** A
 scalar (length 1) is declared explicitly with `scalar<...>`.
 
-The `<>` generic sets the **shape**; everything else attaches to the
-type expression:
+The `<>` generic wraps the **element type** (and, for `vector`, its
+length); the whole-argument modifiers sit outside it:
 
 - **Shape (`<>`):** `scalar<...>`, `vector<..., length>`, `R6<...>`. A
   **bare type is already a vector**, so you only reach for `<>` when you
@@ -86,7 +91,7 @@ type expression:
 
 | Bracket / token | Meaning |
 |----|----|
-| `< >` | generics — **shape only**: `scalar`, `vector`, `R6` |
+| `< >` | generics: `scalar` / `vector` wrap the element type (+ length), `R6` names a class |
 | `[ ] / ] [` | a numeric **interval** — `[`/`]` closed, `]`/`[` open (ISO/Bourbaki) |
 | `in` | a value-constraint on the element type: an interval, or an R set |
 | `c(...)` / a name | a **set** of allowed values (an enum) |
@@ -103,22 +108,31 @@ a **type union**.
 
 Valid wherever a `<type>` appears (inline, or in a column/field bullet):
 
-| Type         | R meaning                           |
-|--------------|-------------------------------------|
-| `logical`    | `TRUE`/`FALSE` vector               |
-| `integer`    | integer vector                      |
-| `numeric`    | double vector                       |
-| `complex`    | complex vector                      |
-| `character`  | character vector                    |
-| `raw`        | raw vector                          |
-| `factor`     | factor                              |
-| `Date`       | `Date` vector                       |
-| `POSIXct`    | date-time vector                    |
-| `list`       | list (see composite form)           |
-| `function`   | a function/closure                  |
+| Type | R meaning |
+|----|----|
+| `logical` | `TRUE`/`FALSE` vector |
+| `integer` | integer vector |
+| `numeric` | double vector |
+| `complex` | complex vector |
+| `character` | character vector |
+| `raw` | raw vector |
+| `factor` | factor |
+| `Date` | `Date` vector |
+| `POSIXct` | date-time vector |
+| `list` | list (see composite form) |
+| `function` | a function/closure (a bare, length-1 reference) |
 | `data.table` | a `data.table` (see composite form) |
 | `data.frame` | a `data.frame` (see composite form) |
-| `R6<Class>`  | an R6 instance inheriting `Class`   |
+| `R6<Class>` | an R6 instance inheriting `Class` (a bare, length-1 reference) |
+
+`function` and `R6<Class>` are **reference types**: written bare
+(`(function)`, `(R6<Engine>)`), nullable as a slot (`(R6<Engine>?)`),
+never wrapped in `scalar<>`/`vector<>` and never carrying
+`in`/`| NA`/length. Intervals (`in [ , ]`) apply to ordered types
+(`integer`/`numeric`/`Date`/`POSIXct`); sets (`in c(...)`) apply to
+atomics; see the [grammar
+reference](https://dereckscompany.github.io/roxyassert/articles/grammar.html)
+for the full per-category rules.
 
 ### Inline forms
 
