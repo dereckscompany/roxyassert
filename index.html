@@ -57,8 +57,8 @@
 <blockquote>
 <p>Write the contract once — in your roxygen2 docs — and generate the runtime checks.</p>
 </blockquote>
-<p><code>roxyassert</code> reads <strong>structured type annotations</strong> in your roxygen2 documentation and, at <code>document()</code> time, <strong>generates per-function assertion helpers</strong> that validate a function’s arguments and its return value. The generated checks are plain calls to the <a href="https://github.com/dereckscompany/assert" class="external-link"><code>assert</code></a> package, written to a committed source file you can read and debug.</p>
-<p>The point: you already describe each parameter’s type and each return shape in your <code>@param</code> / <code>@return</code> docs. Today you <em>also</em> hand-write a separate validation function that repeats all of it — and the two drift. <code>roxyassert</code> makes the documentation the single source of truth: the docs render for humans <strong>and</strong> generate the assertions, so they can never disagree.</p>
+<p><code>roxyassert</code> turns <strong>structured type annotations</strong> in your roxygen2 documentation into <strong>per-function assertion helpers</strong>. At <code>document()</code> time it parses your <code>@param</code>/<code>@return</code> tags and generates argument and return checks — plain calls to the <a href="https://github.com/dereckscompany/assert" class="external-link"><code>assert</code></a> package — into a committed source file you can read and debug.</p>
+<p>R is <strong>dynamically typed</strong>: nothing stops a caller from passing a character where you expected a number, or a function from returning the wrong shape. The usual fix is to hand-write a validation function — which repeats, in code, the types you already wrote in your docs, and then drifts from them. <code>roxyassert</code> makes the <strong>documentation the single source of truth</strong>: the same annotations render for humans <em>and</em> generate the checks, so they cannot disagree.</p>
 <div class="section level2">
 <h2 id="how-it-works">How it works<a class="anchor" aria-label="anchor" href="#how-it-works"></a>
 </h2>
@@ -71,8 +71,7 @@
 <span id="cb1-7"><a href="#cb1-7" tabindex="-1"></a>     <span class="er">|</span>   you call them inside your functions, and commit the file</span>
 <span id="cb1-8"><a href="#cb1-8" tabindex="-1"></a>     v</span>
 <span id="cb1-9"><a href="#cb1-9" tabindex="-1"></a>  runtime validation via the <span class="st">`</span><span class="at">assert</span><span class="st">`</span> package</span></code></pre></div>
-<p><code>roxyassert</code> is a <strong>roxygen2 roclet</strong>: it runs in the documentation step (the same one that writes <code>NAMESPACE</code> and <code>man/*.Rd</code>), never during <code>R CMD build</code>/<code>check</code>. It parses tag <em>text</em> only — it never executes your code — and writes one file you commit alongside the rest of your generated artifacts.</p>
-<p>Layering:</p>
+<p><code>roxyassert</code> is a <strong>roxygen2 roclet</strong> — it runs in the documentation step (the one that writes <code>NAMESPACE</code> and <code>man/*.Rd</code>), never during <code>R CMD build</code>/<code>check</code>. It parses tag <em>text</em> only; it never executes your code.</p>
 <table class="table">
 <colgroup>
 <col width="33%">
@@ -88,7 +87,7 @@
 <tr>
 <td>Vocabulary</td>
 <td><a href="https://github.com/dereckscompany/assert" class="external-link"><code>assert</code></a></td>
-<td>The runtime primitives (<code>assert_scalar_character()</code>, <code>assert_data_table()</code>, …).</td>
+<td>Runtime primitives (<code>assert_scalar_character()</code>, <code>assert_data_table()</code>, …).</td>
 </tr>
 <tr>
 <td>Generator</td>
@@ -97,153 +96,237 @@
 </tr>
 </tbody>
 </table>
-<p><code>assert</code> has no dependency on <code>roxyassert</code> and stays lightweight; <code>roxyassert</code> depends on <code>assert</code> + <code>roxygen2</code>.</p>
+<p><code>assert</code> does not depend on <code>roxyassert</code> and stays lightweight; <code>roxyassert</code> depends on <code>assert</code> + <code>roxygen2</code>.</p>
 </div>
 <div class="section level2">
 <h2 id="installation">Installation<a class="anchor" aria-label="anchor" href="#installation"></a>
 </h2>
 <div class="sourceCode" id="cb2"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="co"># install.packages("remotes")</span></span>
-<span><span class="fu">remotes</span><span class="fu">::</span><span class="fu">install_github</span><span class="op">(</span><span class="st">"dereckscompany/roxyassert"</span><span class="op">)</span></span></code></pre></div>
+<code class="sourceCode R"><span><span class="fu">renv</span><span class="fu">::</span><span class="fu"><a href="https://rstudio.github.io/renv/reference/install.html" class="external-link">install</a></span><span class="op">(</span><span class="st">"dereckscompany/roxyassert"</span><span class="op">)</span></span>
+<span><span class="co"># or: remotes::install_github("dereckscompany/roxyassert")</span></span></code></pre></div>
 </div>
 <div class="section level2">
 <h2 id="setup-one-line">Setup (one line)<a class="anchor" aria-label="anchor" href="#setup-one-line"></a>
 </h2>
 <p>Register the roclet in your package’s <code>DESCRIPTION</code>:</p>
 <pre class="dcf"><code><span><span class="va">Roxygen</span><span class="op">:</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>markdown <span class="op">=</span> <span class="cn">TRUE</span>, roclets <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"namespace"</span>, <span class="st">"rd"</span>, <span class="st">"roxyassert::contract_roclet"</span><span class="op">)</span><span class="op">)</span></span></code></pre>
-<p>That’s the entire integration. Now <code>devtools::document()</code> runs <code>roxyassert</code> alongside the built-in roclets and (re)writes <code>R/contracts-generated.R</code>.</p>
+<p><code>devtools::document()</code> then runs <code>roxyassert</code> alongside the built-in roclets and (re)writes <code>R/contracts-generated.R</code>.</p>
+</div>
+<div class="section level2">
+<h2 id="the-annotation-grammar">The annotation grammar<a class="anchor" aria-label="anchor" href="#the-annotation-grammar"></a>
+</h2>
+<p>A type annotation is a parenthesised token at the <strong>start</strong> of a <code>@param</code> or <code>@return</code> description. Tags without a leading <code>(...)</code> token are ignored, so adoption is incremental and opt-in.</p>
+<p><strong>Default arity follows R: a bare type is a <em>vector</em> of any length.</strong> A scalar (length 1) is declared explicitly.</p>
+<div class="section level3">
+<h3 id="base-types">Base types<a class="anchor" aria-label="anchor" href="#base-types"></a>
+</h3>
+<p>Every type below is valid wherever a <code>&lt;type&gt;</code> appears (inline or in a column/field bullet):</p>
+<table class="table">
+<thead><tr>
+<th>Type</th>
+<th>R meaning</th>
+</tr></thead>
+<tbody>
+<tr>
+<td><code>logical</code></td>
+<td>
+<code>TRUE</code>/<code>FALSE</code> vector</td>
+</tr>
+<tr>
+<td><code>integer</code></td>
+<td>integer vector</td>
+</tr>
+<tr>
+<td><code>numeric</code></td>
+<td>double vector</td>
+</tr>
+<tr>
+<td><code>complex</code></td>
+<td>complex vector</td>
+</tr>
+<tr>
+<td><code>character</code></td>
+<td>character vector</td>
+</tr>
+<tr>
+<td><code>raw</code></td>
+<td>raw vector</td>
+</tr>
+<tr>
+<td><code>factor</code></td>
+<td>factor</td>
+</tr>
+<tr>
+<td><code>Date</code></td>
+<td>
+<code>Date</code> vector</td>
+</tr>
+<tr>
+<td><code>POSIXct</code></td>
+<td>date-time vector</td>
+</tr>
+<tr>
+<td><code>list</code></td>
+<td>list (see composite form)</td>
+</tr>
+<tr>
+<td><code>function</code></td>
+<td>a function/closure</td>
+</tr>
+<tr>
+<td><code>data.table</code></td>
+<td>a <code>data.table</code> (see composite form)</td>
+</tr>
+<tr>
+<td><code>data.frame</code></td>
+<td>a <code>data.frame</code> (see composite form)</td>
+</tr>
+<tr>
+<td><code>R6&lt;Class&gt;</code></td>
+<td>an R6 instance inheriting <code>Class</code>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="section level3">
+<h3 id="inline-forms-generics">Inline forms (generics)<a class="anchor" aria-label="anchor" href="#inline-forms-generics"></a>
+</h3>
+<table class="table">
+<thead><tr>
+<th>Intent</th>
+<th>Annotation</th>
+</tr></thead>
+<tbody>
+<tr>
+<td>vector of any length (default)</td>
+<td><code>(character)</code></td>
+</tr>
+<tr>
+<td>scalar — length 1</td>
+<td><code>(scalar&lt;character&gt;)</code></td>
+</tr>
+<tr>
+<td>exactly <em>n</em>
+</td>
+<td><code>(vector&lt;numeric, 10&gt;)</code></td>
+</tr>
+<tr>
+<td>length range</td>
+<td><code>(vector&lt;numeric, 1..10&gt;)</code></td>
+</tr>
+<tr>
+<td>length at least <em>n</em>
+</td>
+<td><code>(vector&lt;numeric, 2..&gt;)</code></td>
+</tr>
+<tr>
+<td>nullable / optional (<code>NULL</code> or missing passes)</td>
+<td><code>(numeric?)</code></td>
+</tr>
+<tr>
+<td>enum — inline literals</td>
+<td><code>(enum&lt;character, "BUY" \| "SELL"&gt;)</code></td>
+</tr>
+<tr>
+<td>enum — from a constant/object</td>
+<td><code>(enum&lt;character, ORDER_SIDE&gt;)</code></td>
+</tr>
+<tr>
+<td>R6 instance</td>
+<td><code>(R6&lt;Engine&gt;)</code></td>
+</tr>
+</tbody>
+</table>
+<p>The generic style is the explicit, uniform spelling: everything is <code>kind&lt;type, ...&gt;</code> (the same shape as C++ templates or TypeScript’s <code>Array&lt;T&gt;</code>). The <code>?</code> modifier composes, e.g. <code>(scalar&lt;numeric&gt;?)</code>.</p>
+</div>
+<div class="section level3">
+<h3 id="composite-types--nested-bullets">Composite types — nested bullets<a class="anchor" aria-label="anchor" href="#composite-types--nested-bullets"></a>
+</h3>
+<p><code>list</code>, <code>data.table</code>, and <code>data.frame</code> describe their contents as a <strong>markdown bullet list</strong> beneath the tag. Bullets nest arbitrarily, so you can compose tables inside lists inside lists. Each bullet is <code>- name (type): description</code>; <strong>bold around the name is optional</strong> (<code>- **name** (type): ...</code> also works).</p>
+<div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="co">#' @return (list) the query result:</span></span>
+<span><span class="co">#' - ok (scalar&lt;logical&gt;): whether the query succeeded.</span></span>
+<span><span class="co">#' - rows (data.table): matched rows:</span></span>
+<span><span class="co">#'   - id (character): row identifier.</span></span>
+<span><span class="co">#'   - value (numeric): the value.</span></span>
+<span><span class="co">#' - meta (list): pagination metadata:</span></span>
+<span><span class="co">#'   - page (scalar&lt;integer&gt;): current page.</span></span>
+<span><span class="co">#'   - cursor (character?): next-page cursor, or NULL at the end.</span></span></code></pre></div>
+<p>Because each leaf is checked for an atomic type, <strong>list-columns are rejected by construction</strong> — a column declared <code>(numeric)</code> that holds a list fails.</p>
+</div>
 </div>
 <div class="section level2">
 <h2 id="quick-example">Quick example<a class="anchor" aria-label="anchor" href="#quick-example"></a>
 </h2>
-<div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co">#' Submit an order.</span></span>
 <span><span class="co">#'</span></span>
 <span><span class="co">#' @param symbol (scalar&lt;character&gt;) normalised `BASE/QUOTE` pair.</span></span>
-<span><span class="co">#' @param side (enum&lt;character, ORDER_SIDE&gt;) order side.</span></span>
+<span><span class="co">#' @param side (enum&lt;character, "BUY" | "SELL"&gt;) order side.</span></span>
 <span><span class="co">#' @param quantity (scalar&lt;numeric&gt;) order size in the base asset.</span></span>
 <span><span class="co">#' @param price_limit (scalar&lt;numeric&gt;?) limit price; `NULL` for market orders.</span></span>
 <span><span class="co">#' @return (data.table) the accepted order:</span></span>
-<span><span class="co">#' - **order_id** (character): exchange order id.</span></span>
-<span><span class="co">#' - **status** (character): order status.</span></span>
-<span><span class="co">#' - **quantity** (numeric): accepted size.</span></span>
-<span><span class="co">#' - **datetime** (POSIXct): acceptance time.</span></span>
+<span><span class="co">#' - order_id (character): exchange order id.</span></span>
+<span><span class="co">#' - status (character): order status.</span></span>
+<span><span class="co">#' - quantity (numeric): accepted size.</span></span>
+<span><span class="co">#' - datetime (POSIXct): acceptance time.</span></span>
 <span><span class="co">#' @export</span></span>
 <span><span class="va">submit_order</span> <span class="op">&lt;-</span> <span class="kw">function</span><span class="op">(</span><span class="va">symbol</span>, <span class="va">side</span>, <span class="va">quantity</span>, <span class="va">price_limit</span> <span class="op">=</span> <span class="cn">NULL</span><span class="op">)</span> <span class="op">{</span></span>
 <span>  <span class="fu">assert_args_submit_order</span><span class="op">(</span><span class="va">symbol</span>, <span class="va">side</span>, <span class="va">quantity</span>, <span class="va">price_limit</span><span class="op">)</span>   <span class="co"># generated</span></span>
 <span>  <span class="va">result</span> <span class="op">&lt;-</span> <span class="va">...</span></span>
 <span>  <span class="kw"><a href="https://rdrr.io/r/base/function.html" class="external-link">return</a></span><span class="op">(</span><span class="fu">assert_return_submit_order</span><span class="op">(</span><span class="va">result</span><span class="op">)</span><span class="op">)</span>                      <span class="co"># generated</span></span>
 <span><span class="op">}</span></span></code></pre></div>
-<p>After <code>document()</code>, <code>R/contracts-generated.R</code> contains (illustrative):</p>
-<div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="co"># Generated by roxyassert -- do not edit by hand.</span></span>
-<span></span>
-<span><span class="va">assert_args_submit_order</span> <span class="op">&lt;-</span> <span class="kw">function</span><span class="op">(</span><span class="va">symbol</span>, <span class="va">side</span>, <span class="va">quantity</span>, <span class="va">price_limit</span><span class="op">)</span> <span class="op">{</span></span>
-<span>  <span class="fu">assert</span><span class="fu">::</span><span class="fu"><a href="https://dereckscompany.github.io/assert/reference/scalar-assertions.html" class="external-link">assert_scalar_character</a></span><span class="op">(</span><span class="va">symbol</span><span class="op">)</span></span>
-<span>  <span class="fu">assert</span><span class="fu">::</span><span class="fu"><a href="https://dereckscompany.github.io/assert/reference/assert_value_in_set.html" class="external-link">assert_value_in_set</a></span><span class="op">(</span><span class="va">side</span>, <span class="va">ORDER_SIDE</span><span class="op">)</span></span>
-<span>  <span class="fu">assert</span><span class="fu">::</span><span class="fu"><a href="https://dereckscompany.github.io/assert/reference/scalar-assertions.html" class="external-link">assert_scalar_numeric</a></span><span class="op">(</span><span class="va">quantity</span><span class="op">)</span></span>
-<span>  <span class="kw">if</span> <span class="op">(</span><span class="op">!</span><span class="fu"><a href="https://rdrr.io/r/base/NULL.html" class="external-link">is.null</a></span><span class="op">(</span><span class="va">price_limit</span><span class="op">)</span><span class="op">)</span> <span class="fu">assert</span><span class="fu">::</span><span class="fu"><a href="https://dereckscompany.github.io/assert/reference/scalar-assertions.html" class="external-link">assert_scalar_numeric</a></span><span class="op">(</span><span class="va">price_limit</span><span class="op">)</span></span>
-<span>  <span class="fu"><a href="https://rdrr.io/r/base/invisible.html" class="external-link">invisible</a></span><span class="op">(</span><span class="cn">NULL</span><span class="op">)</span></span>
-<span><span class="op">}</span></span>
-<span></span>
-<span><span class="va">assert_return_submit_order</span> <span class="op">&lt;-</span> <span class="kw">function</span><span class="op">(</span><span class="va">value</span><span class="op">)</span> <span class="op">{</span></span>
-<span>  <span class="fu">assert</span><span class="fu">::</span><span class="fu"><a href="https://dereckscompany.github.io/assert/reference/assert_data_table.html" class="external-link">assert_data_table</a></span><span class="op">(</span><span class="va">value</span><span class="op">)</span></span>
-<span>  <span class="fu">assert</span><span class="fu">::</span><span class="fu"><a href="https://dereckscompany.github.io/assert/reference/assert_column_types.html" class="external-link">assert_column_types</a></span><span class="op">(</span><span class="va">value</span>, <span class="st">"character"</span>, <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"order_id"</span>, <span class="st">"status"</span><span class="op">)</span><span class="op">)</span></span>
-<span>  <span class="fu">assert</span><span class="fu">::</span><span class="fu"><a href="https://dereckscompany.github.io/assert/reference/assert_column_types.html" class="external-link">assert_column_types</a></span><span class="op">(</span><span class="va">value</span>, <span class="st">"numeric"</span>, <span class="st">"quantity"</span><span class="op">)</span></span>
-<span>  <span class="fu">assert</span><span class="fu">::</span><span class="fu"><a href="https://dereckscompany.github.io/assert/reference/assert_column_types.html" class="external-link">assert_column_types</a></span><span class="op">(</span><span class="va">value</span>, <span class="st">"POSIXct"</span>, <span class="st">"datetime"</span><span class="op">)</span></span>
-<span>  <span class="kw"><a href="https://rdrr.io/r/base/function.html" class="external-link">return</a></span><span class="op">(</span><span class="va">value</span><span class="op">)</span>   <span class="co"># returned untouched, so you can wrap it in return()/invisible()</span></span>
-<span><span class="op">}</span></span></code></pre></div>
 </div>
 <div class="section level2">
-<h2 id="the-annotation-grammar">The annotation grammar<a class="anchor" aria-label="anchor" href="#the-annotation-grammar"></a>
+<h2 id="demos">Demos<a class="anchor" aria-label="anchor" href="#demos"></a>
 </h2>
-<p>A type annotation is a parenthesised token at the <strong>start</strong> of a <code>@param</code> or <code>@return</code> description. Plain prose <code>@param</code>/<code>@return</code> tags without a leading <code>(...)</code> token are ignored — so adoption is incremental and opt-in.</p>
 <div class="section level3">
-<h3 id="scalars-and-vectors">Scalars and vectors<a class="anchor" aria-label="anchor" href="#scalars-and-vectors"></a>
+<h3 id="composed-list-with-a-nested-table">Composed list with a nested table<a class="anchor" aria-label="anchor" href="#composed-list-with-a-nested-table"></a>
 </h3>
-<table class="table">
-<thead><tr>
-<th>Annotation</th>
-<th>Meaning</th>
-</tr></thead>
-<tbody>
-<tr>
-<td><code>(scalar&lt;character&gt;)</code></td>
-<td>length-1 character</td>
-</tr>
-<tr>
-<td><code>(scalar&lt;numeric&gt;)</code></td>
-<td>length-1 numeric</td>
-</tr>
-<tr>
-<td><code>(vector&lt;numeric&gt;)</code></td>
-<td>numeric of any length (&gt;= 1)</td>
-</tr>
-<tr>
-<td><code>(vector&lt;character&gt;[10])</code></td>
-<td>character of <strong>exactly</strong> 10 elements</td>
-</tr>
-<tr>
-<td><code>(vector&lt;numeric&gt;[1..10])</code></td>
-<td>numeric of length <strong>1 to 10</strong>
-</td>
-</tr>
-<tr>
-<td><code>(vector&lt;integer&gt;[2..])</code></td>
-<td>integer of length <strong>at least 2</strong>
-</td>
-</tr>
-</tbody>
-</table>
-<p><code>scalar&lt;T&gt;</code> is shorthand for <code>vector&lt;T&gt;[1]</code>.</p>
-</div>
-<div class="section level3">
-<h3 id="base-types">Base types<a class="anchor" aria-label="anchor" href="#base-types"></a>
-</h3>
-<p><code>character</code>, <code>numeric</code>, <code>integer</code>, <code>logical</code>, <code>complex</code>, <code>factor</code>, <code>list</code>, <code>function</code>, <code>POSIXct</code>, <code>Date</code>.</p>
-</div>
-<div class="section level3">
-<h3 id="modifiers">Modifiers<a class="anchor" aria-label="anchor" href="#modifiers"></a>
-</h3>
-<table class="table">
-<colgroup>
-<col width="50%">
-<col width="50%">
-</colgroup>
-<thead><tr>
-<th>Annotation</th>
-<th>Meaning</th>
-</tr></thead>
-<tbody>
-<tr>
-<td><code>(scalar&lt;numeric&gt;?)</code></td>
-<td>
-<strong>nullable / optional</strong> — <code>NULL</code> or a missing argument passes; otherwise the inner type is enforced.</td>
-</tr>
-<tr>
-<td><code>(enum&lt;character, ORDER_SIDE&gt;)</code></td>
-<td>value(s) must be members of the set/constant <code>ORDER_SIDE</code> (any object resolving to a vector of allowed values, e.g. a <code>core</code> constant).</td>
-</tr>
-<tr>
-<td><code>(R6&lt;Engine&gt;)</code></td>
-<td>an R6 instance inheriting class <code>Engine</code>. Use this for builder methods that return <code>invisible(self)</code>.</td>
-</tr>
-</tbody>
-</table>
-</div>
-<div class="section level3">
-<h3 id="datatables--dataframes">data.tables / data.frames<a class="anchor" aria-label="anchor" href="#datatables--dataframes"></a>
-</h3>
-<p>Annotate the tag <code>(data.table)</code> (or <code>(data.frame)</code>), then declare the columns as a <strong>markdown bullet list</strong> in this exact form:</p>
 <div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="co">#' @return (data.table) open orders:</span></span>
-<span><span class="co">#' - **order_id** (character): exchange order id.</span></span>
-<span><span class="co">#' - **price** (numeric): limit price.</span></span>
-<span><span class="co">#' - **datetime** (POSIXct): submission time.</span></span></code></pre></div>
-<p>Each bullet <code>- **name** (type): description</code> becomes a column assertion. Column <strong>type</strong> uses the base types above. Because every column is checked for an atomic type, <strong>list-columns are rejected by construction</strong> — a nested/list column fails its declared type.</p>
-<blockquote>
-<p>The same bullet syntax is the human-readable column documentation you already write, so the docs and the generated schema come from one place.</p>
-</blockquote>
+<code class="sourceCode R"><span><span class="co">#' Run a screen and return results plus diagnostics.</span></span>
+<span><span class="co">#'</span></span>
+<span><span class="co">#' @param symbols (character) one or more `BASE/QUOTE` pairs.</span></span>
+<span><span class="co">#' @param top_n (scalar&lt;integer&gt;) how many rows to keep.</span></span>
+<span><span class="co">#' @param weights (vector&lt;numeric, 1..&gt;?) optional per-symbol weights.</span></span>
+<span><span class="co">#' @return (list) the screen output:</span></span>
+<span><span class="co">#' - matched (data.table): ranked matches:</span></span>
+<span><span class="co">#'   - symbol (character): the pair.</span></span>
+<span><span class="co">#'   - score (numeric): rank score.</span></span>
+<span><span class="co">#'   - tags (character): label(s) on the match.</span></span>
+<span><span class="co">#' - summary (list): run summary:</span></span>
+<span><span class="co">#'   - n_in (scalar&lt;integer&gt;): symbols screened.</span></span>
+<span><span class="co">#'   - n_out (scalar&lt;integer&gt;): rows returned.</span></span>
+<span><span class="co">#'   - ran_at (scalar&lt;POSIXct&gt;): run timestamp.</span></span>
+<span><span class="co">#' @export</span></span>
+<span><span class="va">screen</span> <span class="op">&lt;-</span> <span class="kw">function</span><span class="op">(</span><span class="va">symbols</span>, <span class="va">top_n</span>, <span class="va">weights</span> <span class="op">=</span> <span class="cn">NULL</span><span class="op">)</span> <span class="op">{</span></span>
+<span>  <span class="fu">assert_args_screen</span><span class="op">(</span><span class="va">symbols</span>, <span class="va">top_n</span>, <span class="va">weights</span><span class="op">)</span></span>
+<span>  <span class="va">result</span> <span class="op">&lt;-</span> <span class="va">...</span></span>
+<span>  <span class="kw"><a href="https://rdrr.io/r/base/function.html" class="external-link">return</a></span><span class="op">(</span><span class="fu">assert_return_screen</span><span class="op">(</span><span class="va">result</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="op">}</span></span></code></pre></div>
+</div>
+<div class="section level3">
+<h3 id="a-datatable-with-mixed-column-types">A data.table with mixed column types<a class="anchor" aria-label="anchor" href="#a-datatable-with-mixed-column-types"></a>
+</h3>
+<div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="co">#' Open orders for a symbol.</span></span>
+<span><span class="co">#'</span></span>
+<span><span class="co">#' @param symbol (scalar&lt;character&gt;) the pair.</span></span>
+<span><span class="co">#' @param statuses (enum&lt;character, "OPEN" | "PARTIALLY_FILLED"&gt;) statuses to include.</span></span>
+<span><span class="co">#' @return (data.table) the open orders, newest first:</span></span>
+<span><span class="co">#' - order_id (character): exchange id.</span></span>
+<span><span class="co">#' - side (factor): BUY or SELL.</span></span>
+<span><span class="co">#' - quantity (numeric): remaining size.</span></span>
+<span><span class="co">#' - reduce_only (logical): reduce-only flag.</span></span>
+<span><span class="co">#' - created_at (POSIXct): submission time.</span></span>
+<span><span class="co">#' @export</span></span>
+<span><span class="va">open_orders</span> <span class="op">&lt;-</span> <span class="kw">function</span><span class="op">(</span><span class="va">symbol</span>, <span class="va">statuses</span><span class="op">)</span> <span class="op">{</span></span>
+<span>  <span class="fu">assert_args_open_orders</span><span class="op">(</span><span class="va">symbol</span>, <span class="va">statuses</span><span class="op">)</span></span>
+<span>  <span class="va">result</span> <span class="op">&lt;-</span> <span class="va">...</span></span>
+<span>  <span class="kw"><a href="https://rdrr.io/r/base/function.html" class="external-link">return</a></span><span class="op">(</span><span class="fu">assert_return_open_orders</span><span class="op">(</span><span class="va">result</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="op">}</span></span></code></pre></div>
+<p>See the <a href="https://dereckscompany.github.io/roxyassert/articles/demo.html">Getting started vignette</a> for a fuller pattern: an abstract class whose every method enforces its inputs and outputs from the docs.</p>
 </div>
 </div>
 <div class="section level2">
@@ -251,39 +334,25 @@
 </h2>
 <ul>
 <li>
-<strong>Two helpers, each optional.</strong> <code>assert_args_&lt;fn&gt;</code> is emitted only if the function has at least one typed <code>@param</code>; <code>assert_return_&lt;fn&gt;</code> only if <code>@return</code> carries a parseable type. Functions with no typed tags get nothing.</li>
+<strong>Two helpers, each optional.</strong> <code>assert_args_&lt;fn&gt;</code> is emitted only if the function has at least one typed <code>@param</code>; <code>assert_return_&lt;fn&gt;</code> only if <code>@return</code> carries a parseable type.</li>
 <li>
-<strong>Explicit arguments.</strong> <code>assert_args_&lt;fn&gt;(arg1, arg2, ...)</code> takes the documented parameters by name, in declaration order — you call it explicitly so the contract is visible at the call site. (If you change a function’s arguments, re-run <code>document()</code> and update the call.)</li>
+<strong>Explicit arguments.</strong> <code>assert_args_&lt;fn&gt;(arg1, arg2, ...)</code> takes the documented parameters by name, in declaration order, so the contract is visible at the call site.</li>
 <li>
 <strong>Returns are passed through.</strong> <code>assert_return_&lt;fn&gt;(value)</code> validates and returns <code>value</code> unchanged, so you can write <code>return(assert_return_fn(x))</code> or keep your own <code><a href="https://rdrr.io/r/base/invisible.html" class="external-link">invisible()</a></code>.</li>
 <li>
-<strong><code><a href="https://rdrr.io/r/base/invisible.html" class="external-link">invisible()</a></code> is irrelevant.</strong> Whether a function returns visibly or invisibly is a print concern, not a contract — generation depends solely on a typed <code>@return</code>. A <code>@return invisible(self)</code> written as prose is skipped; annotate <code>@return (R6&lt;Engine&gt;)</code> to assert it.</li>
+<strong><code><a href="https://rdrr.io/r/base/invisible.html" class="external-link">invisible()</a></code> is irrelevant</strong> — generation depends only on a typed <code>@return</code>, not on how the value is returned.</li>
 <li>
-<strong>R6 methods are scoped by class.</strong> A method <code>submit</code> on class <code>Engine</code> generates <code>assert_args_Engine__submit</code> (double-underscore separator), so two classes sharing a method name — or a method and a free function with the same name — never collide.</li>
-<li>
-<strong>Collision-safe.</strong> If two generated names would ever clash, generation aborts with a clear error rather than silently overwriting.</li>
+<strong>R6 methods are scoped by class.</strong> Method <code>submit</code> on class <code>Engine</code> generates <code>assert_args_Engine__submit</code> (double-underscore separator), so two classes sharing a method name never collide; clashes abort generation rather than overwrite.</li>
 <li>
 <strong>Internal, undocumented, committed.</strong> Generated helpers are not exported and carry no <code>.Rd</code>; they live in a single <code>R/contracts-generated.R</code> (with a do-not-edit banner) that you commit like <code>NAMESPACE</code>. Each package generates and uses its own.</li>
+<li>
+<strong>Using them is optional.</strong> The helpers are generated for you regardless; <em>calling</em> them is opt-in. You can adopt them in one function, a few, or all — and a function with no typed tags is simply left alone.</li>
 </ul>
 </div>
 <div class="section level2">
-<h2 id="supported-targets">Supported targets<a class="anchor" aria-label="anchor" href="#supported-targets"></a>
+<h2 id="why-annotations-not-in-code-types">Why annotations, not in-code types<a class="anchor" aria-label="anchor" href="#why-annotations-not-in-code-types"></a>
 </h2>
-<ul>
-<li>Plain functions: yes</li>
-<li>R6 class methods: yes</li>
-<li>S4 / Reference classes: not yet.</li>
-</ul>
-</div>
-<div class="section level2">
-<h2 id="configuration">Configuration<a class="anchor" aria-label="anchor" href="#configuration"></a>
-</h2>
-<p>Defaults need no config. Basic options (active roclets, output) live in the <code>DESCRIPTION</code> <code>Roxygen:</code> field. Richer settings (generated-file path, strictness) are read from an optional <code>roxyassert.yml</code> if present; absent, sensible defaults apply.</p>
-</div>
-<div class="section level2">
-<h2 id="why-not-put-the-type-in-the-code-instead">Why not put the type in the code instead?<a class="anchor" aria-label="anchor" href="#why-not-put-the-type-in-the-code-instead"></a>
-</h2>
-<p>Packages like <a href="https://github.com/moodymudskipper/typed" class="external-link"><code>typed</code></a> declare types inside the function body with a custom operator. That works and checks at runtime, but it changes how every function is written. <code>roxyassert</code> keeps your R code exactly as it is and treats the <strong>documentation</strong> you already write as the contract.</p>
+<p>Packages like <a href="https://github.com/moodymudskipper/typed" class="external-link"><code>typed</code></a> declare types inside the function body with a custom operator. That works and checks at runtime, but it changes how every function is written. <code>roxyassert</code> keeps your R code exactly as it is and treats the documentation you already write as the contract — and because the checks are generated <em>for</em> you, you never write a validation function by hand again, even if you choose not to call every one.</p>
 </div>
 <div class="section level2">
 <h2 id="status">Status<a class="anchor" aria-label="anchor" href="#status"></a>
@@ -293,7 +362,13 @@
 <div class="section level2">
 <h2 id="license">License<a class="anchor" aria-label="anchor" href="#license"></a>
 </h2>
-<p>MIT (c) Dereck Mezquita</p>
+<p>MIT © Dereck Mezquita. See <a href="LICENSE">LICENSE</a> for details.</p>
+</div>
+<div class="section level2">
+<h2 id="citation">Citation<a class="anchor" aria-label="anchor" href="#citation"></a>
+</h2>
+<div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/utils/citation.html" class="external-link">citation</a></span><span class="op">(</span><span class="st">"roxyassert"</span><span class="op">)</span></span></code></pre></div>
 </div>
 </div>
   </main><aside class="col-md-3"><div class="links">

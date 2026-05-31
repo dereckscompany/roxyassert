@@ -67,14 +67,16 @@
 <div class="section level2">
 <h2 id="what-roxyassert-does">What roxyassert does<a class="anchor" aria-label="anchor" href="#what-roxyassert-does"></a>
 </h2>
-<p><code>roxyassert</code> reads structured type annotations in your
-roxygen2 documentation and, at <code>document()</code> time, generates
-per-function argument and return assertion helpers. The generated checks
-are calls to the <a href="https://github.com/dereckscompany/assert" class="external-link"><code>assert</code></a>
-package, so a function’s documented contract and its runtime validation
+<p>R is dynamically typed, so a function can be handed the wrong type or
+hand back the wrong shape with no complaint. <code>roxyassert</code>
+reads the structured type annotations in your roxygen2 docs and, at
+<code>document()</code> time, generates per-function argument and return
+assertion helpers — calls to the <a href="https://github.com/dereckscompany/assert" class="external-link"><code>assert</code></a>
+package — so a function’s documented contract and its runtime validation
 come from one source.</p>
 <p>See the <a href="https://github.com/dereckscompany/roxyassert" class="external-link">README</a> for the
-full annotation grammar; this vignette is a short tour.</p>
+complete annotation grammar; this vignette is a short tour plus the
+pattern we use most.</p>
 </div>
 <div class="section level2">
 <h2 id="setup">Setup<a class="anchor" aria-label="anchor" href="#setup"></a>
@@ -86,34 +88,87 @@ full annotation grammar; this vignette is a short tour.</p>
 <h2 id="annotate-a-function">Annotate a function<a class="anchor" aria-label="anchor" href="#annotate-a-function"></a>
 </h2>
 <p>A type annotation is a parenthesised token at the start of a
-<code>@param</code> or <code>@return</code> description:</p>
+<code>@param</code> or <code>@return</code> description. A bare type is
+a vector; a scalar is declared explicitly.</p>
 <div class="sourceCode" id="cb2"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co">#' Submit an order.</span></span>
 <span><span class="co">#'</span></span>
 <span><span class="co">#' @param symbol (scalar&lt;character&gt;) normalised `BASE/QUOTE` pair.</span></span>
+<span><span class="co">#' @param side (enum&lt;character, "BUY" | "SELL"&gt;) order side.</span></span>
 <span><span class="co">#' @param quantity (scalar&lt;numeric&gt;) order size.</span></span>
 <span><span class="co">#' @param price_limit (scalar&lt;numeric&gt;?) limit price; `NULL` for market orders.</span></span>
 <span><span class="co">#' @return (data.table) the accepted order:</span></span>
-<span><span class="co">#' - **order_id** (character): exchange order id.</span></span>
-<span><span class="co">#' - **quantity** (numeric): accepted size.</span></span>
-<span><span class="co">#' - **datetime** (POSIXct): acceptance time.</span></span>
+<span><span class="co">#' - order_id (character): exchange order id.</span></span>
+<span><span class="co">#' - quantity (numeric): accepted size.</span></span>
+<span><span class="co">#' - datetime (POSIXct): acceptance time.</span></span>
 <span><span class="co">#' @export</span></span>
-<span><span class="va">submit_order</span> <span class="op">&lt;-</span> <span class="kw">function</span><span class="op">(</span><span class="va">symbol</span>, <span class="va">quantity</span>, <span class="va">price_limit</span> <span class="op">=</span> <span class="cn">NULL</span><span class="op">)</span> <span class="op">{</span></span>
-<span>  <span class="fu">assert_args_submit_order</span><span class="op">(</span><span class="va">symbol</span>, <span class="va">quantity</span>, <span class="va">price_limit</span><span class="op">)</span>   <span class="co"># generated</span></span>
+<span><span class="va">submit_order</span> <span class="op">&lt;-</span> <span class="kw">function</span><span class="op">(</span><span class="va">symbol</span>, <span class="va">side</span>, <span class="va">quantity</span>, <span class="va">price_limit</span> <span class="op">=</span> <span class="cn">NULL</span><span class="op">)</span> <span class="op">{</span></span>
+<span>  <span class="fu">assert_args_submit_order</span><span class="op">(</span><span class="va">symbol</span>, <span class="va">side</span>, <span class="va">quantity</span>, <span class="va">price_limit</span><span class="op">)</span>   <span class="co"># generated</span></span>
 <span>  <span class="va">result</span> <span class="op">&lt;-</span> <span class="va">...</span></span>
-<span>  <span class="kw"><a href="https://rdrr.io/r/base/function.html" class="external-link">return</a></span><span class="op">(</span><span class="fu">assert_return_submit_order</span><span class="op">(</span><span class="va">result</span><span class="op">)</span><span class="op">)</span>                <span class="co"># generated</span></span>
+<span>  <span class="kw"><a href="https://rdrr.io/r/base/function.html" class="external-link">return</a></span><span class="op">(</span><span class="fu">assert_return_submit_order</span><span class="op">(</span><span class="va">result</span><span class="op">)</span><span class="op">)</span>                      <span class="co"># generated</span></span>
 <span><span class="op">}</span></span></code></pre></div>
+<p><code>devtools::document()</code> (re)writes
+<code>R/contracts-generated.R</code> with
+<code>assert_args_submit_order()</code> and
+<code>assert_return_submit_order()</code>, committed alongside
+<code>NAMESPACE</code>.</p>
 </div>
 <div class="section level2">
-<h2 id="generate-the-checks">Generate the checks<a class="anchor" aria-label="anchor" href="#generate-the-checks"></a>
+<h2 id="the-pattern-an-abstract-class-that-enforces-its-own-contract">The pattern: an abstract class that enforces its own contract<a class="anchor" aria-label="anchor" href="#the-pattern-an-abstract-class-that-enforces-its-own-contract"></a>
 </h2>
+<p>A common use is an abstract base class whose public methods define a
+uniform interface. Document each method’s inputs and outputs once, and
+let <code>roxyassert</code> generate the checks — every concrete
+subclass then inherits a contract that is validated at runtime, on both
+the way in and the way out.</p>
 <div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="fu">devtools</span><span class="fu">::</span><span class="fu">document</span><span class="op">(</span><span class="op">)</span></span></code></pre></div>
-<p>This (re)writes <code>R/contracts-generated.R</code> with
-<code>assert_args_submit_order()</code> and
-<code>assert_return_submit_order()</code> — committed alongside
-<code>NAMESPACE</code>. Edit the docs, re-document, and the checks stay
-in sync.</p>
+<code class="sourceCode R"><span><span class="co">#' @title AbstractStore</span></span>
+<span><span class="co">#' @description A key-value store contract. Subclasses implement `.impl_*`;</span></span>
+<span><span class="co">#'   the public methods validate inputs and returns from the documented types.</span></span>
+<span><span class="va">AbstractStore</span> <span class="op">&lt;-</span> <span class="fu">R6</span><span class="fu">::</span><span class="kw"><a href="https://r6.r-lib.org/reference/R6Class.html" class="external-link">R6Class</a></span><span class="op">(</span></span>
+<span>  <span class="st">"AbstractStore"</span>,</span>
+<span>  public <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span></span>
+<span>    <span class="co">#' @description Fetch records by key.</span></span>
+<span>    <span class="co">#' @param keys (character) one or more keys to fetch.</span></span>
+<span>    <span class="co">#' @param limit (scalar&lt;integer&gt;?) optional max rows.</span></span>
+<span>    <span class="co">#' @return (data.table) the matched records:</span></span>
+<span>    <span class="co">#' - key (character): the record key.</span></span>
+<span>    <span class="co">#' - value (numeric): the stored value.</span></span>
+<span>    <span class="co">#' - updated_at (POSIXct): last-write time.</span></span>
+<span>    get <span class="op">=</span> <span class="kw">function</span><span class="op">(</span><span class="va">keys</span>, <span class="va">limit</span> <span class="op">=</span> <span class="cn">NULL</span><span class="op">)</span> <span class="op">{</span></span>
+<span>      <span class="fu">assert_args_AbstractStore__get</span><span class="op">(</span><span class="va">keys</span>, <span class="va">limit</span><span class="op">)</span>       <span class="co"># generated</span></span>
+<span>      <span class="va">result</span> <span class="op">&lt;-</span> <span class="va">private</span><span class="op">$</span><span class="fu">.impl_get</span><span class="op">(</span><span class="va">keys</span>, <span class="va">limit</span><span class="op">)</span></span>
+<span>      <span class="kw"><a href="https://rdrr.io/r/base/function.html" class="external-link">return</a></span><span class="op">(</span><span class="fu">assert_return_AbstractStore__get</span><span class="op">(</span><span class="va">result</span><span class="op">)</span><span class="op">)</span>  <span class="co"># generated</span></span>
+<span>    <span class="op">}</span>,</span>
+<span></span>
+<span>    <span class="co">#' @description Write one record.</span></span>
+<span>    <span class="co">#' @param key (scalar&lt;character&gt;) the record key.</span></span>
+<span>    <span class="co">#' @param value (scalar&lt;numeric&gt;) the value to store.</span></span>
+<span>    <span class="co">#' @return (R6&lt;AbstractStore&gt;) self, invisibly (for chaining).</span></span>
+<span>    put <span class="op">=</span> <span class="kw">function</span><span class="op">(</span><span class="va">key</span>, <span class="va">value</span><span class="op">)</span> <span class="op">{</span></span>
+<span>      <span class="fu">assert_args_AbstractStore__put</span><span class="op">(</span><span class="va">key</span>, <span class="va">value</span><span class="op">)</span>        <span class="co"># generated</span></span>
+<span>      <span class="va">private</span><span class="op">$</span><span class="fu">.impl_put</span><span class="op">(</span><span class="va">key</span>, <span class="va">value</span><span class="op">)</span></span>
+<span>      <span class="kw"><a href="https://rdrr.io/r/base/function.html" class="external-link">return</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/invisible.html" class="external-link">invisible</a></span><span class="op">(</span><span class="fu">assert_return_AbstractStore__put</span><span class="op">(</span><span class="va">self</span><span class="op">)</span><span class="op">)</span><span class="op">)</span></span>
+<span>    <span class="op">}</span></span>
+<span>  <span class="op">)</span>,</span>
+<span>  private <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span></span>
+<span>    .impl_get <span class="op">=</span> <span class="kw">function</span><span class="op">(</span><span class="va">keys</span>, <span class="va">limit</span><span class="op">)</span> <span class="kw"><a href="https://rdrr.io/r/base/stop.html" class="external-link">stop</a></span><span class="op">(</span><span class="st">"not implemented"</span><span class="op">)</span>,</span>
+<span>    .impl_put <span class="op">=</span> <span class="kw">function</span><span class="op">(</span><span class="va">key</span>, <span class="va">value</span><span class="op">)</span> <span class="kw"><a href="https://rdrr.io/r/base/stop.html" class="external-link">stop</a></span><span class="op">(</span><span class="st">"not implemented"</span><span class="op">)</span></span>
+<span>  <span class="op">)</span></span>
+<span><span class="op">)</span></span></code></pre></div>
+<p>Because the method names are scoped by class
+(<code>assert_args_AbstractStore__get</code>), two classes can share a
+method name without colliding. A subclass that overrides
+<code><a href="https://rdrr.io/r/base/get.html" class="external-link">get()</a></code> re-uses the same documented contract simply by
+calling the same generated helpers.</p>
+</div>
+<div class="section level2">
+<h2 id="using-the-checks-is-optional">Using the checks is optional<a class="anchor" aria-label="anchor" href="#using-the-checks-is-optional"></a>
+</h2>
+<p>The helpers are generated whether or not you call them. Adopt them in
+one method, a few, or all of them; a method with no typed tags is left
+untouched. You never hand-write a validation function again — even for
+the methods where you choose not to call one.</p>
 </div>
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>
     </nav></aside>
