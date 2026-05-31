@@ -1,0 +1,127 @@
+# Tests for the annotation parser (R/parse.R). parse_annotation() is internal.
+
+test_that("a bare atomic parses as a vector", {
+  a <- parse_annotation("(numeric) the value.")
+  expect_equal(a$kind, "slot")
+  expect_false(a$null_ok)
+  t <- a$alternatives[[1]]
+  expect_equal(t$kind, "atomic")
+  expect_equal(t$base, "numeric")
+  expect_equal(t$shape, "bare")
+  expect_null(t$length)
+})
+
+test_that("scalar / vector shapes and length forms", {
+  expect_equal(parse_annotation("(scalar<character>)")$alternatives[[1]]$shape, "scalar")
+  v <- parse_annotation("(vector<numeric, 1..10>)")$alternatives[[1]]
+  expect_equal(v$shape, "vector")
+  expect_equal(v$length, list(min = 1L, max = 10L))
+  expect_equal(parse_annotation("(vector<integer, 2..>)")$alternatives[[1]]$length, list(min = 2L, max = Inf))
+  expect_equal(parse_annotation("(vector<numeric, 10>)")$alternatives[[1]]$length, list(min = 10L, max = 10L))
+  expect_equal(parse_annotation("(vector<character, 0..>)")$alternatives[[1]]$length, list(min = 0L, max = Inf))
+})
+
+test_that("intervals: openness + bounds captured verbatim", {
+  iv <- parse_annotation("(scalar<numeric in ]0, 1]>)")$alternatives[[1]]$interval
+  expect_equal(iv$lo$text, "0")
+  expect_true(iv$lo_open)
+  expect_equal(iv$hi$text, "1")
+  expect_false(iv$hi_open)
+
+  expect_equal(parse_annotation("(scalar<numeric in ]0, Inf[>)")$alternatives[[1]]$interval$hi$sentinel, "Inf")
+  expect_equal(parse_annotation("(scalar<numeric in ]-Inf, 0]>)")$alternatives[[1]]$interval$lo$sentinel, "-Inf")
+  expect_equal(parse_annotation("(scalar<numeric in [-1.5, 2.5]>)")$alternatives[[1]]$interval$lo$text, "-1.5")
+})
+
+test_that("temporal interval bounds are R expressions, captured verbatim", {
+  dv <- parse_annotation('(scalar<Date in [as.Date("2024-01-01"), Inf[>)')$alternatives[[1]]$interval
+  expect_equal(dv$lo$text, 'as.Date("2024-01-01")')
+  expect_equal(dv$hi$sentinel, "Inf")
+  # a comma inside the bound expression is not the interval comma
+  pv <- parse_annotation('(scalar<POSIXct in [as.POSIXct("2024-01-01", tz = "UTC"), Inf[>)')$alternatives[[1]]$interval
+  expect_equal(pv$lo$text, 'as.POSIXct("2024-01-01", tz = "UTC")')
+})
+
+test_that("sets captured verbatim; the vector length comma is respected", {
+  expect_equal(
+    parse_annotation('(scalar<character in c("BUY", "SELL")>)')$alternatives[[1]]$set$text,
+    'c("BUY", "SELL")'
+  )
+  v <- parse_annotation('(vector<character in c("a", "b"), 1..10>)')$alternatives[[1]]
+  expect_equal(v$set$text, 'c("a", "b")')
+  expect_equal(v$length, list(min = 1L, max = 10L))
+  expect_equal(parse_annotation("(character in ORDER_SIDE)")$alternatives[[1]]$set$text, "ORDER_SIDE")
+})
+
+test_that("NA, nullability, and unions", {
+  expect_true(parse_annotation("(scalar<numeric | NA>)")$alternatives[[1]]$na_ok)
+  expect_true(parse_annotation("(numeric | NA)")$alternatives[[1]]$na_ok)
+  expect_true(parse_annotation("(scalar<numeric>?)")$null_ok)
+  expect_true(parse_annotation("(scalar<numeric> | NULL)")$null_ok)
+
+  u <- parse_annotation("(numeric | character)")
+  expect_equal(length(u$alternatives), 2L)
+  expect_equal(u$alternatives[[2]]$base, "character")
+
+  # `| NA` binds to the trailing atom of a union, not the whole slot
+  u2 <- parse_annotation("(numeric | character | NA)")
+  expect_equal(length(u2$alternatives), 2L)
+  expect_false(u2$alternatives[[1]]$na_ok)
+  expect_true(u2$alternatives[[2]]$na_ok)
+})
+
+test_that("references, wildcard, list<T> and composites", {
+  expect_equal(parse_annotation("(function)")$alternatives[[1]]$kind, "function")
+  expect_equal(parse_annotation("(function?)")$null_ok, TRUE)
+  expect_equal(parse_annotation("(R6<Engine>)")$alternatives[[1]]$class, "Engine")
+  expect_equal(parse_annotation("(any)")$alternatives[[1]]$kind, "wildcard")
+  expect_equal(parse_annotation("(scalar<any>)")$alternatives[[1]]$shape, "scalar")
+
+  lt <- parse_annotation("(list<character>)")$alternatives[[1]]
+  expect_equal(lt$kind, "composite")
+  expect_equal(lt$element$base, "character")
+  expect_null(parse_annotation("(data.table)")$alternatives[[1]]$element)
+  expect_equal(parse_annotation("(list<R6<Engine>>)")$alternatives[[1]]$element$kind, "r6")
+  expect_equal(parse_annotation("(R6<Reader> | R6<Writer>)")$alternatives[[2]]$class, "Writer")
+})
+
+test_that("scalar<raw> / vector<raw> / bare factor", {
+  expect_equal(parse_annotation("(scalar<raw>)")$alternatives[[1]]$base, "raw")
+  expect_equal(parse_annotation("(vector<raw, 32>)")$alternatives[[1]]$length, list(min = 32L, max = 32L))
+  expect_equal(parse_annotation("(factor)")$alternatives[[1]]$base, "factor")
+})
+
+test_that("the everything-at-once form", {
+  a <- parse_annotation("(vector<numeric in ]0, 1] | NA, 1..100>?)")
+  expect_true(a$null_ok)
+  t <- a$alternatives[[1]]
+  expect_equal(t$shape, "vector")
+  expect_equal(t$length, list(min = 1L, max = 100L))
+  expect_true(t$na_ok)
+  expect_true(t$interval$lo_open)
+  expect_false(t$interval$hi_open)
+})
+
+test_that("no leading paren returns NULL (untyped tag is skipped)", {
+  expect_null(parse_annotation("just a free-text description"))
+  expect_null(parse_annotation(""))
+  expect_null(parse_annotation(NA_character_))
+})
+
+test_that("invalid annotations are rejected with clear errors", {
+  expect_error(parse_annotation("(complex in [0, 1])"), "interval not allowed")
+  expect_error(parse_annotation("(character in [0, 1])"), "interval not allowed")
+  expect_error(parse_annotation("(logical in c(TRUE, FALSE))"), "set not allowed")
+  expect_error(parse_annotation("(raw in OPCODES)"), "set not allowed")
+  expect_error(parse_annotation("(raw | NA)"), "not allowed on 'raw'")
+  expect_error(parse_annotation("(integer in [0.5, 2.5])"), "whole number")
+  expect_error(parse_annotation("(Date in [0, 1])"), "class-matching expression")
+  expect_error(parse_annotation("(numeric in [Inf, 0])"), "only be the high")
+  expect_error(parse_annotation("(numeric in ]-Inf, 0])"), NA) # valid: -Inf low
+  expect_error(parse_annotation("(numeric in ]1, 1[)"), "empty")
+  expect_error(parse_annotation("(scalar<numeric> | NA)"), "must sit inside")
+  expect_error(parse_annotation("(numeric | NULL?)"), "nothing may follow")
+  expect_error(parse_annotation("(R6)"), "must name a class")
+  expect_error(parse_annotation("(scalar<numeric, 1>)"), "expected '>'")
+  expect_error(parse_annotation("(frobnicate)"), "unknown type")
+})
