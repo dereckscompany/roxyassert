@@ -99,9 +99,9 @@ a vector; a scalar is declared explicitly.</p>
 <span><span class="co">#' @param quantity (scalar&lt;numeric in ]0, Inf[&gt;) order size (positive).</span></span>
 <span><span class="co">#' @param price_limit (scalar&lt;numeric&gt;?) limit price; `NULL` for market orders.</span></span>
 <span><span class="co">#' @return (data.table) the accepted order:</span></span>
-<span><span class="co">#' - order_id (character): exchange order id.</span></span>
-<span><span class="co">#' - quantity (numeric): accepted size.</span></span>
-<span><span class="co">#' - datetime (POSIXct): acceptance time.</span></span>
+<span><span class="co">#' - order_id (character) exchange order id.</span></span>
+<span><span class="co">#' - quantity (numeric) accepted size.</span></span>
+<span><span class="co">#' - datetime (POSIXct) acceptance time.</span></span>
 <span><span class="co">#' @export</span></span>
 <span><span class="va">submit_order</span> <span class="op">&lt;-</span> <span class="kw">function</span><span class="op">(</span><span class="va">symbol</span>, <span class="va">side</span>, <span class="va">quantity</span>, <span class="va">price_limit</span> <span class="op">=</span> <span class="cn">NULL</span><span class="op">)</span> <span class="op">{</span></span>
 <span>  <span class="fu">assert_args_submit_order</span><span class="op">(</span><span class="va">symbol</span>, <span class="va">side</span>, <span class="va">quantity</span>, <span class="va">price_limit</span><span class="op">)</span>   <span class="co"># generated</span></span>
@@ -133,9 +133,9 @@ the way in and the way out.</p>
 <span>    <span class="co">#' @param keys (character) one or more keys to fetch.</span></span>
 <span>    <span class="co">#' @param limit (scalar&lt;integer&gt;?) optional max rows.</span></span>
 <span>    <span class="co">#' @return (data.table) the matched records:</span></span>
-<span>    <span class="co">#' - key (character): the record key.</span></span>
-<span>    <span class="co">#' - value (numeric): the stored value.</span></span>
-<span>    <span class="co">#' - updated_at (POSIXct): last-write time.</span></span>
+<span>    <span class="co">#' - key (character) the record key.</span></span>
+<span>    <span class="co">#' - value (numeric) the stored value.</span></span>
+<span>    <span class="co">#' - updated_at (POSIXct) last-write time.</span></span>
 <span>    get <span class="op">=</span> <span class="kw">function</span><span class="op">(</span><span class="va">keys</span>, <span class="va">limit</span> <span class="op">=</span> <span class="cn">NULL</span><span class="op">)</span> <span class="op">{</span></span>
 <span>      <span class="fu">assert_args_AbstractStore__get</span><span class="op">(</span><span class="va">keys</span>, <span class="va">limit</span><span class="op">)</span>       <span class="co"># generated</span></span>
 <span>      <span class="va">result</span> <span class="op">&lt;-</span> <span class="va">private</span><span class="op">$</span><span class="fu">.impl_get</span><span class="op">(</span><span class="va">keys</span>, <span class="va">limit</span><span class="op">)</span></span>

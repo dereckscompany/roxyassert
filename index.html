@@ -69,7 +69,7 @@
 <li>
 <strong>No magic, no coercion.</strong> Value constraints (ranges, sets) are plain R expressions <strong>copied verbatim</strong> into the generated check. You write <code>as.POSIXct("2024-01-01", tz = "America/New_York")</code> and roxyassert pastes it — it never guesses a format, a constructor, or a time zone on your behalf.</li>
 <li>
-<strong>An open type universe.</strong> Because those bounds and set elements are arbitrary R, <em>any</em> type with a constructor works — <code>Date</code>, <code>POSIXct</code>, <a href="https://lubridate.tidyverse.org/" class="external-link"><code>lubridate</code></a>, <code>bit64</code>, your own S4/R6 — not a fixed built-in list. roxyassert never has to “know about” your type to range-check it.</li>
+<strong>An open <em>value</em> universe.</strong> Interval bounds and set elements are arbitrary R, so you can range- or membership-check against <em>any</em> value type — <code>Date</code>, <code>POSIXct</code>, <a href="https://lubridate.tidyverse.org/" class="external-link"><code>lubridate</code></a>, <code>bit64</code>, your own classes — without roxyassert having to “know about” it. (The set of <em>declared</em> types is fixed; <code>any</code> is the wildcard for a value you deliberately don’t constrain.)</li>
 <li>
 <strong>Readable, debuggable output.</strong> The generated helpers are ordinary <code>assert</code> calls in a committed file you can open, read, and step through.</li>
 </ul>
@@ -132,11 +132,11 @@
 </h2>
 <p>A type annotation is a parenthesised token at the <strong>start</strong> of a <code>@param</code> or <code>@return</code> description. Tags without a leading <code>(...)</code> token are ignored, so adoption is incremental and opt-in.</p>
 <p>This section is the working overview; the <a href="https://dereckscompany.github.io/roxyassert/articles/grammar.html">complete grammar reference</a> (formal EBNF, type categories, precedence, and exhaustive demos) is the authoritative specification.</p>
-<p><strong>Default arity follows R: a bare type is a <em>vector</em> of any length.</strong> A scalar (length 1) is declared explicitly with <code>scalar&lt;...&gt;</code>.</p>
+<p><strong>Default arity follows R: a bare <em>atomic</em> type is a <em>vector</em> of any length.</strong> A scalar (length 1) is declared explicitly with <code>scalar&lt;...&gt;</code>. (Reference types — <code>function</code>/<code>R6</code> — are length-1, and a bare composite is an unconstrained list/table.)</p>
 <p>The <code>&lt;&gt;</code> generic wraps the <strong>element type</strong> (and, for <code>vector</code>, its length); the whole-argument modifiers sit outside it:</p>
 <ul>
 <li>
-<strong>Shape (<code>&lt;&gt;</code>):</strong> <code>scalar&lt;...&gt;</code>, <code>vector&lt;..., length&gt;</code>, <code>R6&lt;...&gt;</code>. A <strong>bare type is already a vector</strong>, so you only reach for <code>&lt;&gt;</code> when you need length 1 (<code>scalar</code>), an explicit length, or an R6 class.</li>
+<strong>Shape (<code>&lt;&gt;</code>):</strong> <code>scalar&lt;...&gt;</code>, <code>vector&lt;..., length&gt;</code>, <code>R6&lt;...&gt;</code>. A <strong>bare <em>atomic</em> type is already a vector</strong>, so you only reach for <code>&lt;&gt;</code> when you need length 1 (<code>scalar</code>), an explicit length, or an R6 class.</li>
 <li>
 <strong>Element constraints:</strong> <code>in &lt;interval-or-set&gt;</code> and <code>| NA</code> attach to the <em>element type</em> — <strong>bare or wrapped</strong>. <code>(numeric in [0, Inf[)</code> is a non-negative numeric vector; <code>(scalar&lt;numeric in [0, Inf[&gt;)</code> is a single non-negative number.</li>
 <li>
@@ -165,7 +165,7 @@
 <div class="section level3">
 <h3 id="base-types">Base types<a class="anchor" aria-label="anchor" href="#base-types"></a>
 </h3>
-<p>Valid wherever a <code>&lt;type&gt;</code> appears (inline, or in a column/field bullet):</p>
+<p>The type token in an annotation or a column/field bullet (subject to the per-category rules — <code>scalar&lt;&gt;</code>/<code>vector&lt;&gt;</code> wrap only atomics and <code>any</code>; <code>function</code>/<code>R6</code>/<code>list</code>/<code>data.*</code> are written bare):</p>
 <table class="table">
 <colgroup>
 <col width="50%">
@@ -215,6 +215,10 @@
 <td>date-time vector</td>
 </tr>
 <tr>
+<td><code>any</code></td>
+<td>any R object — no type check (the wildcard)</td>
+</tr>
+<tr>
 <td><code>list</code></td>
 <td>list (see composite form)</td>
 </tr>
@@ -236,7 +240,7 @@
 </tr>
 </tbody>
 </table>
-<p><code>function</code> and <code>R6&lt;Class&gt;</code> are <strong>reference types</strong>: written bare (<code>(function)</code>, <code>(R6&lt;Engine&gt;)</code>), nullable as a slot (<code>(R6&lt;Engine&gt;?)</code>), never wrapped in <code>scalar&lt;&gt;</code>/<code>vector&lt;&gt;</code> and never carrying <code>in</code>/<code>| NA</code>/length. Intervals (<code>in [ , ]</code>) apply to ordered types (<code>integer</code>/<code>numeric</code>/<code>Date</code>/<code>POSIXct</code>); sets (<code>in c(...)</code>) apply to atomics; see the <a href="https://dereckscompany.github.io/roxyassert/articles/grammar.html">grammar reference</a> for the full per-category rules.</p>
+<p><code>function</code> and <code>R6&lt;Class&gt;</code> are <strong>reference types</strong>: written bare (<code>(function)</code>, <code>(R6&lt;Engine&gt;)</code>), nullable as a slot (<code>(R6&lt;Engine&gt;?)</code>), never wrapped in <code>scalar&lt;&gt;</code>/<code>vector&lt;&gt;</code> and never carrying <code>in</code>/<code>| NA</code>/length. Intervals (<code>in [ , ]</code>) apply to the ordered types (<code>integer</code>/<code>numeric</code>/<code>Date</code>/<code>POSIXct</code>); sets (<code>in c(...)</code>) apply to the ordered and enumerable atomics (<code>integer</code>/<code>numeric</code>/<code>Date</code>/<code>POSIXct</code>/<code>character</code>/<code>factor</code>) — <code>complex</code>, <code>logical</code>, <code>raw</code>, and <code>any</code> take no set. <code>any</code> asserts nothing about type (length/nullability only). See the <a href="https://dereckscompany.github.io/roxyassert/articles/grammar.html">grammar reference</a> for the full per-category rules.</p>
 </div>
 <div class="section level3">
 <h3 id="inline-forms">Inline forms<a class="anchor" aria-label="anchor" href="#inline-forms"></a>
@@ -277,23 +281,28 @@
 <div class="section level3">
 <h3 id="composite-types--nested-bullets">Composite types — nested bullets<a class="anchor" aria-label="anchor" href="#composite-types--nested-bullets"></a>
 </h3>
-<p><code>list</code>, <code>data.table</code>, and <code>data.frame</code> describe their contents as a <strong>markdown bullet list</strong> beneath the tag. Bullets nest arbitrarily, so you can compose tables inside lists inside lists. Each bullet is <code>- name (type): description</code>; <strong>bold around the name is optional</strong> (<code>- **name** (type): ...</code> also works).</p>
+<p><code>list</code>, <code>data.table</code>, and <code>data.frame</code> describe their contents as a <strong>markdown bullet list</strong> beneath the tag. Bullets nest arbitrarily, so you can compose tables inside lists inside lists. Each bullet is <code>- name (type) description</code>; a <code>:</code> after the <code>)</code> is tolerated but optional, and <strong>bold around the name is optional</strong> (<code>- **name** (type) ...</code> also works).</p>
 <div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co">#' @return (list) the query result:</span></span>
-<span><span class="co">#' - ok (scalar&lt;logical&gt;): whether the query succeeded.</span></span>
-<span><span class="co">#' - rows (data.table): matched rows:</span></span>
-<span><span class="co">#'   - id (character): row identifier.</span></span>
-<span><span class="co">#'   - value (numeric in [0, Inf[): the (non-negative) value.</span></span>
-<span><span class="co">#' - meta (list): pagination metadata:</span></span>
-<span><span class="co">#'   - page (scalar&lt;integer in [1, Inf[&gt;): current page.</span></span>
-<span><span class="co">#'   - cursor (scalar&lt;character&gt;?): next-page cursor, or NULL at the end.</span></span></code></pre></div>
-<p>Because each leaf is checked for an atomic type, <strong>list-columns are rejected by construction</strong> — a column declared <code>(numeric)</code> that holds a list fails.</p>
+<span><span class="co">#' - ok (scalar&lt;logical&gt;) whether the query succeeded.</span></span>
+<span><span class="co">#' - rows (data.table) matched rows:</span></span>
+<span><span class="co">#'   - id (character) row identifier.</span></span>
+<span><span class="co">#'   - value (numeric in [0, Inf[) the (non-negative) value.</span></span>
+<span><span class="co">#' - meta (list) pagination metadata:</span></span>
+<span><span class="co">#'   - page (scalar&lt;integer in [1, Inf[&gt;) current page.</span></span>
+<span><span class="co">#'   - cursor (scalar&lt;character&gt;?) next-page cursor, or NULL at the end.</span></span></code></pre></div>
+<p>A column declared with an <strong>atomic</strong> type is checked for that type, so a column declared <code>(numeric)</code> that actually holds a list <strong>fails</strong> — the intended way to catch an accidental list-column. To declare one <em>on purpose</em>, type it <code>list&lt;T&gt;</code> (each cell a <code>T</code>) or <code>list&lt;any&gt;</code> (arbitrary cells). <code>list&lt;T&gt;</code> is also how you write any homogeneous list — <code>list&lt;function&gt;</code> (callbacks), <code>list&lt;R6&lt;Model&gt;&gt;</code> (model objects):</p>
+<div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="co">#' @return (data.table) rows:</span></span>
+<span><span class="co">#' - id (character) identifier.</span></span>
+<span><span class="co">#' - tags (list&lt;character&gt;) a list-column; each cell a character vector.</span></span>
+<span><span class="co">#' - meta (list&lt;any&gt;) a list-column of arbitrary cells (unchecked).</span></span></code></pre></div>
 </div>
 </div>
 <div class="section level2">
 <h2 id="quick-example">Quick example<a class="anchor" aria-label="anchor" href="#quick-example"></a>
 </h2>
-<div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co">#' Submit an order.</span></span>
 <span><span class="co">#'</span></span>
 <span><span class="co">#' @param symbol (scalar&lt;character&gt;) normalised `BASE/QUOTE` pair.</span></span>
@@ -301,10 +310,10 @@
 <span><span class="co">#' @param quantity (scalar&lt;numeric in ]0, Inf[&gt;) order size (positive).</span></span>
 <span><span class="co">#' @param price_limit (scalar&lt;numeric in ]0, Inf[&gt;?) limit price; `NULL` for market orders.</span></span>
 <span><span class="co">#' @return (data.table) the accepted order:</span></span>
-<span><span class="co">#' - order_id (character): exchange order id.</span></span>
-<span><span class="co">#' - status (character): order status.</span></span>
-<span><span class="co">#' - quantity (numeric): accepted size.</span></span>
-<span><span class="co">#' - datetime (POSIXct): acceptance time.</span></span>
+<span><span class="co">#' - order_id (character) exchange order id.</span></span>
+<span><span class="co">#' - status (character) order status.</span></span>
+<span><span class="co">#' - quantity (numeric) accepted size.</span></span>
+<span><span class="co">#' - datetime (POSIXct) acceptance time.</span></span>
 <span><span class="co">#' @export</span></span>
 <span><span class="va">submit_order</span> <span class="op">&lt;-</span> <span class="kw">function</span><span class="op">(</span><span class="va">symbol</span>, <span class="va">side</span>, <span class="va">quantity</span>, <span class="va">price_limit</span> <span class="op">=</span> <span class="cn">NULL</span><span class="op">)</span> <span class="op">{</span></span>
 <span>  <span class="fu">assert_args_submit_order</span><span class="op">(</span><span class="va">symbol</span>, <span class="va">side</span>, <span class="va">quantity</span>, <span class="va">price_limit</span><span class="op">)</span>   <span class="co"># generated</span></span>
@@ -318,25 +327,25 @@
 <div class="section level3">
 <h3 id="deeply-nested-composition">Deeply nested composition<a class="anchor" aria-label="anchor" href="#deeply-nested-composition"></a>
 </h3>
-<div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co">#' Run a report.</span></span>
 <span><span class="co">#'</span></span>
 <span><span class="co">#' @param symbols (character) one or more `BASE/QUOTE` pairs.</span></span>
 <span><span class="co">#' @param top_n (scalar&lt;integer in [1, Inf[&gt;) how many rows to keep.</span></span>
 <span><span class="co">#' @return (list) the report:</span></span>
-<span><span class="co">#' - status (scalar&lt;character in c("ok", "partial", "failed")&gt;): outcome.</span></span>
-<span><span class="co">#' - result (list): the payload:</span></span>
-<span><span class="co">#'   - rows (data.table): ranked rows:</span></span>
-<span><span class="co">#'     - symbol (character): the pair.</span></span>
-<span><span class="co">#'     - score (numeric in [0, Inf[): rank score.</span></span>
-<span><span class="co">#'   - pagination (list): cursor state:</span></span>
-<span><span class="co">#'     - page (scalar&lt;integer in [1, Inf[&gt;): current page.</span></span>
-<span><span class="co">#'     - cursor (scalar&lt;character&gt;?): next cursor, or NULL at the end.</span></span>
-<span><span class="co">#' - diagnostics (list): run diagnostics:</span></span>
-<span><span class="co">#'   - warnings (character): messages (possibly length 0).</span></span>
-<span><span class="co">#'   - timings (list): millisecond timings:</span></span>
-<span><span class="co">#'     - parse_ms (scalar&lt;numeric in [0, Inf[&gt;): parse time.</span></span>
-<span><span class="co">#'     - run_ms (scalar&lt;numeric in [0, Inf[&gt;): run time.</span></span>
+<span><span class="co">#' - status (scalar&lt;character in c("ok", "partial", "failed")&gt;) outcome.</span></span>
+<span><span class="co">#' - result (list) the payload:</span></span>
+<span><span class="co">#'   - rows (data.table) ranked rows:</span></span>
+<span><span class="co">#'     - symbol (character) the pair.</span></span>
+<span><span class="co">#'     - score (numeric in [0, Inf[) rank score.</span></span>
+<span><span class="co">#'   - pagination (list) cursor state:</span></span>
+<span><span class="co">#'     - page (scalar&lt;integer in [1, Inf[&gt;) current page.</span></span>
+<span><span class="co">#'     - cursor (scalar&lt;character&gt;?) next cursor, or NULL at the end.</span></span>
+<span><span class="co">#' - diagnostics (list) run diagnostics:</span></span>
+<span><span class="co">#'   - warnings (character) messages (possibly length 0).</span></span>
+<span><span class="co">#'   - timings (list) millisecond timings:</span></span>
+<span><span class="co">#'     - parse_ms (scalar&lt;numeric in [0, Inf[&gt;) parse time.</span></span>
+<span><span class="co">#'     - run_ms (scalar&lt;numeric in [0, Inf[&gt;) run time.</span></span>
 <span><span class="co">#' @export</span></span>
 <span><span class="va">report</span> <span class="op">&lt;-</span> <span class="kw">function</span><span class="op">(</span><span class="va">symbols</span>, <span class="va">top_n</span><span class="op">)</span> <span class="op">{</span></span>
 <span>  <span class="fu">assert_args_report</span><span class="op">(</span><span class="va">symbols</span>, <span class="va">top_n</span><span class="op">)</span></span>
@@ -347,17 +356,17 @@
 <div class="section level3">
 <h3 id="a-datatable-with-mixed-column-types">A data.table with mixed column types<a class="anchor" aria-label="anchor" href="#a-datatable-with-mixed-column-types"></a>
 </h3>
-<div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co">#' Open orders for a symbol.</span></span>
 <span><span class="co">#'</span></span>
 <span><span class="co">#' @param symbol (scalar&lt;character&gt;) the pair.</span></span>
 <span><span class="co">#' @param statuses (character in c("OPEN", "PARTIALLY_FILLED")) statuses to include.</span></span>
 <span><span class="co">#' @return (data.table) the open orders, newest first:</span></span>
-<span><span class="co">#' - order_id (character): exchange id.</span></span>
-<span><span class="co">#' - side (factor): BUY or SELL.</span></span>
-<span><span class="co">#' - quantity (numeric in ]0, Inf[): remaining size.</span></span>
-<span><span class="co">#' - reduce_only (logical): reduce-only flag.</span></span>
-<span><span class="co">#' - created_at (POSIXct): submission time.</span></span>
+<span><span class="co">#' - order_id (character) exchange id.</span></span>
+<span><span class="co">#' - side (factor) BUY or SELL.</span></span>
+<span><span class="co">#' - quantity (numeric in ]0, Inf[) remaining size.</span></span>
+<span><span class="co">#' - reduce_only (logical) reduce-only flag.</span></span>
+<span><span class="co">#' - created_at (POSIXct) submission time.</span></span>
 <span><span class="co">#' @export</span></span>
 <span><span class="va">open_orders</span> <span class="op">&lt;-</span> <span class="kw">function</span><span class="op">(</span><span class="va">symbol</span>, <span class="va">statuses</span><span class="op">)</span> <span class="op">{</span></span>
 <span>  <span class="fu">assert_args_open_orders</span><span class="op">(</span><span class="va">symbol</span>, <span class="va">statuses</span><span class="op">)</span></span>
@@ -405,7 +414,7 @@
 <div class="section level2">
 <h2 id="citation">Citation<a class="anchor" aria-label="anchor" href="#citation"></a>
 </h2>
-<div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb9"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/utils/citation.html" class="external-link">citation</a></span><span class="op">(</span><span class="st">"roxyassert"</span><span class="op">)</span></span></code></pre></div>
 </div>
 </div>

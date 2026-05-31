@@ -37,9 +37,9 @@ explicitly.
 #' @param quantity (scalar<numeric in ]0, Inf[>) order size (positive).
 #' @param price_limit (scalar<numeric>?) limit price; `NULL` for market orders.
 #' @return (data.table) the accepted order:
-#' - order_id (character): exchange order id.
-#' - quantity (numeric): accepted size.
-#' - datetime (POSIXct): acceptance time.
+#' - order_id (character) exchange order id.
+#' - quantity (numeric) accepted size.
+#' - datetime (POSIXct) acceptance time.
 #' @export
 submit_order <- function(symbol, side, quantity, price_limit = NULL) {
   assert_args_submit_order(symbol, side, quantity, price_limit)   # generated
@@ -72,9 +72,9 @@ AbstractStore <- R6::R6Class(
     #' @param keys (character) one or more keys to fetch.
     #' @param limit (scalar<integer>?) optional max rows.
     #' @return (data.table) the matched records:
-    #' - key (character): the record key.
-    #' - value (numeric): the stored value.
-    #' - updated_at (POSIXct): last-write time.
+    #' - key (character) the record key.
+    #' - value (numeric) the stored value.
+    #' - updated_at (POSIXct) last-write time.
     get = function(keys, limit = NULL) {
       assert_args_AbstractStore__get(keys, limit)       # generated
       result <- private$.impl_get(keys, limit)
