@@ -165,7 +165,7 @@
 <div class="section level3">
 <h3 id="base-types">Base types<a class="anchor" aria-label="anchor" href="#base-types"></a>
 </h3>
-<p>The type token in an annotation or a column/field bullet (subject to the per-category rules — <code>scalar&lt;&gt;</code>/<code>vector&lt;&gt;</code> wrap only atomics and <code>any</code>; <code>function</code>/<code>R6</code>/<code>list</code>/<code>data.*</code> are written bare):</p>
+<p>The type token in an annotation or a column/field bullet (subject to the per-category rules — <code>scalar&lt;&gt;</code>/<code>vector&lt;&gt;</code> wrap only atomics and <code>any</code>; <code>function</code>/<code>R6</code>/<code>data.table</code>/<code>data.frame</code> are written bare; <code>list</code> is written bare, refined by bullets, or parameterised as <code>list&lt;T&gt;</code>):</p>
 <table class="table">
 <colgroup>
 <col width="50%">
@@ -220,7 +220,7 @@
 </tr>
 <tr>
 <td><code>list</code></td>
-<td>list (see composite form)</td>
+<td>list — bare = unconstrained; <code>list&lt;T&gt;</code> = homogeneous; + bullets = named record</td>
 </tr>
 <tr>
 <td><code>function</code></td>
@@ -269,11 +269,14 @@
 <li>
 <code>NA</code> elements allowed — <code>(numeric | NA)</code>
 </li>
-<li>nullable slot — <code>(scalar&lt;numeric&gt;?)</code> ≡ <code>(scalar&lt;numeric&gt; | NULL)</code>
-</li>
+<li>nullable slot — <code>(scalar&lt;numeric&gt;?)</code> ≡ <code>(scalar&lt;numeric&gt; | NULL)</code> (use one, not both)</li>
 <li>union of types — <code>(numeric | character)</code>
 </li>
 <li>R6 instance — <code>(R6&lt;Engine&gt;)</code>
+</li>
+<li>any (no type check) — <code>(any)</code>
+</li>
+<li>homogeneous list / list-column — <code>(list&lt;character&gt;)</code> / <code>(list&lt;any&gt;)</code>
 </li>
 </ul>
 <p>Everything composes. For example <code>(vector&lt;numeric in ]0, 1] | NA, 10&gt;)</code> means: a numeric vector of length 10, every element in <code>(0, 1]</code>, <code>NA</code> allowed.</p>

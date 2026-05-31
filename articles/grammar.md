@@ -34,12 +34,14 @@ itself — it must agree with itself everywhere.
     literals and taken on trust for opaque expressions (S2).
 7.  **A type may only carry what its category supports** (§2). The
     grammar makes *category-level* nonsense unrepresentable — an
-    interval on `complex`, a set on `logical`/`raw`, a fractional bound
-    on `integer`, a `vector` of `function`, `| NA` on `raw`, a
-    constraint on `any`. A bare *numeric literal* cannot bound a `Date`,
-    and `Inf`/`-Inf` are side-specific sentinels (the `bound`
-    productions are split positionally and by type); whether an opaque
-    expression bound is of the right class defers to static rule S2.
+    interval on `complex`, a set on `logical`/`raw`, a fractional or
+    expression bound on `integer` (integer bounds are literal whole
+    numbers or `±Inf`), a `vector` of `function`, `| NA` on `raw`, a
+    constraint on `any`. `Inf`/`-Inf` are side-specific sentinels
+    (`-Inf` low only, `Inf` high only). A `numeric`/`Date`/`POSIXct`
+    bound, by contrast, is an opaque expression — `0` and `as.Date(...)`
+    both parse — so whether it is of the atom’s class is a static check
+    (S2), not a grammatical one.
 
 ## 2. Type categories
 
@@ -54,7 +56,7 @@ per-type exceptions) decides which modifiers are legal:
 | **Byte atomic** | `raw` | ❌ | ❌ | ❌ | ✅ | bare / `scalar<>` / `vector<>` |
 | **Wildcard** | `any` | ❌ | ❌ | ❌ | ✅ | bare / `scalar<>` / `vector<>` |
 | **Reference** | `function` `R6<Class>` | ❌ | ❌ | ❌ | ❌ | **bare only** (length-1 by nature) |
-| **Composite** | `list` `data.table` `data.frame` | ❌ | ❌ | ❌ | ❌ | bare, or refined by **nested bullets** |
+| **Composite** | `list` `data.table` `data.frame` | ❌ | ❌ | ❌ | ❌ | bare, **nested bullets**, or `list<T>` (`list` only) |
 
 ¹ Sets compare with `==`/`%in%` and apply no normalisation. `integer`
 and whole-day `Date` sets (from `as.Date`/`Sys.Date`) are **exact** and
@@ -65,13 +67,16 @@ sub-day `Date`) sets are precision/time-zone-fragile, so are
 class — `as.Date("2024-01-01")`,
 `as.POSIXct("2024-01-01 09:00", tz = "America/New_York")` — and copied
 verbatim, so the user (not roxyassert) chooses the constructor, format,
-and time zone (S2). `integer` bounds are whole numbers; `Inf`/`-Inf` are
-open-end sentinels (S2). ² On `character` and `factor` a set constrains
-the **realised values** (`as.character(x) %in% set`); with `| NA` the
-generated check is `all(as.character(x) %in% set | is.na(x))`. It does
-**not** assert a factor’s declared
-[`levels()`](https://rdrr.io/r/base/levels.html) — for that, use prose
-(out of scope, §12).
+and time zone (S2). A `Date`/`POSIXct` bound’s class and time zone are
+taken on trust and compared with `<`/`>` (which coerce), so a class/tz
+mismatch yields a silently-wrong range check — keep the bound and the
+value in the same class/tz. `integer` bounds are literal whole numbers;
+`Inf`/`-Inf` are open-end sentinels (S2). ² On `character` and `factor`
+a set constrains the **realised values** (`as.character(x) %in% set`);
+with `| NA` the generated check is
+`all(as.character(x) %in% set | is.na(x))`. It does **not** assert a
+factor’s declared [`levels()`](https://rdrr.io/r/base/levels.html) — for
+that, use prose (out of scope, §12).
 
 `any` asserts **nothing** about type — the generator emits no type
 check, only the requested length/nullability. It is the explicit escape
@@ -87,9 +92,9 @@ residual element-type rules are static (§4).
 
 ## 3. Formal context-free grammar (EBNF)
 
-    annotation     ::= "(" slot ")" ":"? description? bullets?
-                       (* the roxygen tag text after ) is the description; a leading
-                          ":" is tolerated but cosmetic (§canonical: omit it);
+    annotation     ::= "(" slot ")" description? bullets?
+                       (* everything after ) is free-text description (roxyassert
+                          ignores it); any ":" adjacent to it is cosmetic.
                           bullets gated by S1 *)
 
     slot           ::= type ( "|" type )*  ( ( "|" "NULL" ) | "?" )?
@@ -101,8 +106,10 @@ residual element-type rules are static (§4).
 
     atomic         ::= atom
                      | "scalar" "<" atom ">"
-                     | "vector" "<" atom ( "," length )? ">"
-                       (* a bare atom is a vector of any length *)
+                     | "vector" "<" atom "," length ">"
+                       (* a bare atom is a vector of any length; vector<> requires a
+                          length (a length-less vector<atom> is a parse error — use
+                          bare `atom`) *)
 
     atom           ::= "integer"     ( "in" ( int_interval  | set ) )?  ( "|" "NA" )?
                      | "numeric"     ( "in" ( num_interval  | set ) )?  ( "|" "NA" )?
@@ -117,16 +124,18 @@ residual element-type rules are static (§4).
 
     wildcard       ::= "any"
                      | "scalar" "<" "any" ">"
-                     | "vector" "<" "any" ( "," length )? ">"
+                     | "vector" "<" "any" "," length ">"
                        (* no in / set / | NA: any asserts nothing about type *)
 
     reference      ::= "function" | "R6" "<" ident ">"
-    composite      ::= "list" ( "<" slot ">" )? | "data.table" | "data.frame"
+    composite      ::= "list" ( "<" type ">" )? | "data.table" | "data.frame"
                        (* bare `list`/table = unconstrained, or a named record /
                           typed columns when refined by nested bullets (S1/S3).
-                          `list<T>` is a HOMOGENEOUS list: EVERY element is the slot
-                          T (assert_list_of) — list<character>, list<R6<Engine>>,
-                          list<any>, list<data.table>. A `list<T>` takes no bullets. *)
+                          `list<T>` is a HOMOGENEOUS list: EVERY element satisfies the
+                          type T — list<character>, list<scalar<numeric>>,
+                          list<R6<Engine>>, list<any>, list<data.table>. T is a `type`
+                          (no slot-level union / `| NULL` / `?`); a `list<T>` is a leaf
+                          and takes no bullets (S1, S3). *)
 
     int_interval   ::= low int_lo  "," int_hi  high
     num_interval   ::= low num_lo  "," num_hi  high
@@ -151,16 +160,17 @@ residual element-type rules are static (§4).
     name_set       ::= ident       (* a bare constant; a single maximal-munch token,
                                       terminated by | , ) > or ?; may NOT be a
                                       compound or indexing R expression *)
-    call_set       ::= rexpr       (* a bracketed R expression such as c("a", "b") *)
+    call_set       ::= rexpr       (* a call / index / any expression with brackets
+                                      or an operator — c("a", "b"), pkg::CONST *)
 
     length         ::= int          (* exactly n *)
                      | int ".." int (* inclusive range *)
                      | int ".."     (* at least n *)
 
     bullets        ::= bullet+      (* siblings at one indentation depth *)
-    bullet         ::= "- " name " (" slot ")" ":"? description? bullets?
-                       (* ":" tolerated, cosmetic; description optional;
-                          trailing bullets gated by S1 *)
+    bullet         ::= "- " name " (" slot ")" description? bullets?
+                       (* everything after ) is free-text description; any ":" is
+                          cosmetic. trailing bullets gated by S1. *)
     name           ::= ident | "**" ident "**"   (* bold optional, no semantic effect *)
 
     (* lexical terminals *)
@@ -179,15 +189,21 @@ Tokenizing rules (so the grammar is deterministic in practice):
   does the next structural token count. Consequently any `,` `|` `>` `<`
   `[` `]` inside a balanced `rexpr` is invisible to the annotation
   tokenizer; only top-level structural tokens are seen.
-- **Interval delimiters are lexed before the balancer.** A leading `[`
-  or `]` right after `in` opens an interval; the matching `]`/`[` after
-  the second bound closes it. These two structural brackets are stripped
-  *first*, so the rexpr bracket-balancer only ever runs on the
-  characters strictly between them — inside an interval a top-level
-  `[`/`]` is never a balancer bracket, and an open interval `]0, Inf[`
-  never unbalances anything. The interval has exactly one *top-level*
-  comma (between the bounds); commas inside an `rexpr` bound are
-  invisible.
+- **Interval scan (single pass).** A `[` or `]` immediately after `in`
+  opens an interval. Each bound is then scanned by the string-aware
+  bracket-balanced rexpr scan (rule 1), the two bounds separated by
+  exactly one *top-level* comma; the interval is closed by the first
+  top-level `]` or `[` that appears **after** the high bound has been
+  fully balanced. So a bound may itself end in `]` (e.g. `df[["t"]]`):
+  the balancer consumes it first, and only the bracket *after* it closes
+  the interval. Commas/brackets inside a balanced `rexpr` bound are
+  invisible; an open interval `]0, Inf[` never unbalances anything.
+- **Bound classification (ordered choice).** A bound is matched by
+  ordered choice: `-Inf`/`Inf` sentinel first, then a `signed_number`
+  (maximal munch of `-?digit+(.digit+)?` with nothing trailing before
+  the comma/close), then any other `rexpr`. A bound that lexes fully as
+  a sentinel or `signed_number` is a literal (subject to S2/S4);
+  anything else is an opaque `rexpr`, trusted (S2).
 - **Set dispatch after `in`.** If the next char is `[` or `]`, parse an
   interval. Otherwise scan an R expression: a lone maximal-munch `ident`
   with nothing trailing before `| , ) > ?` is a `name_set`; anything
@@ -210,17 +226,16 @@ Tokenizing rules (so the grammar is deterministic in practice):
   lone `.` is a decimal point, valid only inside a numeric bound; `..`
   in a bound position and a lone `.` in a length position are lexical
   errors.
-- **An optional `:` after `)`** — in both the single-line `annotation`
-  and a `bullet` — is tolerated and carries no grammatical force; the
-  canonical style omits it. The `name` of a bullet is the single token
-  before the first `(` at the bullet’s top level; the `slot` is the
-  balanced-parenthesis group opened by that `(`, found with the same
-  string-aware scan as `annotation`; everything after its matching `)`
-  (optionally a leading `:`) is the `description` — the remainder of the
-  **same physical line**. Names contain no spaces. Child `bullets` begin
-  only on a *subsequent* line at strictly greater indentation whose
-  first non-space characters are `-`; a `-` inside description text
-  (same line) is literal.
+- **Everything after `)` is free-text description.** roxyassert parses
+  only the `(slot)` token; the rest of the line is description it
+  ignores, so any `:` adjacent to it (`(type): desc`, `(type) desc:`) is
+  cosmetic — the canonical style omits it. The `name` of a bullet is the
+  single token before the first `(` at the bullet’s top level; the
+  `slot` is the balanced-parenthesis group opened by that `(`, found
+  with the same string-aware scan as `annotation`. Names contain no
+  spaces. Child `bullets` begin only on a *subsequent* line at strictly
+  greater indentation whose first non-space characters are `-`; a `-`
+  inside description text (same line) is literal.
 - **Reference and wildcard shapes** — `function`/`R6<Class>` are bare
   length-1 references (never `scalar<>`/`vector<>`, never
   `in`/`| NA`/length); `any` takes no `in`/set/`| NA` but does accept
@@ -241,33 +256,43 @@ are *specified rules*, not stylistic suggestions.
 
 - **S1 — composite nesting.** Nested `bullets` may follow an
   `annotation` or a `bullet` only when its slot has exactly one non-NULL
-  alternative and that alternative is a composite
-  (`list`/`data.table`/`data.frame`). Any other slot is a leaf and takes
-  no children; `(data.table | data.frame)` with bullets is rejected
-  (which field-set would they describe?).
-- **S2 — bound/set element type.** Every interval bound and set element
-  is an R expression **emitted verbatim** — roxyassert never coerces.
-  For an inline literal the generator checks it matches the atom’s type:
-  a number for `numeric`, a whole number for `integer` (also
-  grammar-enforced via `int_lo`/`int_hi`), the literal type for
-  `character`/`factor` sets. For `Date`/`POSIXct` “type” means the S3
-  class (`inherits(x, "Date")`), not `typeof`; the bound is a
-  class-matching expression the user supplies (`as.Date(...)`,
-  `as.POSIXct(..., tz = ...)`, `lubridate::ymd_hms(...)`), so the user
-  owns constructor/format/tz. `Inf`/`-Inf` are open-end **sentinels** —
-  `-Inf` only as the low bound, `Inf` only as the high — denoting “no
-  bound that side” (the comparison is omitted), not values. An opaque
-  `name_set` or any other `rexpr` is taken on trust — prefer an inline
-  literal where it matters.
+  alternative and that alternative is a **bare**
+  `list`/`data.table`/`data.frame` (no `<T>` parameter). Any other slot
+  — including a `list<T>`, which is a leaf — takes no children;
+  `(data.table | data.frame)` with bullets is rejected (which field-set
+  would they describe?).
+- **S2 — bound/set element type and lowering.** Every interval bound and
+  set element is an R expression **emitted verbatim** — roxyassert never
+  coerces. For an inline literal the generator checks it matches the
+  atom’s type: a number for `numeric`; a whole number written with the
+  `L` suffix for `integer` (a bare `c(1, 2, 3)` for an `integer` atom is
+  rejected — no coercion); a **character literal** for both `character`
+  and `factor` sets (a `factor` set is given by its character labels,
+  matched via `as.character(x)`, footnote 2). For `Date`/`POSIXct`
+  “type” means the S3 class (`inherits(x, "Date")`), not `typeof`; the
+  bound is a class-matching expression the user supplies
+  (`as.Date(...)`, `as.POSIXct(..., tz = ...)`,
+  `lubridate::ymd_hms(...)`), so the user owns constructor/format/tz,
+  and a class/tz mismatch compares silently wrong. `Inf`/`-Inf` are
+  open-end **sentinels** — `-Inf` only the low bound, `Inf` only the
+  high — denoting “no bound that side” (the comparison is omitted), not
+  values. **With `| NA`** an interval is lowered NA-aware —
+  `all((x in range) | is.na(x))`, equivalently checked on `x[!is.na(x)]`
+  — parallel to the set form in footnote 2; the default (no `| NA`)
+  rejects NA. An opaque `name_set` or any other `rexpr` is taken on
+  trust — prefer an inline literal where it matters.
 - **S3 — named composite fields, homogeneous lists, and list-columns.**
   A bulleted `list`/`data.table`/`data.frame` asserts the presence of
   the **named** fields/columns listed (`all(<names> %in% names(x))`,
   plus the per-column type for tables). A `list<T>` instead asserts
-  every element is `T` (`assert_list_of`) — no names. A column declared
-  with an **atomic** type rejects a list-cell — the intended way to
-  catch an accidental list-column; to declare a list-column
-  *deliberately*, type it `list<T>` (each cell a `T`,
-  e.g. `list<character>`) or `list<any>` (arbitrary cells).
+  every element satisfies `T`, applied element-wise (`assert_list_of`
+  for a flat element type; an element-wise loop of `T`’s full check when
+  `T` carries length/range/`| NA`). `list<any>` imposes **no**
+  per-element check — it lowers to a bare `assert_list(x)`, so `list`
+  and `list<any>` are the same runtime check. A column declared with an
+  **atomic** type rejects a list-cell — the intended way to catch an
+  accidental list-column; to declare one *deliberately*, type it
+  `list<T>` (each cell a `T`, e.g. `list<character>`) or `list<any>`.
   Positional/unnamed *records* are out of scope (§12). Field checks
   apply only when the value is non-`NULL`: a `| NULL`/`?` value
   short-circuits them.
@@ -342,6 +367,7 @@ list-column) whose every element is `T` (e.g. `list<character>`,
 (complex)                         # complex vector
 (raw)                             # raw vector
 (Date)                            # Date vector
+(POSIXct)                         # date-time vector
 (factor)                          # factor of any length
 
 # --- wildcard: any asserts nothing about type ---
@@ -349,6 +375,7 @@ list-column) whose every element is `T` (e.g. `list<character>`,
 (any?)                            # anything, or NULL
 (scalar<any>)                     # a single object of any type
 (vector<any, 3>)                  # length 3, elements of any type(s)
+(vector<any, 1..>)                # at least one element, any type(s)
 
 # --- scalar (length 1) ---
 (scalar<character>)
@@ -368,7 +395,8 @@ list-column) whose every element is `T` (e.g. `list<character>`,
 (list<scalar<numeric>>)           # a list of single numbers
 (list<R6<Engine>>)                # a list of Engine instances
 (list<function>)                  # a list of callbacks
-(list<any>)                       # a list of anything (e.g. a list-column)
+(list<any>)                       # a list of anything (= bare list at runtime)
+(list<data.table>)                # a list of data.tables
 
 # --- vector with explicit length (every atom type) ---
 (vector<numeric, 10>)             # exactly 10
@@ -389,9 +417,11 @@ list-column) whose every element is `T` (e.g. `list<character>`,
 (scalar<numeric in ]0, Inf[>)     # x > 0
 (scalar<numeric in ]-Inf, 0]>)    # x <= 0
 (scalar<integer in [1, Inf[>)     # x >= 1  (integer bounds are whole numbers)
+(scalar<integer in ]-Inf, 0]>)    # x <= 0  (-Inf is the low sentinel)
 (numeric in [0, 1])               # every element in [0, 1]
 (scalar<Date in [as.Date("2024-01-01"), as.Date("2026-12-31")]>)        # bounds are R exprs, verbatim
 (scalar<Date in [as.Date("2024-01-01"), Inf[>)                          # on or after a date (Inf high sentinel)
+(scalar<Date in ]-Inf, as.Date("2024-12-31")]>)                         # on or before a date (-Inf low sentinel)
 (scalar<POSIXct in [as.POSIXct("2024-01-01 00:00", tz = "America/New_York"), Inf[>)  # user owns the tz
 (scalar<POSIXct in [lubridate::ymd_hms("2024-01-01 00:00:00"), lubridate::ymd_hms("2025-01-01 00:00:00")[>)  # any constructor
 
@@ -624,7 +654,9 @@ AbstractStore <- R6::R6Class(
 # (vector<function, 3>)           # function is a length-1 reference (scope choice, §12)
 # (R6 | NULL)                     # R6 must name a class: R6<Class>
 # (data.table | NA)               # | NA is element-level; not valid on a composite
-# (data.table | data.frame): ...  # S1: bullets need a single composite alternative
+# (data.table | data.frame): ...  # S1: bullets need a single bare composite
+# (vector<numeric>)               # vector<> requires a length — use bare (numeric)
+# (list<numeric>): ...            # S1: list<T> is a leaf and takes no bullets
 ```
 
 ## 12. Non-goals (deliberately inexpressible)
@@ -655,10 +687,10 @@ Every base type sits in exactly one category (§2); every modifier it
 carries is a ✅ in that category’s row — no per-type exceptions.
 
 `in [interval]` appears only on `integer`/`numeric`/`Date`/`POSIXct`;
-integer bounds are whole numbers; `Date`/`POSIXct` bounds are
-class-matching R expressions emitted verbatim (no coercion); a
-numeric-literal bound on a `Date` is ungrammatical; `-Inf` only as the
-low bound, `Inf` only as the high (S2).
+integer bounds are literal whole numbers / `±Inf` (no expression);
+`numeric`/`Date`/`POSIXct` bounds are expressions whose class S2 checks
+(so `Date in [0, 1]` parses but S2 rejects it); `-Inf` only as the low
+bound, `Inf` only as the high.
 
 `in c(set)` appears only on ordered + enumerable atomics; never on
 `complex`/`logical`/`raw`/`any`; exact on `integer`/whole-day `Date`,
@@ -681,28 +713,33 @@ never after a closed `scalar<>`/`vector<>`.
 `any` carries no `in`/set/`| NA` and emits no type check; only length
 (`scalar<any>`/`vector<any, n>`) and nullability apply.
 
-intervals use `[ ]` / `] [` only; one top-level comma; brackets/commas
-inside an `rexpr` bound are invisible to the tokenizer.
+intervals use square brackets only (`[`/`]` low, `]`/`[` high —
+closed/open, any combination); never
+`( )`/[`{ }`](https://rdrr.io/r/base/Paren.html); one top-level comma;
+brackets/commas inside an `rexpr` bound are invisible to the tokenizer.
 
-sets are a bare `name_set` (single token) or a bracketed `call_set`;
-never [`{ }`](https://rdrr.io/r/base/Paren.html); `enum` is not a
-construct (the word appears only as prose).
+sets are a bare `name_set` (single token) or a `call_set`
+(call/index/operator expression); never
+[`{ }`](https://rdrr.io/r/base/Paren.html); `enum` is not a construct
+(the word appears only as prose).
 
-a length (`,` n / a..b / a..) appears only inside `vector<>`;
-`scalar<T, n>` is rejected (no top-level comma); `..` is one token,
-valid only in length position.
+`vector<>` requires a length (`,` n / a..b / a..); a length-less
+`vector<T>` is rejected (use bare `T`); a length appears only inside
+`vector<>`; `scalar<T, n>` is rejected; `..` is one token, valid only in
+length position.
 
 `function`/`R6<Class>` appear only as bare reference types; `R6` always
 names a class.
 
 `list`/`data.table`/`data.frame` carry no `in`/`| NA`/length/`vector<>`;
 refined by nested bullets (named record / typed columns, S1/S3) **or**,
-for `list`, parameterised as `list<T>` (homogeneous, every element `T`,
-no bullets); a list-column is typed `list<T>`, and an atomic-typed
-column rejects list-cells.
+for `list`, parameterised as `list<T>` where `T` is a single `type`
+(homogeneous, no slot-union/`| NULL`/`?`, a leaf with no bullets);
+`list<any>` ≡ bare `list` at runtime; a list-column is typed `list<T>`,
+and an atomic-typed column rejects list-cells.
 
-a `:` after `)` is tolerated but cosmetic in both single-line and bullet
-forms; canonical style omits it.
+everything after `)` is free-text description (roxyassert ignores it); a
+`:` adjacent to it is cosmetic; canonical style omits it.
 
 generated names are `assert_args_<fn>` / `assert_return_<fn>`, and
 `assert_args_<Class>__<method>` / `assert_return_<Class>__<method>` for
