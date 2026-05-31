@@ -28,11 +28,13 @@ can be audited against itself — it must agree with itself everywhere.
     type** as the atom it constrains — a static rule (S2), since `rexpr`
     is opaque.
 7.  **A type may only carry what its category supports** (§2). The
-    grammar makes structurally nonsensical combinations unrepresentable
-    — an interval on `complex`, a set on `logical`/`raw`, a fractional
-    bound on `integer`, a `vector` of `function`, `| NA` on `raw`. The
-    few remaining element-level rules are stated as static rules (§4),
-    not left implicit.
+    grammar makes *category-level* nonsense unrepresentable — an
+    interval on `complex`, a set on `logical`/`raw`, a fractional bound
+    on `integer`, a `vector` of `function`, `| NA` on `raw`.
+    Element-type agreement for **literal** bounds is grammar- enforced
+    too (a `numeric` literal cannot bound a `Date`, nor an ISO string a
+    `numeric` — the `bound` productions are split by type); only an
+    opaque R-expression bound defers to static rule S2.
 
 ## 2. Type categories
 
@@ -48,14 +50,19 @@ per-type exceptions) decides which modifiers are legal:
 | **Reference** | `function` `R6<Class>` | ❌ | ❌ | ❌ | ❌ | **bare only** (length-1 by nature) |
 | **Composite** | `list` `data.table` `data.frame` | ❌ | ❌ | ❌ | ❌ | bare, or refined by **nested bullets** |
 
-¹ Sets compare with `==`/`%in%` and apply no normalisation:
-**discouraged** on `numeric` (floating-point) and on `Date`/`POSIXct`
-(double-based, time-zone- and precision-sensitive) — prefer intervals
-there. Integer sets are exact and fine. Interval bounds for
-`Date`/`POSIXct` are R expressions of the matching class
-(e.g. `as.Date("2024-01-01")`); `integer` bounds are whole numbers (the
-grammar rejects fractional integer bounds); see static rule S2. ² On
-`character` and `factor` a set constrains the **realised values**
+¹ Sets compare with `==`/`%in%` and apply no normalisation. `integer`
+and `Date` sets are **exact** (both are whole-number doubles) and fine;
+`numeric` sets are floating-point-fragile and `POSIXct` sets are
+sub-second/time-zone-fragile, so both are **discouraged** — prefer
+intervals. Interval bounds for `Date`/`POSIXct` are written as **ISO
+8601 string literals** (`Date in ["2024-01-01", "2026-12-31"]`, coerced
+by the check) or as an explicit R expression (`as.Date(...)`) for a
+non-default format/time zone; see S2/S2a. `integer` bounds are whole
+numbers (the grammar rejects fractional integer bounds). `Inf` and
+`-Inf` are open-end **sentinels** — an unbounded side, not a value — so
+on `integer` they denote “no bound on that side” and the generated check
+simply omits that comparison. See static rule S2. ² On `character` and
+`factor` a set constrains the **realised values**
 (`as.character(x) %in% set`), so the two behave identically; it does
 **not** assert a factor’s declared
 [`levels()`](https://rdrr.io/r/base/levels.html) — for that, use prose
@@ -70,7 +77,9 @@ the residual element-type rules are static (§4).
 
 ## 3. Formal context-free grammar (EBNF)
 
-    annotation     ::= "(" slot ")" bullets?           (* bullets gated by S1 *)
+    annotation     ::= "(" slot ")" description? bullets?
+                       (* the roxygen tag text after ) is the description;
+                          bullets gated by S1 *)
 
     slot           ::= type ( "|" type )*  ( ( "|" "NULL" ) | "?" )?
                        (* a union of >=1 types; the whole argument may be NULL,
@@ -84,32 +93,37 @@ the residual element-type rules are static (§4).
                      | "vector" "<" atom ( "," length )? ">"
                        (* a bare atom is a vector of any length *)
 
-    atom           ::= "integer"     ( "in" ( int_interval | set ) )?  ( "|" "NA" )?
-                     | real_ordered  ( "in" ( interval | set ) )?      ( "|" "NA" )?
-                     | enumerable    ( "in" set )?                     ( "|" "NA" )?
-                     | plain                                           ( "|" "NA" )?
+    atom           ::= "integer"     ( "in" ( int_interval  | set ) )?  ( "|" "NA" )?
+                     | "numeric"     ( "in" ( num_interval  | set ) )?  ( "|" "NA" )?
+                     | temporal      ( "in" ( time_interval | set ) )?  ( "|" "NA" )?
+                     | enumerable    ( "in" set )?                      ( "|" "NA" )?
+                     | plain                                            ( "|" "NA" )?
                      | "raw"
 
-    real_ordered   ::= "numeric" | "Date" | "POSIXct"
+    temporal       ::= "Date" | "POSIXct"
     enumerable     ::= "character" | "factor"
     plain          ::= "complex" | "logical"
 
     reference      ::= "function" | "R6" "<" ident ">"
     composite      ::= "list" | "data.table" | "data.frame"
 
-    int_interval   ::= low int_bound "," int_bound high
-    interval       ::= low bound "," bound high
+    int_interval   ::= low int_bound  "," int_bound  high
+    num_interval   ::= low num_bound  "," num_bound  high
+    time_interval  ::= low time_bound "," time_bound high
     low            ::= "["    (* closed *) | "]"   (* open *)
     high           ::= "]"    (* closed *) | "["   (* open *)
     int_bound      ::= "-"? digit+ | "Inf" | "-Inf"
-    bound          ::= signed_number | "Inf" | "-Inf" | rexpr
-                       (* signed_number for numeric; an R expr of the matching class
-                          for Date/POSIXct, e.g. as.Date("2024-01-01"); see S2 *)
+    num_bound      ::= signed_number | "Inf" | "-Inf" | rexpr
+    time_bound     ::= iso_string | "Inf" | "-Inf" | rexpr
+                       (* iso_string is coerced via as.Date()/as.POSIXct(); a full R
+                          expr (as.Date(...)) is also accepted for explicit tz/format;
+                          see S2. The split makes a numeric bound on a Date — or vice
+                          versa — ungrammatical, not merely a static error. *)
 
     set            ::= name_set | call_set
     name_set       ::= ident       (* a bare constant; a single maximal-munch token,
-                                      terminated by | , ) or >; may NOT be a compound
-                                      R expression *)
+                                      terminated by | , ) > or ?; may NOT be a
+                                      compound or indexing R expression *)
     call_set       ::= rexpr       (* a bracketed R expression such as c("a", "b") *)
 
     length         ::= int          (* exactly n *)
@@ -125,8 +139,10 @@ the residual element-type rules are static (§4).
     int            ::= digit+
     signed_number  ::= "-"? digit+ ( "." digit+ )?
     ident          ::= letter ( letter | digit | "." | "_" )*
+    iso_string     ::= '"' ISO-8601-date-or-datetime '"'
+                       (* "YYYY", "YYYY-MM", "YYYY-MM-DD", or "YYYY-MM-DDThh:mm:ss" *)
     rexpr          ::= (* any valid R expression; opaque, emitted verbatim *)
-    description    ::= (* free text to end of the bullet line *)
+    description    ::= (* free text; the remainder of the same physical line *)
 
 Tokenizing rules (so the grammar is deterministic in practice):
 
@@ -137,42 +153,56 @@ Tokenizing rules (so the grammar is deterministic in practice):
   does the next structural token count. Consequently any `,` `|` `>` `<`
   `[` `]` inside a balanced `rexpr` is invisible to the annotation
   tokenizer; only top-level structural tokens are seen.
-- **One top-level comma per interval.** An `interval`/`int_interval` has
-  exactly one *top-level* comma, between its two bounds; commas inside
-  an `rexpr` bound are invisible (previous rule). The interval
-  delimiters `[ ] ] [` are recognised only at the interval’s structural
-  boundary (right after `in`, and right after the second bound) and are
-  **not** counted by the `< >` / `( )` depth tracker, so an open
-  interval `]0, Inf[` never unbalances anything.
+- **Interval delimiters are lexed before the balancer.** A leading `[`
+  or `]` right after `in` opens an interval; the matching `]`/`[` after
+  the second bound closes it. These two structural brackets are stripped
+  *first*, so the rexpr bracket-balancer only ever runs on the
+  characters strictly between them — inside an interval a top-level
+  `[`/`]` is never a balancer bracket, and an open interval `]0, Inf[`
+  never unbalances anything. The interval has exactly one *top-level*
+  comma (between the bounds); commas inside an `rexpr` bound are
+  invisible.
+- **Set dispatch after `in`.** If the next char is `[` or `]`, parse an
+  interval. Otherwise scan an R expression: a lone maximal-munch `ident`
+  with nothing trailing before `| , ) > ?` is a `name_set`; anything
+  containing `(`/`[`/an operator is a `call_set` (bracket-balanced,
+  string-aware). A bare `name_set` may not be compound or indexed —
+  `FOO | NA` is the set `FOO` plus an atom-level `| NA`, and `foo[1:2]`
+  must be written as the `call_set` it is. The terminating `|` is then
+  resolved by §5 (`NA` → atom, `NULL`/type → slot).
 - **The `vector` length comma.** Inside `vector<...>` the element `atom`
   — with its `in (...)` and `| NA` — is consumed first; the atom/length
-  comma is the first top-level comma that remains. `scalar<...>`
-  likewise admits **no top-level comma** (a comma inside an interval or
-  set is fine); `scalar<T, n>` fails because no length slot follows the
-  atom.
-- **Bare-name set.** A `name_set` is a single `ident` (maximal munch
-  over `letter|digit|.|_`); the next `|`, `,`, `)`, or `>` ends it. A
-  bare name may not itself be a compound R expression (`FOO | NA` reads
-  as the set `FOO` plus an atom-level `| NA`); use a `call_set` `c(...)`
-  when operators are needed.
+  comma is the first top-level comma that remains. `scalar<...>` has
+  **no length production**, so any *top-level* comma inside
+  `scalar<...>` is a parse error (a comma inside its interval or set is
+  fine) — that single rule is why `scalar<T, n>` is rejected.
 - **`>`** closes the innermost open generic (depth-aware); `vector<...>`
   and `R6<...>` each close one level. `R6` must be followed by
   `<ident>`; a bare `R6` is a parse error.
-- **`..` is one maximal-munch token**, valid only in a `length`; a lone
-  `.` is a decimal point, valid only inside a numeric bound. `..` in a
-  bound position and a lone `.` in a length position are lexical errors.
+- **`..` is exactly two dots** (maximal munch), valid only in a
+  `length`; a run of three or more dots (`...`) is a lexical error. A
+  lone `.` is a decimal point, valid only inside a numeric bound; `..`
+  in a bound position and a lone `.` in a length position are lexical
+  errors.
 - **Bullet anatomy.** The `name` is the single token before the first
   `(` at the bullet’s top level; the `slot` is the balanced-parenthesis
   group opened by that `(`, found with the same string-aware scan as
   `annotation`; everything after its matching `)` (optionally a leading
-  `:`) is free-text `description`. Names contain no spaces.
+  `:`) is the `description` — the remainder of the **same physical
+  line**. Names contain no spaces. Child `bullets` begin only on a
+  *subsequent* line at strictly greater indentation whose first
+  non-space characters are `-`; a `-` inside description text (same
+  line) is literal.
 - **Reference types are bare** — `function`/`R6<Class>` never appear in
   `scalar<>`/`vector<>` and never carry `in`/`| NA`/length.
-- **Union `| NA`.** Each union member is parsed as a full `atom`, so a
-  trailing `| NA` is consumed by that member’s `atom` before the slot
-  union resumes; since `NA` is reserved it can never be a `type`, so
-  `( "|" type )*` never swallows it. Thus in
-  `(numeric | character | NA)` the `| NA` belongs to `character`.
+- **Union `| NA` (one-token look-ahead past the `|`).** Each union
+  member is parsed as a full `atom`, which eagerly consumes its own
+  optional `| NA` before the slot’s union loop resumes; the
+  disambiguation is the token *after* the `|` (`NA` → element, reserved;
+  `NULL`/typename → slot). So in `(numeric | character | NA)` the `| NA`
+  belongs to `character`. `| NULL` is not positional: the grammar fixes
+  it to the slot tail, so a mid-union `(numeric | NULL | character)` is
+  a parse error.
 - **Nesting** of bullets is by **indentation depth**; the trailing `:`
   is optional and carries no grammatical force.
 
@@ -190,30 +220,52 @@ are *specified rules*, not stylistic suggestions.
 - **S2 — bound/set element type.** Interval bounds and set elements must
   evaluate to the constrained atom’s type: `signed_number`/`±Inf` for
   `numeric`; whole numbers/`±Inf` for `integer` (also enforced by the
-  grammar via `int_bound`); class-matching R expressions for
-  `Date`/`POSIXct` (e.g. `as.Date(...)`, never a character literal); the
-  literal element type for `character`/`factor`/`integer` sets.
+  grammar via `int_bound`); for `Date`/`POSIXct`, either an **ISO 8601
+  string literal** — coerced by the generated check via
+  [`as.Date()`](https://rdrr.io/r/base/as.Date.html) /
+  `as.POSIXct(..., tz = "UTC")` — or a class-matching R expression
+  (`as.Date(...)`) when a non-default format or time zone is needed; the
+  literal element type for `character`/`factor`/`integer` sets. S2
+  inspects literal/inline forms; a bare `name_set` (and any other opaque
+  `rexpr`) is taken on trust — prefer an inline literal where
+  checkability matters.
+- **S2a — partial dates resolve to period edges.** A partial
+  `iso_string` (`"2024"`, `"2024-06"`) denotes a whole period; as a
+  **low** bound it resolves to that period’s **first** instant and as a
+  **high** bound to its **last**, so `Date in ["2024", "2026"]` means
+  `[2024-01-01, 2026-12-31]` (“all of 2024 through all of 2026”). A full
+  `"YYYY-MM-DD"` is exact and unambiguous; use it when you do not want
+  period expansion.
 - **S3 — named composite fields.** A bulleted
   `list`/`data.table`/`data.frame` asserts the presence of the **named**
   fields/columns listed (`all(<names> %in% names(x))`, and the
   per-column type for tables). Positional or unnamed lists are out of
-  scope (§12).
+  scope (§12). Field checks apply only when the value is non-`NULL`: a
+  `| NULL`/`?` value short-circuits them.
+- **S4 — non-empty interval.** For literal numeric/integer bounds, the
+  low bound must be ≤ the high bound (and strictly \< when either end is
+  open), so an empty or reversed interval (`]1, 1[`, `[5, 1]`) — whose
+  check can never pass — is rejected at generation time.
+  `Date`/`POSIXct`/`rexpr` bounds are opaque and not range-checked.
 
 ## 5. Binding & precedence (why `|` is never ambiguous)
 
-After an `atom`/type, the next `|` is resolved by its operand:
+A `|` is resolved by **one-token look-ahead past it** — the token that
+follows:
 
 | What follows `\|` | Reads as | Level |
 |----|----|----|
 | `NA` | elements may be missing | element (part of an atom) |
-| `NULL` | the whole argument may be `NULL` | slot |
+| `NULL` | the whole argument may be `NULL` | slot (tail only) |
 | a type (`atomic` / `reference` / `composite`) | a union alternative | slot |
 
-`NA`/`NULL` are reserved and can never start a type, so each `|`
-resolves by look-ahead. `| NA` is valid **only after an atom** (never
-after a closed `scalar<>`/`vector<>`, never on `raw`, reference, or
-composite), and binds to the **immediately preceding atom** — the
-nearest type to its left, at most one per atom. Thus:
+`NA`/`NULL` are reserved and can never start a type, so this peek is
+unambiguous. Only `| NA` is *positional* (it attaches to the atom on its
+left); `| NULL` is fixed by the grammar to the slot tail and never
+appears mid-union. `| NA` is valid **only after an atom** (never after a
+closed `scalar<>`/`vector<>`, never on `raw`, reference, or composite),
+and binds to the **immediately preceding atom** — the nearest type to
+its left, at most one per atom. Thus:
 
 - `(scalar<numeric> | NA)` is **invalid**; write
   `(scalar<numeric | NA>)`.
@@ -251,16 +303,19 @@ list/table.
 ``` r
 # --- bare atomic = vector (any length) ---
 (character)                       # character vector, length >= 1
+(numeric)                         # double vector
 (integer)                         # integer vector
 (logical)                         # logical vector
 (complex)                         # complex vector
 (raw)                             # raw vector
 (Date)                            # Date vector
+(factor)                          # factor of any length
 
 # --- scalar (length 1) ---
 (scalar<character>)
 (scalar<numeric>)
 (scalar<complex>)
+(scalar<raw>)                     # a single byte
 (scalar<logical | NA>)            # tri-state flag: TRUE / FALSE / NA
 
 # --- reference types: bare, length-1 by nature ---
@@ -275,7 +330,9 @@ list/table.
 (vector<integer, 2..>)            # at least 2
 (vector<character, 0..>)          # any length, including 0
 (vector<logical, 3>)              # three flags
+(vector<raw, 32>)                 # a 32-byte hash
 (vector<factor in c("a", "b"), 2..>)               # set + open length
+(vector<numeric in [0, 1], 1..>)                   # interval + open-ended length
 (vector<Date in [as.Date("2024-01-01"), as.Date("2024-12-31")], 1..7>)  # rexpr-comma vs length-comma
 
 # --- intervals (ordered atomics only) ---
@@ -287,20 +344,29 @@ list/table.
 (scalar<numeric in ]-Inf, 0]>)    # x <= 0  (-Inf lower sentinel)
 (scalar<integer in [1, Inf[>)     # x >= 1  (integer bounds are whole numbers)
 (numeric in [0, 1])               # every element in [0, 1]
-(scalar<Date in [as.Date("2024-01-01"), as.Date("2024-12-31")]>)        # date range
-(scalar<POSIXct in [as.POSIXct("2024-01-01 00:00:00", tz = "UTC"), as.POSIXct("2024-12-31 23:59:59", tz = "UTC")]>)
+(scalar<Date in ["2024-01-01", "2026-12-31"]>)    # ISO string bounds (coerced)
+(scalar<Date in ["2024", "2026"]>)                # partial dates: all of 2024..2026 (S2a)
+(scalar<Date in ["2024-01-01", Inf[>)             # on or after a date (Inf sentinel)
+(scalar<Date in [as.Date("2024-01-01"), as.Date("2024-12-31")]>)        # explicit as.Date form
+(scalar<POSIXct in ["2024-01-01T00:00:00", "2024-12-31T23:59:59"]>)     # ISO date-time (UTC)
+(scalar<POSIXct in [as.POSIXct("2024-01-01 00:00:00", tz = "America/New_York"), Inf[>)  # explicit tz
 
 # --- sets / enums (ordered + enumerable atomics) ---
 (scalar<character in c("BUY", "SELL")>)   # inline set, scalar
 (character in c("BUY", "SELL"))           # vector, every element in the set
 (scalar<character in ORDER_SIDE>)         # set from a bare constant name
-(integer in c(1L, 2L, 3L))                # exact integer enum
-(factor in c("low", "med", "high"))       # constrains realised values (S2/footnote 2)
+(integer in c(1L, 2L, 3L))                # exact integer enum (bare vector)
+(scalar<integer in c(1L, 2L, 3L)>)        # exact integer enum (scalar)
+(factor in c("low", "med", "high"))       # constrains realised values (footnote 2)
+(Date in c("2024-01-01", "2024-06-30"))   # ISO-string set, coerced; exact at day resolution
 (numeric in c(0.25, 0.5, 1.0))            # discouraged: floating-point ==
 
 # --- NA permission (atomics except raw; default: NA not allowed) ---
 (numeric | NA)                    # numeric vector, NAs allowed
 (scalar<numeric | NA>)            # one numeric or NA
+(scalar<integer | NA>)            # one integer or NA
+(scalar<POSIXct | NA>)            # one timestamp or NA
+(complex | NA)                    # complex vector, NAs allowed
 (vector<numeric | NA, 10>)        # 10 numerics, NAs allowed
 (numeric in [0, 1] | NA)          # constrained + NA-allowed
 (factor in c("low", "med", "high") | NA)   # missing-category factor
@@ -339,13 +405,16 @@ list/table.
 #' @param dry_run (scalar<logical | NA>) simulate only; NA = use account default.
 #' @param not_before (scalar<POSIXct>?) earliest send time, or NULL.
 #' @param on_fill (function?) optional fill callback.
+#' @param config (list) execution config (a bulleted composite @param, S1):
+#' - slippage_bps (scalar<numeric in [0, Inf[>): allowed slippage.
+#' - retries (scalar<integer in [0, 5]>): max retries.
 #' @return (data.table) the acknowledgements (see Demo 2 for nested returns).
 #' @export
 place_batch <- function(symbol, sides, quantities, limits, leverage = NULL,
                         tags = character(), tag = NULL, venue, tier, dry_run,
-                        not_before = NULL, on_fill = NULL) {
+                        not_before = NULL, on_fill = NULL, config = list()) {
   assert_args_place_batch(symbol, sides, quantities, limits, leverage,
-                          tags, tag, venue, tier, dry_run, not_before, on_fill)
+                          tags, tag, venue, tier, dry_run, not_before, on_fill, config)
   result <- ...
   return(assert_return_place_batch(result))
 }
@@ -362,7 +431,7 @@ place_batch <- function(symbol, sides, quantities, limits, leverage = NULL,
 #' @return (list) the report:
 #' - **status** (scalar<character in c("ok", "partial", "failed")>): overall outcome.
 #' - generated_at (scalar<POSIXct>): when the report was produced.
-#' - window (scalar<Date in [as.Date("2000-01-01"), as.Date("2100-01-01")]>): as-of date.
+#' - window (scalar<Date in ["2000-01-01", "2100-01-01"]>): as-of date.
 #' - sections (list): one entry per requested view:
 #'   - matches (data.table): ranked matches:
 #'     - symbol (character): the pair.
@@ -487,6 +556,7 @@ AbstractStore <- R6::R6Class(
 # (complex in [0, 1])             # interval on a non-ordered type
 # (character in [0, 1])           # interval on a non-ordered type (use a set)
 # (integer in [0.5, 2.5])         # fractional bounds on integer
+# (numeric in ]1, 1[)             # S4: empty / reversed interval (never satisfiable)
 # (logical in c(TRUE, FALSE))     # logical takes no set (degenerate)
 # (complex in c(0+0i, 1+0i))      # complex takes no set
 # (raw in OPCODES)                # raw takes no set
@@ -523,14 +593,17 @@ Every base type sits in exactly one category (§2); every modifier it
 carries is a ✅ in that category’s row — no per-type exceptions.
 
 `in [interval]` appears only on `integer`/`numeric`/`Date`/`POSIXct`;
-integer bounds are whole numbers (`int_bound`).
+integer bounds are whole numbers; `Date`/`POSIXct` bounds are ISO
+strings (coerced) or class-matching expressions; `bound` productions are
+split by type so literal mismatches are ungrammatical (S2/S2a).
 
 `in c(set)` appears only on ordered + enumerable atomics; never on
-`complex`/`logical`/`raw`; discouraged on `numeric`/`Date`/`POSIXct`
-(`==`); on `factor`/`character` it constrains realised values, not
-levels (S2).
+`complex`/`logical`/`raw`; exact on `integer`/`Date`, discouraged on
+`numeric`/`POSIXct` (`==`); on `factor`/`character` it constrains
+realised values, not levels (footnote 2).
 
-interval/set bound types match the atom (S2).
+interval/set bound types match the atom, and intervals are non-empty
+(S2, S4).
 
 `| NA` appears only after an atom (bare or inside `<>`), never on `raw`,
 reference, or composite; binds to the nearest atom on its left; never
