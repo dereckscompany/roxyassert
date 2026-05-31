@@ -92,3 +92,15 @@ test_that("R6 methods generate <Class>__<method> helpers", {
   expect_false(any(grepl("assert_args_Store__count", code)))
   expect_true(any(grepl("^assert_return_Store__count <- function\\(value\\)", code)))
 })
+
+test_that("annotation text is read from raw, not markdown-rewritten val", {
+  # roxygen2 rewrites $val through markdown when enabled, mangling `<...>` into
+  # `\if{html}{\out{<...>}}`; the roclet must read the pristine $raw instead.
+  ptag <- list(raw = "qty (vector<numeric, 3>) sizes.", val = list(name = "qty", description = "MANGLED"))
+  expect_equal(.ra_param_text(ptag), "(vector<numeric, 3>) sizes.")
+  rtag <- list(raw = c("(data.table) acks:", "- id (character) the id."), val = "MANGLED")
+  expect_equal(.ra_tag_text(rtag), "(data.table) acks:\n- id (character) the id.")
+  # a multi-name @param keeps its names from $val$name, text from $raw
+  mtag <- list(raw = "a,b (scalar<numeric>) two.", val = list(name = "a,b", description = "X"))
+  expect_equal(.ra_param_text(mtag), "(scalar<numeric>) two.")
+})

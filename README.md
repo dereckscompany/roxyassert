@@ -71,12 +71,25 @@ renv::install("dereckscompany/roxyassert")
 # or: remotes::install_github("dereckscompany/roxyassert")
 ```
 
-## Setup (one line)
+## Setup
 
 Register the roclet in your package’s `DESCRIPTION`:
 
 ``` dcf
 Roxygen: list(markdown = TRUE, roclets = c("namespace", "rd", "roxyassert::contract_roclet"))
+```
+
+The generated helpers call `assert::*` functions by their bare names, so
+make `assert` an import of your package — add it to `Imports` and bring
+its namespace in once (e.g. a package-level `#' @import assert`):
+
+``` dcf
+Imports: assert
+```
+
+``` r
+#' @import assert
+NULL
 ```
 
 `devtools::document()` then runs `roxyassert` alongside the built-in

@@ -108,9 +108,25 @@ roclet_output.roclet_contract <- function(x, results, base_path, ...) {
 .ra_block_params <- function(block) {
   out <- list()
   for (tag in roxygen2::block_get_tags(block, "param")) {
-    out <- .ra_add_param(out, tag$val$name, tag$val$description, sprintf("@param '%s'", tag$val$name))
+    out <- .ra_add_param(out, tag$val$name, .ra_param_text(tag), sprintf("@param '%s'", tag$val$name))
   }
   return(out)
+}
+
+# The annotation text of a tag, read from its PRISTINE `$raw` (roxygen2 rewrites
+# `$val` through markdown when the package enables it, mangling our `<...>`
+# syntax into `\if{html}{\out{<...>}}`; `$raw` is the untouched source).
+.ra_tag_text <- function(tag) {
+  if (!is.character(tag$raw)) {
+    return("")
+  }
+  return(paste(tag$raw, collapse = "\n"))
+}
+
+# A @param's raw text is "name description"; drop the leading name token (the
+# name itself comes from the reliably-parsed `$val$name`).
+.ra_param_text <- function(tag) {
+  return(sub("^\\s*\\S+\\s+", "", .ra_tag_text(tag)))
 }
 
 # Append a parsed @param (split across its comma-separated names) to a param list.
@@ -131,7 +147,7 @@ roclet_output.roclet_contract <- function(x, results, base_path, ...) {
   if (is.null(tag)) {
     return(NULL)
   }
-  return(.ra_parse_or_stop(tag$val, "@return"))
+  return(.ra_parse_or_stop(.ra_tag_text(tag), "@return"))
 }
 
 # ---- assemble the generated helpers -----------------------------------------
@@ -209,9 +225,9 @@ roclet_output.roclet_contract <- function(x, results, base_path, ...) {
     }
     if (tag$tag == "param") {
       where <- sprintf("@param '%s' of method %s()", tag$val$name, method)
-      by_method[[method]]$params <- .ra_add_param(by_method[[method]]$params, tag$val$name, tag$val$description, where)
+      by_method[[method]]$params <- .ra_add_param(by_method[[method]]$params, tag$val$name, .ra_param_text(tag), where)
     } else {
-      by_method[[method]]$ret <- .ra_parse_or_stop(tag$val, sprintf("@return of method %s()", method))
+      by_method[[method]]$ret <- .ra_parse_or_stop(.ra_tag_text(tag), sprintf("@return of method %s()", method))
     }
   }
   return(by_method)
