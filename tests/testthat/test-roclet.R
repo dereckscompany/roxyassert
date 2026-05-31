@@ -153,4 +153,6 @@ test_that("a promise<T> @param is allowed — it lowers to the resolved-type che
   code <- unlist(roxygen2::roc_proc_text(contract_roclet(), text), use.names = FALSE)
   expect_true(any(grepl("^assert_args_with_logging <- function\\(p\\)", code)))
   expect_true(any(grepl("assert_data_table\\(p\\)", code)))
+  # promise-agnostic in @param position too: no then()/is.promise emitted
+  expect_false(any(grepl("promises::then|is\\.promise", code)))
 })

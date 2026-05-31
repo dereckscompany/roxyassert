@@ -335,8 +335,7 @@ inputs and outputs from the docs.
 Many APIs return a result either **synchronously** (the value) or
 **asynchronously** (a
 [`promises::promise`](https://rstudio.github.io/promises/) that resolves
-to the *same* value). roxyassert supports this with two return-only
-forms:
+to the *same* value). roxyassert supports this with two forms:
 
 - `promise<T>` — the function always returns a promise resolving to `T`.
 - `T | promise<T>` — the function returns `T` directly **or** a promise

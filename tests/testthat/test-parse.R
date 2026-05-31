@@ -282,5 +282,37 @@ test_that("promise<T> carries field bullets into the resolved composite", {
 
 test_that("promise<T> needs <T>, and a heterogeneous promise union is rejected", {
   expect_error(parse_annotation("(promise)"), "resolved type")
-  expect_error(parse_annotation("(numeric | promise<character>)"), "single type")
+  expect_error(parse_annotation("(numeric | promise<character>)"), "identical type")
+})
+
+# ---- promise<T> edge cases (self-review round) -------------------------------
+
+test_that("nested promise<promise<T>> collapses to the innermost type", {
+  expect_equal(parse_annotation("(promise<promise<data.table>>)")$alternatives[[1]]$base, "data.table")
+  n <- parse_annotation("(promise<promise<data.table>>)\n- id (character) i.")$alternatives[[1]]
+  expect_equal(n$base, "data.table")
+  expect_equal(length(n$fields), 1L)
+})
+
+test_that("promise<T> is a whole-slot value: rejected as a list element / inside scalar<>/vector<>", {
+  expect_error(parse_annotation("(list<promise<numeric>>)"), "list element")
+  expect_error(parse_annotation("(scalar<promise<numeric>>)"), "atomic type or 'any'")
+  expect_error(parse_annotation("(vector<promise<numeric>, 3>)"), "atomic type or 'any'")
+})
+
+test_that("a promise union must be the identical type on every alternative", {
+  expect_equal(parse_annotation("(promise<numeric> | promise<numeric>)")$alternatives[[1]]$base, "numeric")
+  expect_error(parse_annotation("(promise<numeric> | promise<character>)"), "identical type")
+  expect_error(parse_annotation("(numeric in [0, 1] | promise<numeric>)"), "identical type")
+})
+
+test_that("promise normalisation reaches field bullets", {
+  # a heterogeneous promise union in a field is rejected, like at the top level
+  expect_error(parse_annotation("(data.table)\n- x (numeric | promise<character>) c."), "identical type")
+  # a promise<data.table> field collapses, so it can carry its own column bullets
+  rows <- parse_annotation("(list)\n- rows (promise<data.table>) r:\n  - id (character) i.")$alternatives[[1]]$fields[[
+    1
+  ]]$ast$alternatives[[1]]
+  expect_equal(rows$base, "data.table")
+  expect_equal(length(rows$fields), 1L)
 })

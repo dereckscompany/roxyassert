@@ -405,3 +405,9 @@ test_that("promise<T> / T | promise<T> lower to the resolved type's checks (no p
     )
   )
 })
+
+test_that("promise<T> over a reference / nullable / nested resolved value", {
+  expect_equal(genf("(promise<R6<Engine>>)"), 'assert_class(x, "Engine")')
+  expect_equal(genf("(promise<data.table>?)"), c("if (!is.null(x)) {", "  assert_data_table(x)", "}"))
+  expect_equal(genf("(promise<promise<scalar<numeric>>>)"), "assert_scalar_double(x)")
+})
