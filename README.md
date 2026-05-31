@@ -81,7 +81,7 @@ Roxygen: list(markdown = TRUE, roclets = c("namespace", "rd", "roxyassert::contr
 
 The generated helpers call `assert::*` functions by their bare names, so
 make `assert` an import of your package — add it to `Imports` and bring
-its namespace in once (e.g. a package-level `#' @import assert`):
+its namespace in once (e.g. a package-level `#' @import assert`):
 
 ``` dcf
 Imports: assert
