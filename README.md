@@ -134,7 +134,8 @@ a **type union**.
 
 The type token in an annotation or a column/field bullet (subject to the
 per-category rules — `scalar<>`/`vector<>` wrap only atomics and `any`;
-`function`/`R6`/`list`/`data.*` are written bare):
+`function`/`R6`/`data.table`/`data.frame` are written bare; `list` is
+written bare, refined by bullets, or parameterised as `list<T>`):
 
 | Type | R meaning |
 |----|----|
@@ -148,7 +149,7 @@ per-category rules — `scalar<>`/`vector<>` wrap only atomics and `any`;
 | `Date` | `Date` vector |
 | `POSIXct` | date-time vector |
 | `any` | any R object — no type check (the wildcard) |
-| `list` | list (see composite form) |
+| `list` | list — bare = unconstrained; `list<T>` = homogeneous; + bullets = named record |
 | `function` | a function/closure (a bare, length-1 reference) |
 | `data.table` | a `data.table` (see composite form) |
 | `data.frame` | a `data.frame` (see composite form) |
@@ -180,9 +181,12 @@ for the full per-category rules.
 - enum, inline set (scalar) — `(scalar<character in c("BUY", "SELL")>)`
 - enum, vector from a constant — `(character in ORDER_SIDE)`
 - `NA` elements allowed — `(numeric | NA)`
-- nullable slot — `(scalar<numeric>?)` ≡ `(scalar<numeric> | NULL)`
+- nullable slot — `(scalar<numeric>?)` ≡ `(scalar<numeric> | NULL)` (use
+  one, not both)
 - union of types — `(numeric | character)`
 - R6 instance — `(R6<Engine>)`
+- any (no type check) — `(any)`
+- homogeneous list / list-column — `(list<character>)` / `(list<any>)`
 
 Everything composes. For example `(vector<numeric in ]0, 1] | NA, 10>)`
 means: a numeric vector of length 10, every element in `(0, 1]`, `NA`
