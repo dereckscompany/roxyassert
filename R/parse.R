@@ -245,6 +245,7 @@ parse_annotation <- function(text) {
   if (!.ra_eof(sp)) {
     .ra_err(sp, paste0("unexpected trailing input: '", substr(sp$s, sp$pos, sp$n), "'"))
   }
+  ast <- .ra_normalize_promise(ast)
   # Everything after the closing ')' is free-text description, which may carry
   # nested `- name (slot)` field bullets (a composite record / typed columns, S1).
   rest <- if (p$pos < p$n) substr(p$s, p$pos + 1L, p$n) else ""
@@ -402,7 +403,31 @@ parse_annotation <- function(text) {
       break
     }
   }
-  return(list(kind = "slot", alternatives = alts, null_ok = null_ok))
+  return(list(kind = "slot", alternatives = alts, null_ok = null_ok, async = FALSE))
+}
+
+# A promise<T> denotes the resolved type T plus an async marker; a union mixing
+# promise<X> with a bare X (the "sync-or-async delivery" pattern) collapses to a
+# single X. roxyassert validates only the resolved value and emits no promise
+# code (the caller wires the async); this just records `async = TRUE` and reduces
+# the slot to its resolved type, so generation and field bullets see plain T.
+.ra_normalize_promise <- function(ast) {
+  has_promise <- any(vapply(ast$alternatives, function(a) identical(a$kind, "promise"), logical(1)))
+  if (!has_promise) {
+    return(ast)
+  }
+  resolved <- lapply(ast$alternatives, function(a) if (identical(a$kind, "promise")) a$inner else a)
+  first <- resolved[[1]]
+  if (!all(vapply(resolved, function(a) identical(a, first), logical(1)))) {
+    stop(
+      "roxyassert: a union with a promise must resolve to a single type ",
+      "(e.g. (T | promise<T>)); its alternatives differ.",
+      call. = FALSE
+    )
+  }
+  ast$alternatives <- list(first)
+  ast$async <- TRUE
+  return(ast)
 }
 
 # ---- type --------------------------------------------------------------------
@@ -445,6 +470,16 @@ parse_annotation <- function(text) {
     }
     .ra_expect(p, ">")
     return(list(kind = "r6", class = cls))
+  }
+  if (w == "promise") {
+    .ra_ws(p)
+    if (.ra_ch(p) != "<") {
+      .ra_err(p, "promise must name its resolved type: promise<T>")
+    }
+    p$pos <- p$pos + 1L
+    inner <- .ra_parse_type(p)
+    .ra_expect(p, ">")
+    return(list(kind = "promise", inner = inner))
   }
   if (w %in% .ra_composite) {
     element <- NULL
