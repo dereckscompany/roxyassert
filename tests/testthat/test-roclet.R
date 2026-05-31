@@ -49,3 +49,46 @@ test_that("only annotated params enter the args helper; return-only is allowed",
   expect_false(any(grepl("assert_args_h <- function\\(a, b\\)", code)))
   expect_true(any(grepl("^assert_return_h <- function\\(value\\)", code)))
 })
+
+test_that("a bulleted composite @return generates field checks", {
+  text <- "
+    #' Report.
+    #' @return (data.table) matches:
+    #' - symbol (character) the pair.
+    #' - score (numeric in [0, 1]) normalised score.
+    #' @export
+    report <- function() NULL
+  "
+  code <- unlist(roxygen2::roc_proc_text(contract_roclet(), text), use.names = FALSE)
+  expect_true(any(grepl("^assert_return_report <- function\\(value\\)", code)))
+  expect_true(any(grepl('assert_has_columns\\(value, c\\("symbol", "score"\\)\\)', code)))
+  expect_true(any(grepl('assert_between\\(value\\[\\["score"\\]\\], lower = 0, upper = 1\\)', code)))
+})
+
+test_that("R6 methods generate <Class>__<method> helpers", {
+  text <- "
+    #' @title Store
+    #' @description A store.
+    Store <- R6::R6Class('Store',
+      public = list(
+        #' @description Get records.
+        #' @param keys (character) keys to fetch.
+        #' @param limit (scalar<integer in [1, Inf[>?) optional max rows.
+        #' @return (data.table) the records.
+        get = function(keys, limit = NULL) NULL,
+        #' @description Count records.
+        #' @return (scalar<integer in [0, Inf[>) the count.
+        count = function() NULL
+      )
+    )
+  "
+  code <- unlist(roxygen2::roc_proc_text(contract_roclet(), text), use.names = FALSE)
+  expect_true(any(grepl("^assert_args_Store__get <- function\\(keys, limit\\)", code)))
+  expect_true(any(grepl("assert_character\\(keys\\)", code)))
+  expect_true(any(grepl("assert_scalar_integer\\(limit\\)", code)))
+  expect_true(any(grepl("^assert_return_Store__get <- function\\(value\\)", code)))
+  expect_true(any(grepl("assert_data_table\\(value\\)", code)))
+  # count() has no params -> no args helper, but a return helper
+  expect_false(any(grepl("assert_args_Store__count", code)))
+  expect_true(any(grepl("^assert_return_Store__count <- function\\(value\\)", code)))
+})

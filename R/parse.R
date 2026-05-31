@@ -193,6 +193,111 @@ parse_annotation <- function(text) {
   if (!.ra_eof(sp)) {
     .ra_err(sp, paste0("unexpected trailing input: '", substr(sp$s, sp$pos, sp$n), "'"))
   }
+  # Everything after the closing ')' is free-text description, which may carry
+  # nested `- name (slot)` field bullets (a composite record / typed columns, S1).
+  rest <- if (p$pos < p$n) substr(p$s, p$pos + 1L, p$n) else ""
+  tree <- .ra_collect_bullets(rest)
+  if (length(tree) > 0L) {
+    ast <- .ra_attach_fields(ast, lapply(tree, .ra_finalize_bullet))
+  }
+  return(ast)
+}
+
+# ---- nested field bullets (S1 / S3) -----------------------------------------
+
+# Gather the `- ` bullet lines of a description into an indentation tree. Each
+# node is list(content = <text after "- ">, children = list(...)); non-bullet
+# lines (the inline description, wrapped prose) are ignored.
+.ra_collect_bullets <- function(text) {
+  if (!nzchar(trimws(text))) {
+    return(list())
+  }
+  lines <- strsplit(text, "\n", fixed = TRUE)[[1]]
+  items <- list()
+  for (ln in lines) {
+    m <- regmatches(ln, regexec("^([ \t]*)-[ \t]+(.*)$", ln))[[1]]
+    if (length(m) == 3L) {
+      items[[length(items) + 1L]] <- list(indent = nchar(m[[2]]), content = trimws(m[[3]]))
+    }
+  }
+  if (length(items) == 0L) {
+    return(list())
+  }
+  return(.ra_nest_bullets(items, 1L, -1L)$nodes)
+}
+
+# Turn the flat (indent, content) list into a tree: an item is a child of the
+# nearest preceding item with strictly smaller indentation.
+.ra_nest_bullets <- function(items, i, min_indent) {
+  nodes <- list()
+  while (i <= length(items)) {
+    it <- items[[i]]
+    if (it$indent <= min_indent) {
+      break
+    }
+    i <- i + 1L
+    sub <- .ra_nest_bullets(items, i, it$indent)
+    nodes[[length(nodes) + 1L]] <- list(content = it$content, children = sub$nodes)
+    i <- sub$pos
+  }
+  return(list(nodes = nodes, pos = i))
+}
+
+# One bullet -> list(name=, ast=): its `name (slot)` head, plus its own children
+# attached as fields when the slot is a bare composite.
+.ra_finalize_bullet <- function(node) {
+  bp <- .ra_cursor(node$content)
+  name <- .ra_read_bullet_name(bp)
+  .ra_expect(bp, "(")
+  inner <- .ra_scan(bp, stops = ")")
+  if (.ra_ch(bp) != ")") {
+    .ra_err(bp, "unterminated '(' in field bullet")
+  }
+  sp <- .ra_cursor(inner)
+  ast <- .ra_parse_slot(sp)
+  .ra_ws(sp)
+  if (!.ra_eof(sp)) {
+    .ra_err(sp, paste0("unexpected trailing input in field slot: '", substr(sp$s, sp$pos, sp$n), "'"))
+  }
+  if (length(node$children) > 0L) {
+    ast <- .ra_attach_fields(ast, lapply(node$children, .ra_finalize_bullet))
+  }
+  return(list(name = name, ast = ast))
+}
+
+# The field name: the single token before the slot's `(`, with optional **bold**.
+.ra_read_bullet_name <- function(p) {
+  nm <- trimws(.ra_scan(p, stops = "("))
+  nm <- trimws(gsub("^\\*\\*|\\*\\*$", "", nm))
+  if (nm == "") {
+    .ra_err(p, "field bullet needs a name before its '(type)'")
+  }
+  return(nm)
+}
+
+# S1: attach field bullets to a slot, which must be a single bare composite.
+.ra_attach_fields <- function(ast, fields) {
+  reject <- function(reason) {
+    stop(
+      "roxyassert: nested field bullets require a single bare composite ",
+      "(list / data.table / data.frame); ",
+      reason,
+      call. = FALSE
+    )
+  }
+  if (length(ast$alternatives) != 1L) {
+    reject("the slot is a union of several types")
+  }
+  node <- ast$alternatives[[1]]
+  if (!identical(node$kind, "composite")) {
+    kind <- if (identical(node$kind, "atomic")) node$base else node$kind
+    reject(paste0("the slot is a '", kind, "'"))
+  }
+  if (!is.null(node$element)) {
+    reject("a list<T> is a leaf and takes no bullets")
+  }
+  node$fields <- fields
+  ast$alternatives[[1]] <- node
   return(ast)
 }
 

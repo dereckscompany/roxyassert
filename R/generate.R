@@ -147,6 +147,22 @@ generate_checks <- function(ast, expr) {
       checks <- c(checks, sprintf("for (.x in %s) {", expr), paste0("  ", inner), "}")
     }
   }
+  if (!is.null(node$fields) && length(node$fields) > 0L) {
+    checks <- c(checks, .rg_fields(node, expr))
+  }
+  return(checks)
+}
+
+# Named-record / typed-column fields (S3): assert the names/columns are present,
+# then check each field's own annotation against `expr[["field"]]` (recursively).
+.rg_fields <- function(node, expr) {
+  names <- vapply(node$fields, function(f) f$name, character(1))
+  set <- paste0("c(", paste(sprintf('"%s"', names), collapse = ", "), ")")
+  has <- if (node$base == "list") "assert_has_names" else "assert_has_columns"
+  checks <- sprintf("%s(%s, %s)", has, expr, set)
+  for (f in node$fields) {
+    checks <- c(checks, generate_checks(f$ast, sprintf('%s[["%s"]]', expr, f$name)))
+  }
   return(checks)
 }
 

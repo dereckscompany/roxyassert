@@ -57,6 +57,10 @@ roclet_output.roclet_contract <- function(x, results, base_path, ...) {
 # ---- per-block: build the helper(s) for one documented object ---------------
 
 .ra_block_contract <- function(block) {
+  if (inherits(block$object, "r6class")) {
+    return(.ra_block_r6(block))
+  }
+
   fn <- .ra_block_name(block)
   if (is.null(fn)) {
     return(character())
@@ -64,8 +68,13 @@ roclet_output.roclet_contract <- function(x, results, base_path, ...) {
 
   params <- .ra_block_params(block)
   ret <- .ra_block_return(block)
-  out <- character()
+  return(.ra_assemble(fn, params, ret))
+}
 
+# Stitch a function's annotated params + return into its helper code (shared by
+# the plain-function and R6-method paths).
+.ra_assemble <- function(fn, params, ret) {
+  out <- character()
   if (length(params) > 0L) {
     out <- c(out, .ra_build_args_helper(fn, params))
   }
@@ -76,6 +85,13 @@ roclet_output.roclet_contract <- function(x, results, base_path, ...) {
     out <- c(out, .ra_build_return_helper(fn, ret))
   }
   return(out)
+}
+
+# Parse one annotation, re-raising any error with the documentation location.
+.ra_parse_or_stop <- function(text, where) {
+  return(tryCatch(parse_annotation(text), error = function(e) {
+    stop("roxyassert: in ", where, ": ", conditionMessage(e), call. = FALSE)
+  }))
 }
 
 # The documented object's name (a top-level function), or NULL to skip.
@@ -90,24 +106,21 @@ roclet_output.roclet_contract <- function(x, results, base_path, ...) {
 # Annotated @param tags, in documentation order, as a list of list(name=, ast=).
 # A multi-name tag (`@param x,y ...`) applies its annotation to each name.
 .ra_block_params <- function(block) {
-  tags <- roxygen2::block_get_tags(block, "param")
   out <- list()
-  for (tag in tags) {
-    ast <- tryCatch(parse_annotation(tag$val$description), error = function(e) {
-      stop(
-        "roxyassert: in @param '",
-        tag$val$name,
-        "': ",
-        conditionMessage(e),
-        call. = FALSE
-      )
-    })
-    if (is.null(ast)) {
-      next
-    }
-    for (nm in strsplit(tag$val$name, "\\s*,\\s*")[[1]]) {
-      out[[length(out) + 1L]] <- list(name = nm, ast = ast)
-    }
+  for (tag in roxygen2::block_get_tags(block, "param")) {
+    out <- .ra_add_param(out, tag$val$name, tag$val$description, sprintf("@param '%s'", tag$val$name))
+  }
+  return(out)
+}
+
+# Append a parsed @param (split across its comma-separated names) to a param list.
+.ra_add_param <- function(out, names, description, where) {
+  ast <- .ra_parse_or_stop(description, where)
+  if (is.null(ast)) {
+    return(out)
+  }
+  for (nm in strsplit(names, "\\s*,\\s*")[[1]]) {
+    out[[length(out) + 1L]] <- list(name = nm, ast = ast)
   }
   return(out)
 }
@@ -118,9 +131,7 @@ roclet_output.roclet_contract <- function(x, results, base_path, ...) {
   if (is.null(tag)) {
     return(NULL)
   }
-  return(tryCatch(parse_annotation(tag$val), error = function(e) {
-    stop("roxyassert: in @return: ", conditionMessage(e), call. = FALSE)
-  }))
+  return(.ra_parse_or_stop(tag$val, "@return"))
 }
 
 # ---- assemble the generated helpers -----------------------------------------
@@ -146,4 +157,85 @@ roclet_output.roclet_contract <- function(x, results, base_path, ...) {
     paste0("  ", body),
     "}"
   ))
+}
+
+# ---- R6 classes -------------------------------------------------------------
+#
+# roxygen2 collapses an R6 class's inline method docs into a single `r6class`
+# block: each method's @param/@return tags live in `block$tags`, and `.r6data`
+# (attached during parsing) records the methods and their source lines. We reuse
+# roxygen2's own tag->method association so the split matches its RD output, then
+# emit assert_args_<Class>__<method> / assert_return_<Class>__<method> per method.
+
+.ra_block_r6 <- function(block) {
+  r6 <- .ra_r6_data(block)
+  if (is.null(r6)) {
+    return(character())
+  }
+  methods <- r6$self[r6$self$type == "method", , drop = FALSE]
+  if (nrow(methods) == 0L) {
+    return(character())
+  }
+
+  class <- block$object$alias
+  by_method <- .ra_r6_collect(block, methods)
+  out <- character()
+  for (method in names(by_method)) {
+    info <- by_method[[method]]
+    code <- .ra_assemble(paste0(class, "__", method), info$params, info$ret)
+    if (length(code) > 0L) {
+      out <- c(if (length(out) > 0L) c(out, "") else out, code)
+    }
+  }
+  return(out)
+}
+
+# Group the block's method-level @param/@return tags by method name, in source
+# order, returning method -> list(params = list(list(name=, ast=)), ret = ast).
+.ra_r6_collect <- function(block, methods) {
+  tag_type <- .ra_ns_fn("r6_tag_type")
+  find_method <- .ra_ns_fn("find_method_for_tag")
+  by_method <- list()
+  for (tag in block$tags) {
+    if (!(tag$tag %in% c("param", "return")) || !identical(tag_type(tag, block), "method")) {
+      next
+    }
+    method <- if (!is.null(tag$r6method)) tag$r6method else find_method(methods, tag)
+    if (is.null(method) || is.na(method)) {
+      next
+    }
+    if (is.null(by_method[[method]])) {
+      by_method[[method]] <- list(params = list(), ret = NULL)
+    }
+    if (tag$tag == "param") {
+      where <- sprintf("@param '%s' of method %s()", tag$val$name, method)
+      by_method[[method]]$params <- .ra_add_param(by_method[[method]]$params, tag$val$name, tag$val$description, where)
+    } else {
+      by_method[[method]]$ret <- .ra_parse_or_stop(tag$val, sprintf("@return of method %s()", method))
+    }
+  }
+  return(by_method)
+}
+
+# The `.r6data` tag roxygen2 attaches to an R6 class block, or NULL.
+.ra_r6_data <- function(block) {
+  tag <- roxygen2::block_get_tag(block, ".r6data")
+  if (is.null(tag)) {
+    return(NULL)
+  }
+  return(tag$val)
+}
+
+# Fetch a roxygen2 internal needed for R6 tag association, with a clear error.
+.ra_ns_fn <- function(name) {
+  ns <- asNamespace("roxygen2")
+  if (!exists(name, envir = ns, inherits = FALSE)) {
+    stop(
+      "roxyassert: R6 contract support needs roxygen2's internal '",
+      name,
+      "'; your roxygen2 version may be incompatible.",
+      call. = FALSE
+    )
+  }
+  return(get(name, envir = ns))
 }

@@ -125,3 +125,58 @@ test_that("invalid annotations are rejected with clear errors", {
   expect_error(parse_annotation("(scalar<numeric, 1>)"), "expected '>'")
   expect_error(parse_annotation("(frobnicate)"), "unknown type")
 })
+
+# ---- nested field bullets (S1 / S3) -----------------------------------------
+
+test_that("a bulleted composite attaches its fields", {
+  txt <- paste(
+    "(data.table) ranked matches:",
+    "- symbol (character) the pair.",
+    "- score (numeric in [0, 1]) score.",
+    sep = "\n"
+  )
+  node <- parse_annotation(txt)$alternatives[[1]]
+  expect_equal(node$kind, "composite")
+  expect_equal(node$base, "data.table")
+  expect_equal(length(node$fields), 2L)
+  expect_equal(node$fields[[1]]$name, "symbol")
+  expect_equal(node$fields[[1]]$ast$alternatives[[1]]$base, "character")
+  expect_equal(node$fields[[2]]$name, "score")
+  expect_equal(node$fields[[2]]$ast$alternatives[[1]]$interval$hi$text, "1")
+})
+
+test_that("bullets nest by indentation, recursively", {
+  txt <- paste(
+    "(list) the report:",
+    "- status (scalar<character>) outcome.",
+    "- rows (data.table | NULL) the page:",
+    "  - id (character) identifier.",
+    "  - amount (numeric in ]0, Inf[ | NA) amount.",
+    sep = "\n"
+  )
+  node <- parse_annotation(txt)$alternatives[[1]]
+  expect_equal(length(node$fields), 2L)
+  rows <- node$fields[[2]]
+  expect_equal(rows$name, "rows")
+  expect_true(rows$ast$null_ok)
+  inner <- rows$ast$alternatives[[1]]
+  expect_equal(inner$base, "data.table")
+  expect_equal(length(inner$fields), 2L)
+  expect_equal(inner$fields[[2]]$name, "amount")
+  expect_true(inner$fields[[2]]$ast$alternatives[[1]]$na_ok)
+})
+
+test_that("a **bold** field name is stripped", {
+  node <- parse_annotation("(list)\n- **status** (scalar<character>) outcome.")$alternatives[[1]]
+  expect_equal(node$fields[[1]]$name, "status")
+})
+
+test_that("S1: bullets require a single bare composite", {
+  expect_error(parse_annotation("(scalar<numeric>)\n- a (character) x."), "single bare composite")
+  expect_error(parse_annotation("(data.table | data.frame)\n- a (character) x."), "union of several types")
+  expect_error(parse_annotation("(list<numeric>)\n- a (character) x."), "list<T> is a leaf")
+})
+
+test_that("a composite with no bullets keeps fields NULL", {
+  expect_null(parse_annotation("(data.table) just a table.")$alternatives[[1]]$fields)
+})

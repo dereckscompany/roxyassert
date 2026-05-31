@@ -80,3 +80,38 @@ test_that("nullable slot wraps the checks in if (!is.null(...))", {
   expect_true(any(grepl("assert_scalar_double\\(x\\)", g)))
   expect_equal(g[length(g)], "}")
 })
+
+test_that("composite fields lower to a names check + per-field checks", {
+  txt <- paste(
+    "(data.table) matches:",
+    "- symbol (character) the pair.",
+    "- score (numeric in [0, 1]) score.",
+    sep = "\n"
+  )
+  g <- generate_checks(parse_annotation(txt), "value")
+  expect_true(any(grepl('assert_has_columns\\(value, c\\("symbol", "score"\\)\\)', g)))
+  expect_true(any(grepl('assert_character\\(value\\[\\["symbol"\\]\\]\\)', g)))
+  expect_true(any(grepl('assert_between\\(value\\[\\["score"\\]\\], lower = 0, upper = 1\\)', g)))
+})
+
+test_that("a list record uses assert_has_names; nesting threads [[...]]", {
+  txt <- paste(
+    "(list)",
+    "- page (scalar<integer in [1, Inf[>) page.",
+    "- rows (data.table | NULL) the page:",
+    "  - id (character) id.",
+    sep = "\n"
+  )
+  g <- generate_checks(parse_annotation(txt), "value")
+  expect_true(any(grepl('assert_has_names\\(value, c\\("page", "rows"\\)\\)', g)))
+  expect_true(any(grepl('if \\(!is.null\\(value\\[\\["rows"\\]\\]\\)\\)', g)))
+  expect_true(any(grepl('assert_character\\(value\\[\\["rows"\\]\\]\\[\\["id"\\]\\]\\)', g)))
+})
+
+test_that("an atomic-typed column rejects list-cells; list<T> column is allowed", {
+  g <- generate_checks(parse_annotation("(data.table)\n- blob (list<any>) a list-column."), "value")
+  expect_true(any(grepl('assert_list\\(value\\[\\["blob"\\]\\]\\)', g)))
+  # an atomic column lowers to an atomic assert, which rejects a list at runtime
+  g2 <- generate_checks(parse_annotation("(data.table)\n- id (character) id."), "value")
+  expect_true(any(grepl('assert_character\\(value\\[\\["id"\\]\\]\\)', g2)))
+})
