@@ -108,7 +108,8 @@ roclet_output.roclet_contract <- function(x, results, base_path, ...) {
 .ra_block_params <- function(block) {
   out <- list()
   for (tag in roxygen2::block_get_tags(block, "param")) {
-    out <- .ra_add_param(out, tag$val$name, .ra_param_text(tag), sprintf("@param '%s'", tag$val$name))
+    split <- .ra_param_split(tag)
+    out <- .ra_add_param(out, split$names, split$text, sprintf("@param '%s'", split$names))
   }
   return(out)
 }
@@ -123,10 +124,18 @@ roclet_output.roclet_contract <- function(x, results, base_path, ...) {
   return(paste(tag$raw, collapse = "\n"))
 }
 
-# A @param's raw text is "name description"; drop the leading name token (the
-# name itself comes from the reliably-parsed `$val$name`).
-.ra_param_text <- function(tag) {
-  return(sub("^\\s*\\S+\\s+", "", .ra_tag_text(tag)))
+# Split a @param's raw text into its (comma-separated) name list and annotation
+# text. Read from $raw, NOT $val$name: when a user writes `@param a, b (...)`
+# roxygen2 splits on the first space and mangles $val$name to "a,". The leading
+# run of comma-separated identifiers is the names; the remainder is the text.
+.ra_param_split <- function(tag) {
+  raw <- .ra_tag_text(tag)
+  pattern <- "^\\s*([A-Za-z0-9._]+(?:\\s*,\\s*[A-Za-z0-9._]+)*)\\s*([\\s\\S]*)$"
+  m <- regmatches(raw, regexec(pattern, raw, perl = TRUE))[[1]]
+  if (length(m) != 3L) {
+    return(list(names = "", text = ""))
+  }
+  return(list(names = m[[2]], text = m[[3]]))
 }
 
 # Append a parsed @param (split across its comma-separated names) to a param list.
@@ -224,8 +233,9 @@ roclet_output.roclet_contract <- function(x, results, base_path, ...) {
       by_method[[method]] <- list(params = list(), ret = NULL)
     }
     if (tag$tag == "param") {
-      where <- sprintf("@param '%s' of method %s()", tag$val$name, method)
-      by_method[[method]]$params <- .ra_add_param(by_method[[method]]$params, tag$val$name, .ra_param_text(tag), where)
+      split <- .ra_param_split(tag)
+      where <- sprintf("@param '%s' of method %s()", split$names, method)
+      by_method[[method]]$params <- .ra_add_param(by_method[[method]]$params, split$names, split$text, where)
     } else {
       by_method[[method]]$ret <- .ra_parse_or_stop(.ra_tag_text(tag), sprintf("@return of method %s()", method))
     }

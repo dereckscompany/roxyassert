@@ -118,11 +118,16 @@
   return(invisible(NULL))
 }
 
-# Scan a verbatim span until a top-level character in `stops`. Tracks `()`/`{}`
-# nesting and skips string literals; `[`/`]` are NOT counted as nesting, so a
-# top-level `[`/`]` can act as an interval delimiter (the documented limitation:
-# an interval bound may not contain a top-level subscript — wrap it in a call).
-.ra_scan <- function(p, stops) {
+# Scan a verbatim span until a top-level character in `stops`. Always balances
+# `()` and `{}` and skips string literals. `brackets = TRUE` additionally balances
+# `[]` — use it ONLY in a rexpr context (an interval LOW bound, a call_set), where
+# `[` opens a subscript; leave it FALSE for the structural annotation scan, where
+# a top-level `[`/`]` is an interval delimiter and must pass through. The interval
+# HIGH bound is scanned separately (.ra_scan_high), since there `[`/`]` double as
+# the open/close delimiter.
+.ra_scan <- function(p, stops, brackets = FALSE) {
+  open <- if (brackets) c("(", "[", "{") else c("(", "{")
+  close <- if (brackets) c(")", "]", "}") else c(")", "}")
   start <- p$pos
   depth <- 0L
   while (!.ra_eof(p)) {
@@ -134,9 +139,9 @@
       .ra_skip_string(p)
       next
     }
-    if (ch %in% c("(", "{")) {
+    if (ch %in% open) {
       depth <- depth + 1L
-    } else if (ch %in% c(")", "}")) {
+    } else if (ch %in% close) {
       if (depth == 0L) {
         break
       }
@@ -145,6 +150,79 @@
     p$pos <- p$pos + 1L
   }
   return(trimws(substr(p$s, start, p$pos - 1L)))
+}
+
+# Scan an interval's HIGH bound, returning list(text=, open=). The closing
+# delimiter is a top-level `]` (closed) or `[` (open); brackets WITHIN the bound
+# (a subscript `df[["t"]]`, a call) are balanced first. A `[` at depth 0 is the
+# open-interval close only when it has no matching `]` ahead — otherwise it opens
+# a subscript that is part of the bound. p stops ON the closing bracket.
+.ra_scan_high <- function(p) {
+  start <- p$pos
+  depth <- 0L
+  while (!.ra_eof(p)) {
+    ch <- p$chars[p$pos]
+    if (ch %in% c("\"", "'", "`")) {
+      .ra_skip_string(p)
+      next
+    }
+    if (depth == 0L && ch == "]") {
+      return(list(text = trimws(substr(p$s, start, p$pos - 1L)), open = FALSE))
+    }
+    if (depth == 0L && ch == "[" && !.ra_bracket_has_match(p)) {
+      return(list(text = trimws(substr(p$s, start, p$pos - 1L)), open = TRUE))
+    }
+    if (ch %in% c("(", "[", "{")) {
+      depth <- depth + 1L
+    } else if (ch %in% c(")", "]", "}")) {
+      depth <- depth - 1L
+    }
+    p$pos <- p$pos + 1L
+  }
+  return(.ra_err(p, "expected ']' or '[' to close the interval"))
+}
+
+# From a `[` at p$pos, is there a matching `]` ahead (nesting- and string-aware)?
+# Tells a subscript (`df[["t"]]`, has a match) from an open-interval close
+# (`]0, Inf[`, whose trailing `[` has none).
+.ra_bracket_has_match <- function(p) {
+  i <- p$pos + 1L
+  depth <- 1L
+  while (i <= p$n) {
+    ch <- p$chars[i]
+    if (ch %in% c("\"", "'", "`")) {
+      i <- .ra_string_end(p, i)
+      next
+    }
+    if (ch == "[") {
+      depth <- depth + 1L
+    } else if (ch == "]") {
+      depth <- depth - 1L
+      if (depth == 0L) {
+        return(TRUE)
+      }
+    }
+    i <- i + 1L
+  }
+  return(FALSE)
+}
+
+# Index one past a string literal starting at index `i` (handles `\` escapes).
+.ra_string_end <- function(p, i) {
+  q <- p$chars[i]
+  i <- i + 1L
+  while (i <= p$n) {
+    ch <- p$chars[i]
+    if (ch == "\\") {
+      i <- i + 2L
+      next
+    }
+    i <- i + 1L
+    if (ch == q) {
+      break
+    }
+  }
+  return(i)
 }
 
 .ra_check_rexpr <- function(txt, p, what) {
@@ -196,6 +274,11 @@ parse_annotation <- function(text) {
   # Everything after the closing ')' is free-text description, which may carry
   # nested `- name (slot)` field bullets (a composite record / typed columns, S1).
   rest <- if (p$pos < p$n) substr(p$s, p$pos + 1L, p$n) else ""
+  # A nullability '?' belongs INSIDE the parens (slot tail); catch the misplaced
+  # `(slot)?` form rather than silently dropping it (which would read as non-null).
+  if (grepl("^\\s*\\?", rest)) {
+    .ra_err(p, "'?' must sit inside the parentheses: write (slot?), not (slot)?")
+  }
   tree <- .ra_collect_bullets(rest)
   if (length(tree) > 0L) {
     ast <- .ra_attach_fields(ast, lapply(tree, .ra_finalize_bullet))
@@ -433,7 +516,7 @@ parse_annotation <- function(text) {
       if (!(base %in% .ra_set_ok)) {
         .ra_err(p, paste0("set not allowed on '", base, "' (only ordered + enumerable atomics)"))
       }
-      set <- .ra_parse_set(p)
+      set <- .ra_parse_set(p, base)
     }
   }
 
@@ -460,18 +543,21 @@ parse_annotation <- function(text) {
 .ra_parse_interval <- function(p, base) {
   lo_open <- (.ra_ch(p) == "]")
   p$pos <- p$pos + 1L
-  lo_txt <- .ra_scan(p, stops = ",")
+  lo_txt <- .ra_scan(p, stops = ",", brackets = TRUE)
   .ra_expect(p, ",")
-  hi_txt <- .ra_scan(p, stops = c("]", "["))
-  hb <- .ra_ch(p)
-  if (!(hb %in% c("]", "["))) {
-    .ra_err(p, "expected ']' or '[' to close the interval")
-  }
-  hi_open <- (hb == "[")
-  p$pos <- p$pos + 1L
+  hi_scan <- .ra_scan_high(p)
+  hi_txt <- hi_scan$text
+  hi_open <- hi_scan$open
+  p$pos <- p$pos + 1L # consume the closing ']' / '['
 
   lo <- .ra_classify_bound(lo_txt, base, "low", p)
   hi <- .ra_classify_bound(hi_txt, base, "high", p)
+
+  # A both-sentinel interval imposes no bound and would lower to a bound-less
+  # assert_between() that aborts at runtime; reject it here instead.
+  if (!is.na(lo$sentinel) && !is.na(hi$sentinel)) {
+    .ra_err(p, "degenerate interval ]-Inf, Inf[: both ends are sentinels, so it bounds nothing; drop the 'in [..]'")
+  }
 
   # S4: reject an empty / reversed interval for literal numeric bounds.
   if (is.na(lo$sentinel) && is.na(hi$sentinel) && grepl("^-?[0-9.]+$", lo$text) && grepl("^-?[0-9.]+$", hi$text)) {
@@ -535,8 +621,8 @@ parse_annotation <- function(text) {
 
 # ---- set & length ------------------------------------------------------------
 
-.ra_parse_set <- function(p) {
-  txt <- .ra_scan(p, stops = c(",", "|", ">", ")", "?"))
+.ra_parse_set <- function(p, base) {
+  txt <- .ra_scan(p, stops = c(",", "|", ">", ")", "?"), brackets = TRUE)
   if (txt == "") {
     .ra_err(p, "empty set after 'in'")
   }
@@ -544,7 +630,70 @@ parse_annotation <- function(text) {
   if (grepl("[^A-Za-z0-9._]", txt)) {
     .ra_check_rexpr(txt, p, "set")
   }
+  .ra_check_set_elements(txt, base, p)
   return(list(text = txt))
+}
+
+# S2: an INLINE `c(...)` literal set must have elements of the atom's type, with
+# no coercion. An opaque name_set / rexpr (ORDER_SIDE, pkg::CONST, VALUES[...])
+# is trusted and left unchecked.
+.ra_check_set_elements <- function(txt, base, p) {
+  elems <- .ra_inline_set_elements(txt)
+  if (is.null(elems)) {
+    return(invisible(NULL))
+  }
+  for (e in elems) {
+    .ra_check_set_element(e, base, p)
+  }
+  return(invisible(NULL))
+}
+
+# The deparsed elements of a literal `c(...)` call, or NULL if `txt` is anything
+# else (a bare name, a `::`, an index, ...).
+.ra_inline_set_elements <- function(txt) {
+  expr <- tryCatch(parse(text = txt)[[1]], error = function(e) NULL)
+  if (is.null(expr) || !is.call(expr) || !identical(expr[[1]], as.name("c"))) {
+    return(NULL)
+  }
+  args <- as.list(expr)[-1]
+  return(vapply(args, function(a) paste(deparse(a), collapse = ""), character(1)))
+}
+
+.ra_check_set_element <- function(e, base, p) {
+  is_num <- grepl("^-?[0-9]+(\\.[0-9]+)?$", e)
+  is_int_l <- grepl("^-?[0-9]+L$", e)
+  is_str <- grepl("^[\"']", e)
+  if (base == "integer") {
+    if (is_num) {
+      .ra_err(
+        p,
+        paste0("integer set element '", e, "' needs the 'L' suffix (c(1L, 2L, 3L)); a bare number is not coerced")
+      )
+    }
+    if (!is_int_l) {
+      .ra_err(p, paste0("integer set element must be an integer literal like 2L, got '", e, "'"))
+    }
+  } else if (base %in% .ra_enumerable) {
+    if (!is_str) {
+      .ra_err(p, paste0("'", base, "' set element must be a string literal, got '", e, "'"))
+    }
+  } else if (base == "numeric") {
+    if (is_str || is_int_l) {
+      .ra_err(p, paste0("numeric set element must be a number, got '", e, "'"))
+    }
+  } else if (base %in% .ra_temporal) {
+    if (is_num || is_int_l) {
+      .ra_err(
+        p,
+        paste0(
+          "'",
+          base,
+          "' set element must be a class-matching expression (e.g. as.Date(\"...\")), not a bare number"
+        )
+      )
+    }
+  }
+  return(invisible(NULL))
 }
 
 .ra_parse_length <- function(p) {

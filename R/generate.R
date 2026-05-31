@@ -140,7 +140,10 @@ generate_checks <- function(ast, expr) {
       is.null(el$set) &&
       !isTRUE(el$na_ok)
     if (flat_atomic) {
-      checks <- c(checks, sprintf('assert_list_of(%s, "%s")', expr, el$base))
+      # `numeric` means double everywhere else; assert_list_of's is.numeric would
+      # otherwise wave through integer cells, so lower it to the strict "double".
+      el_type <- if (identical(el$base, "numeric")) "double" else el$base
+      checks <- c(checks, sprintf('assert_list_of(%s, "%s")', expr, el_type))
     } else {
       # richer element type: check each element in turn.
       inner <- .rg_type(el, ".x")

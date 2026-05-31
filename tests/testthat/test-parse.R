@@ -180,3 +180,44 @@ test_that("S1: bullets require a single bare composite", {
 test_that("a composite with no bullets keeps fields NULL", {
   expect_null(parse_annotation("(data.table) just a table.")$alternatives[[1]]$fields)
 })
+
+# ---- conformance review regressions -----------------------------------------
+
+test_that("interval bounds and call_sets balance square brackets (rexpr scan)", {
+  # the grammar's own worked example: a high bound ending in a subscript
+  iv <- parse_annotation('(scalar<numeric in [0, df[["t"]]]>)')$alternatives[[1]]$interval
+  expect_equal(iv$lo$text, "0")
+  expect_equal(iv$hi$text, 'df[["t"]]')
+  expect_false(iv$hi_open)
+  # a low bound containing a comma'd subscript
+  iv2 <- parse_annotation("(scalar<numeric in [x[1, 2], 5]>)")$alternatives[[1]]$interval
+  expect_equal(iv2$lo$text, "x[1, 2]")
+  expect_equal(iv2$hi$text, "5")
+  # a call_set with an operator inside a subscript
+  expect_equal(parse_annotation("(numeric in VALUES[VALUES > 0])")$alternatives[[1]]$set$text, "VALUES[VALUES > 0]")
+  expect_equal(parse_annotation("(integer in M[1, 2])")$alternatives[[1]]$set$text, "M[1, 2]")
+  # open intervals are unaffected
+  expect_true(parse_annotation("(scalar<numeric in ]0, Inf[>)")$alternatives[[1]]$interval$hi_open)
+})
+
+test_that("a nullability '?' after the closing ')' is rejected, not dropped", {
+  expect_error(parse_annotation("(character)?"), "must sit inside")
+  expect_error(parse_annotation("(numeric in [0, 1] | NA | character)?"), "must sit inside")
+  # the in-paren form is the canonical one and works
+  expect_true(parse_annotation("(character?)")$null_ok)
+})
+
+test_that("S2: inline set element types are checked (no coercion); opaque sets trusted", {
+  expect_error(parse_annotation("(integer in c(1, 2, 3))"), "L")
+  expect_silent(parse_annotation("(integer in c(1L, 2L, 3L))"))
+  expect_error(parse_annotation("(character in c(1, 2))"), "string literal")
+  expect_silent(parse_annotation('(character in c("a", "b"))'))
+  expect_error(parse_annotation("(Date in c(1, 2))"), "class-matching")
+  # a bare name_set / namespaced constant / index is opaque and trusted
+  expect_silent(parse_annotation("(character in ORDER_SIDE)"))
+  expect_silent(parse_annotation("(integer in pkg::CODES)"))
+})
+
+test_that("S: a both-sentinel interval is rejected (it bounds nothing)", {
+  expect_error(parse_annotation("(scalar<numeric in ]-Inf, Inf[>)"), "degenerate|bounds nothing")
+})

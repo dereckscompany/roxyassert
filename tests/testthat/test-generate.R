@@ -115,3 +115,10 @@ test_that("an atomic-typed column rejects list-cells; list<T> column is allowed"
   g2 <- generate_checks(parse_annotation("(data.table)\n- id (character) id."), "value")
   expect_true(any(grepl('assert_character\\(value\\[\\["id"\\]\\]\\)', g2)))
 })
+
+test_that("list<numeric> lowers to assert_list_of with the strict \"double\" type", {
+  expect_equal(gen("list<numeric>"), c("assert_list(x)", 'assert_list_of(x, "double")'))
+  # other element bases pass through unchanged
+  expect_equal(gen("list<character>"), c("assert_list(x)", 'assert_list_of(x, "character")'))
+  expect_equal(gen("list<integer>"), c("assert_list(x)", 'assert_list_of(x, "integer")'))
+})
