@@ -33,8 +33,8 @@ explicitly.
 #' Submit an order.
 #'
 #' @param symbol (scalar<character>) normalised `BASE/QUOTE` pair.
-#' @param side (enum<character, "BUY" | "SELL">) order side.
-#' @param quantity (scalar<numeric>) order size.
+#' @param side (scalar<character in c("BUY", "SELL")>) order side.
+#' @param quantity (scalar<numeric in ]0, Inf[>) order size (positive).
 #' @param price_limit (scalar<numeric>?) limit price; `NULL` for market orders.
 #' @return (data.table) the accepted order:
 #' - order_id (character): exchange order id.

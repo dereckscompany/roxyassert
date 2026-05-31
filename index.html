@@ -36,6 +36,7 @@
   <button class="nav-link dropdown-toggle" type="button" id="dropdown-articles" data-bs-toggle="dropdown" aria-expanded="false" aria-haspopup="true">Articles</button>
   <ul class="dropdown-menu" aria-labelledby="dropdown-articles">
 <li><a class="dropdown-item" href="articles/demo.html">Getting started with roxyassert</a></li>
+    <li><a class="dropdown-item" href="articles/grammar.html">The roxyassert annotation grammar — complete reference</a></li>
   </ul>
 </li>
       </ul>
@@ -116,12 +117,75 @@
 <h2 id="the-annotation-grammar">The annotation grammar<a class="anchor" aria-label="anchor" href="#the-annotation-grammar"></a>
 </h2>
 <p>A type annotation is a parenthesised token at the <strong>start</strong> of a <code>@param</code> or <code>@return</code> description. Tags without a leading <code>(...)</code> token are ignored, so adoption is incremental and opt-in.</p>
-<p><strong>Default arity follows R: a bare type is a <em>vector</em> of any length.</strong> A scalar (length 1) is declared explicitly.</p>
+<p>This section is the working overview; the <a href="https://dereckscompany.github.io/roxyassert/articles/grammar.html">complete grammar reference</a> (formal EBNF, type categories, precedence, and exhaustive demos) is the authoritative specification.</p>
+<p><strong>Default arity follows R: a bare type is a <em>vector</em> of any length.</strong> A scalar (length 1) is declared explicitly with <code>scalar&lt;...&gt;</code>.</p>
+<p>The <code>&lt;&gt;</code> generic wraps the <strong>element type</strong> (and, for <code>vector</code>, its length); the whole-argument modifiers sit outside it:</p>
+<ul>
+<li>
+<strong>Shape (<code>&lt;&gt;</code>):</strong> <code>scalar&lt;...&gt;</code>, <code>vector&lt;..., length&gt;</code>, <code>R6&lt;...&gt;</code>. A <strong>bare type is already a vector</strong>, so you only reach for <code>&lt;&gt;</code> when you need length 1 (<code>scalar</code>), an explicit length, or an R6 class.</li>
+<li>
+<strong>Element constraints:</strong> <code>in &lt;interval-or-set&gt;</code> and <code>| NA</code> attach to the <em>element type</em> — <strong>bare or wrapped</strong>. <code>(numeric in [0, Inf[)</code> is a non-negative numeric vector; <code>(scalar&lt;numeric in [0, Inf[&gt;)</code> is a single non-negative number.</li>
+<li>
+<strong>Slot (whole argument):</strong> a trailing <code>?</code> (may be <code>NULL</code>) and <code>|</code> type-unions.</li>
+</ul>
+<table class="table">
+<colgroup>
+<col width="50%">
+<col width="50%">
+</colgroup>
+<thead><tr>
+<th>Bracket / token</th>
+<th>Meaning</th>
+</tr></thead>
+<tbody>
+<tr>
+<td><code>&lt; &gt;</code></td>
+<td>generics: <code>scalar</code> / <code>vector</code> wrap the element type (+ length), <code>R6</code> names a class</td>
+</tr>
+<tr>
+<td><code>[ ] / ] [</code></td>
+<td>a numeric <strong>interval</strong> — <code>[</code>/<code>]</code> closed, <code>]</code>/<code>[</code> open (ISO/Bourbaki)</td>
+</tr>
+<tr>
+<td><code>in</code></td>
+<td>a value-constraint on the element type: an interval, or an R set</td>
+</tr>
+<tr>
+<td>
+<code>c(...)</code> / a name</td>
+<td>a <strong>set</strong> of allowed values (an enum)</td>
+</tr>
+<tr>
+<td><code>,</code></td>
+<td>a vector <strong>length</strong> (inside <code>&lt;&gt;</code>)</td>
+</tr>
+<tr>
+<td><code>\| NA</code></td>
+<td>elements may be <code>NA</code> (bare or wrapped) — default: <strong>not</strong> allowed</td>
+</tr>
+<tr>
+<td>
+<code>?</code> / <code>\| NULL</code>
+</td>
+<td>the whole argument may be <code>NULL</code> (slot level)</td>
+</tr>
+<tr>
+<td><code>\| &lt;type&gt;</code></td>
+<td>a union with another type, e.g. <code>numeric \| character</code>
+</td>
+</tr>
+</tbody>
+</table>
+<p>The <code>\|</code> operator is read by what follows it: <strong><code>NA</code></strong> = elements may be missing, <strong><code>NULL</code></strong> = the whole argument may be <code>NULL</code>, anything else = a <strong>type union</strong>.</p>
 <div class="section level3">
 <h3 id="base-types">Base types<a class="anchor" aria-label="anchor" href="#base-types"></a>
 </h3>
-<p>Every type below is valid wherever a <code>&lt;type&gt;</code> appears (inline or in a column/field bullet):</p>
+<p>Valid wherever a <code>&lt;type&gt;</code> appears (inline, or in a column/field bullet):</p>
 <table class="table">
+<colgroup>
+<col width="50%">
+<col width="50%">
+</colgroup>
 <thead><tr>
 <th>Type</th>
 <th>R meaning</th>
@@ -171,7 +235,7 @@
 </tr>
 <tr>
 <td><code>function</code></td>
-<td>a function/closure</td>
+<td>a function/closure (a bare, length-1 reference)</td>
 </tr>
 <tr>
 <td><code>data.table</code></td>
@@ -183,16 +247,20 @@
 </tr>
 <tr>
 <td><code>R6&lt;Class&gt;</code></td>
-<td>an R6 instance inheriting <code>Class</code>
-</td>
+<td>an R6 instance inheriting <code>Class</code> (a bare, length-1 reference)</td>
 </tr>
 </tbody>
 </table>
+<p><code>function</code> and <code>R6&lt;Class&gt;</code> are <strong>reference types</strong>: written bare (<code>(function)</code>, <code>(R6&lt;Engine&gt;)</code>), nullable as a slot (<code>(R6&lt;Engine&gt;?)</code>), never wrapped in <code>scalar&lt;&gt;</code>/<code>vector&lt;&gt;</code> and never carrying <code>in</code>/<code>| NA</code>/length. Intervals (<code>in [ , ]</code>) apply to ordered types (<code>integer</code>/<code>numeric</code>/<code>Date</code>/<code>POSIXct</code>); sets (<code>in c(...)</code>) apply to atomics; see the <a href="https://dereckscompany.github.io/roxyassert/articles/grammar.html">grammar reference</a> for the full per-category rules.</p>
 </div>
 <div class="section level3">
-<h3 id="inline-forms-generics">Inline forms (generics)<a class="anchor" aria-label="anchor" href="#inline-forms-generics"></a>
+<h3 id="inline-forms">Inline forms<a class="anchor" aria-label="anchor" href="#inline-forms"></a>
 </h3>
 <table class="table">
+<colgroup>
+<col width="50%">
+<col width="50%">
+</colgroup>
 <thead><tr>
 <th>Intent</th>
 <th>Annotation</th>
@@ -212,25 +280,50 @@
 <td><code>(vector&lt;numeric, 10&gt;)</code></td>
 </tr>
 <tr>
-<td>length range</td>
-<td><code>(vector&lt;numeric, 1..10&gt;)</code></td>
-</tr>
-<tr>
-<td>length at least <em>n</em>
+<td>length range / at least <em>n</em>
 </td>
-<td><code>(vector&lt;numeric, 2..&gt;)</code></td>
+<td>
+<code>(vector&lt;numeric, 1..10&gt;)</code> / <code>(vector&lt;numeric, 2..&gt;)</code>
+</td>
 </tr>
 <tr>
-<td>nullable / optional (<code>NULL</code> or missing passes)</td>
-<td><code>(numeric?)</code></td>
+<td>between 1 and 5 (inclusive)</td>
+<td><code>(scalar&lt;numeric in [1, 5]&gt;)</code></td>
 </tr>
 <tr>
-<td>enum — inline literals</td>
-<td><code>(enum&lt;character, "BUY" \| "SELL"&gt;)</code></td>
+<td>greater than 0</td>
+<td><code>(scalar&lt;numeric in ]0, Inf[&gt;)</code></td>
 </tr>
 <tr>
-<td>enum — from a constant/object</td>
-<td><code>(enum&lt;character, ORDER_SIDE&gt;)</code></td>
+<td>at most 1</td>
+<td><code>(scalar&lt;numeric in ]-Inf, 1]&gt;)</code></td>
+</tr>
+<tr>
+<td>every element of a vector in a range</td>
+<td><code>(numeric in [1, 5])</code></td>
+</tr>
+<tr>
+<td>enum — inline set (scalar)</td>
+<td><code>(scalar&lt;character in c("BUY", "SELL")&gt;)</code></td>
+</tr>
+<tr>
+<td>enum — vector from a constant</td>
+<td><code>(character in ORDER_SIDE)</code></td>
+</tr>
+<tr>
+<td>
+<code>NA</code> elements allowed</td>
+<td><code>(numeric \| NA)</code></td>
+</tr>
+<tr>
+<td>nullable slot</td>
+<td>
+<code>(scalar&lt;numeric&gt;?)</code> ≡ <code>(scalar&lt;numeric&gt; \| NULL)</code>
+</td>
+</tr>
+<tr>
+<td>union of types</td>
+<td><code>(numeric \| character)</code></td>
 </tr>
 <tr>
 <td>R6 instance</td>
@@ -238,7 +331,7 @@
 </tr>
 </tbody>
 </table>
-<p>The generic style is the explicit, uniform spelling: everything is <code>kind&lt;type, ...&gt;</code> (the same shape as C++ templates or TypeScript’s <code>Array&lt;T&gt;</code>). The <code>?</code> modifier composes, e.g. <code>(scalar&lt;numeric&gt;?)</code>.</p>
+<p>Everything composes. For example <code>(vector&lt;numeric in ]0, 1] | NA, 10&gt;)</code> means: a numeric vector of length 10, every element in <code>(0, 1]</code>, <code>NA</code> allowed.</p>
 </div>
 <div class="section level3">
 <h3 id="composite-types--nested-bullets">Composite types — nested bullets<a class="anchor" aria-label="anchor" href="#composite-types--nested-bullets"></a>
@@ -249,10 +342,10 @@
 <span><span class="co">#' - ok (scalar&lt;logical&gt;): whether the query succeeded.</span></span>
 <span><span class="co">#' - rows (data.table): matched rows:</span></span>
 <span><span class="co">#'   - id (character): row identifier.</span></span>
-<span><span class="co">#'   - value (numeric): the value.</span></span>
+<span><span class="co">#'   - value (numeric in [0, Inf[): the (non-negative) value.</span></span>
 <span><span class="co">#' - meta (list): pagination metadata:</span></span>
-<span><span class="co">#'   - page (scalar&lt;integer&gt;): current page.</span></span>
-<span><span class="co">#'   - cursor (character?): next-page cursor, or NULL at the end.</span></span></code></pre></div>
+<span><span class="co">#'   - page (scalar&lt;integer in [1, Inf[&gt;): current page.</span></span>
+<span><span class="co">#'   - cursor (scalar&lt;character&gt;?): next-page cursor, or NULL at the end.</span></span></code></pre></div>
 <p>Because each leaf is checked for an atomic type, <strong>list-columns are rejected by construction</strong> — a column declared <code>(numeric)</code> that holds a list fails.</p>
 </div>
 </div>
@@ -263,9 +356,9 @@
 <code class="sourceCode R"><span><span class="co">#' Submit an order.</span></span>
 <span><span class="co">#'</span></span>
 <span><span class="co">#' @param symbol (scalar&lt;character&gt;) normalised `BASE/QUOTE` pair.</span></span>
-<span><span class="co">#' @param side (enum&lt;character, "BUY" | "SELL"&gt;) order side.</span></span>
-<span><span class="co">#' @param quantity (scalar&lt;numeric&gt;) order size in the base asset.</span></span>
-<span><span class="co">#' @param price_limit (scalar&lt;numeric&gt;?) limit price; `NULL` for market orders.</span></span>
+<span><span class="co">#' @param side (scalar&lt;character in c("BUY", "SELL")&gt;) order side.</span></span>
+<span><span class="co">#' @param quantity (scalar&lt;numeric in ]0, Inf[&gt;) order size (positive).</span></span>
+<span><span class="co">#' @param price_limit (scalar&lt;numeric in ]0, Inf[&gt;?) limit price; `NULL` for market orders.</span></span>
 <span><span class="co">#' @return (data.table) the accepted order:</span></span>
 <span><span class="co">#' - order_id (character): exchange order id.</span></span>
 <span><span class="co">#' - status (character): order status.</span></span>
@@ -282,28 +375,32 @@
 <h2 id="demos">Demos<a class="anchor" aria-label="anchor" href="#demos"></a>
 </h2>
 <div class="section level3">
-<h3 id="composed-list-with-a-nested-table">Composed list with a nested table<a class="anchor" aria-label="anchor" href="#composed-list-with-a-nested-table"></a>
+<h3 id="deeply-nested-composition">Deeply nested composition<a class="anchor" aria-label="anchor" href="#deeply-nested-composition"></a>
 </h3>
 <div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="co">#' Run a screen and return results plus diagnostics.</span></span>
+<code class="sourceCode R"><span><span class="co">#' Run a report.</span></span>
 <span><span class="co">#'</span></span>
 <span><span class="co">#' @param symbols (character) one or more `BASE/QUOTE` pairs.</span></span>
-<span><span class="co">#' @param top_n (scalar&lt;integer&gt;) how many rows to keep.</span></span>
-<span><span class="co">#' @param weights (vector&lt;numeric, 1..&gt;?) optional per-symbol weights.</span></span>
-<span><span class="co">#' @return (list) the screen output:</span></span>
-<span><span class="co">#' - matched (data.table): ranked matches:</span></span>
-<span><span class="co">#'   - symbol (character): the pair.</span></span>
-<span><span class="co">#'   - score (numeric): rank score.</span></span>
-<span><span class="co">#'   - tags (character): label(s) on the match.</span></span>
-<span><span class="co">#' - summary (list): run summary:</span></span>
-<span><span class="co">#'   - n_in (scalar&lt;integer&gt;): symbols screened.</span></span>
-<span><span class="co">#'   - n_out (scalar&lt;integer&gt;): rows returned.</span></span>
-<span><span class="co">#'   - ran_at (scalar&lt;POSIXct&gt;): run timestamp.</span></span>
+<span><span class="co">#' @param top_n (scalar&lt;integer in [1, Inf[&gt;) how many rows to keep.</span></span>
+<span><span class="co">#' @return (list) the report:</span></span>
+<span><span class="co">#' - status (scalar&lt;character in c("ok", "partial", "failed")&gt;): outcome.</span></span>
+<span><span class="co">#' - result (list): the payload:</span></span>
+<span><span class="co">#'   - rows (data.table): ranked rows:</span></span>
+<span><span class="co">#'     - symbol (character): the pair.</span></span>
+<span><span class="co">#'     - score (numeric in [0, Inf[): rank score.</span></span>
+<span><span class="co">#'   - pagination (list): cursor state:</span></span>
+<span><span class="co">#'     - page (scalar&lt;integer in [1, Inf[&gt;): current page.</span></span>
+<span><span class="co">#'     - cursor (scalar&lt;character&gt;?): next cursor, or NULL at the end.</span></span>
+<span><span class="co">#' - diagnostics (list): run diagnostics:</span></span>
+<span><span class="co">#'   - warnings (character): messages (possibly length 0).</span></span>
+<span><span class="co">#'   - timings (list): millisecond timings:</span></span>
+<span><span class="co">#'     - parse_ms (scalar&lt;numeric in [0, Inf[&gt;): parse time.</span></span>
+<span><span class="co">#'     - run_ms (scalar&lt;numeric in [0, Inf[&gt;): run time.</span></span>
 <span><span class="co">#' @export</span></span>
-<span><span class="va">screen</span> <span class="op">&lt;-</span> <span class="kw">function</span><span class="op">(</span><span class="va">symbols</span>, <span class="va">top_n</span>, <span class="va">weights</span> <span class="op">=</span> <span class="cn">NULL</span><span class="op">)</span> <span class="op">{</span></span>
-<span>  <span class="fu">assert_args_screen</span><span class="op">(</span><span class="va">symbols</span>, <span class="va">top_n</span>, <span class="va">weights</span><span class="op">)</span></span>
+<span><span class="va">report</span> <span class="op">&lt;-</span> <span class="kw">function</span><span class="op">(</span><span class="va">symbols</span>, <span class="va">top_n</span><span class="op">)</span> <span class="op">{</span></span>
+<span>  <span class="fu">assert_args_report</span><span class="op">(</span><span class="va">symbols</span>, <span class="va">top_n</span><span class="op">)</span></span>
 <span>  <span class="va">result</span> <span class="op">&lt;-</span> <span class="va">...</span></span>
-<span>  <span class="kw"><a href="https://rdrr.io/r/base/function.html" class="external-link">return</a></span><span class="op">(</span><span class="fu">assert_return_screen</span><span class="op">(</span><span class="va">result</span><span class="op">)</span><span class="op">)</span></span>
+<span>  <span class="kw"><a href="https://rdrr.io/r/base/function.html" class="external-link">return</a></span><span class="op">(</span><span class="fu">assert_return_report</span><span class="op">(</span><span class="va">result</span><span class="op">)</span><span class="op">)</span></span>
 <span><span class="op">}</span></span></code></pre></div>
 </div>
 <div class="section level3">
@@ -313,11 +410,11 @@
 <code class="sourceCode R"><span><span class="co">#' Open orders for a symbol.</span></span>
 <span><span class="co">#'</span></span>
 <span><span class="co">#' @param symbol (scalar&lt;character&gt;) the pair.</span></span>
-<span><span class="co">#' @param statuses (enum&lt;character, "OPEN" | "PARTIALLY_FILLED"&gt;) statuses to include.</span></span>
+<span><span class="co">#' @param statuses (character in c("OPEN", "PARTIALLY_FILLED")) statuses to include.</span></span>
 <span><span class="co">#' @return (data.table) the open orders, newest first:</span></span>
 <span><span class="co">#' - order_id (character): exchange id.</span></span>
 <span><span class="co">#' - side (factor): BUY or SELL.</span></span>
-<span><span class="co">#' - quantity (numeric): remaining size.</span></span>
+<span><span class="co">#' - quantity (numeric in ]0, Inf[): remaining size.</span></span>
 <span><span class="co">#' - reduce_only (logical): reduce-only flag.</span></span>
 <span><span class="co">#' - created_at (POSIXct): submission time.</span></span>
 <span><span class="co">#' @export</span></span>
@@ -346,7 +443,7 @@
 <li>
 <strong>Internal, undocumented, committed.</strong> Generated helpers are not exported and carry no <code>.Rd</code>; they live in a single <code>R/contracts-generated.R</code> (with a do-not-edit banner) that you commit like <code>NAMESPACE</code>. Each package generates and uses its own.</li>
 <li>
-<strong>Using them is optional.</strong> The helpers are generated for you regardless; <em>calling</em> them is opt-in. You can adopt them in one function, a few, or all — and a function with no typed tags is simply left alone.</li>
+<strong>Using them is optional.</strong> The helpers are generated for you regardless; <em>calling</em> them is opt-in. Adopt them in one function, a few, or all — a function with no typed tags is simply left alone.</li>
 </ul>
 </div>
 <div class="section level2">
