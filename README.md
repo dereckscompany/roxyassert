@@ -95,6 +95,16 @@ NULL
 `devtools::document()` then runs `roxyassert` alongside the built-in
 roclets and (re)writes `R/contracts-generated.R`.
 
+> **Note — a harmless markdown warning.** With `markdown = TRUE`,
+> roxygen2’s link resolver sees the `[ ]` of an interval (`[0, 1]`) or a
+> `[[ ]]` subscript bound in a `@param`/`@return` description and
+> reports a “could not resolve link” **warning** during `document()`. It
+> is cosmetic: the `.Rd` still builds and the generated checks are
+> unaffected — `roxyassert` reads each tag’s untouched **raw** text,
+> never the markdown-rendered version. You can ignore the warning, or
+> avoid it by escaping the bracket (`\[0, 1\]`) in the description if
+> your help pages must be warning-clean.
+
 ## The annotation grammar
 
 A type annotation is a parenthesised token at the **start** of a

@@ -117,6 +117,11 @@ roclet_output.roclet_contract <- function(x, results, base_path, ...) {
 # The annotation text of a tag, read from its PRISTINE `$raw` (roxygen2 rewrites
 # `$val` through markdown when the package enables it, mangling our `<...>`
 # syntax into `\if{html}{\out{<...>}}`; `$raw` is the untouched source).
+#
+# (Aside: with markdown on, roxygen2's RD link resolver also emits a harmless
+# "could not resolve link" warning for the `[ ]` of an interval / a `[[ ]]`
+# subscript in a description. That is purely the RD path; reading `$raw` here
+# means our generation is unaffected. Documented in the README.)
 .ra_tag_text <- function(tag) {
   if (!is.character(tag$raw)) {
     return("")
