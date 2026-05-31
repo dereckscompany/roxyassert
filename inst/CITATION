@@ -1,0 +1,17 @@
+citHeader("To cite roxyassert in publications use:")
+
+bibentry(
+  bibtype  = "Manual",
+  title    = "roxyassert: Generate Runtime Assertions from roxygen2 Documentation",
+  author   = person("Dereck", "Mezquita", comment = c(ORCID = "0000-0002-9307-6762")),
+  year     = "2026",
+  note     = "R package version 0.0.0.9000",
+  url      = "https://github.com/dereckscompany/roxyassert",
+  key      = "roxyassert-2026",
+  textVersion = paste(
+    "Mezquita, D. (2026).",
+    "roxyassert: Generate Runtime Assertions from roxygen2 Documentation.",
+    "R package version 0.0.0.9000.",
+    "Available at https://github.com/dereckscompany/roxyassert"
+  )
+)

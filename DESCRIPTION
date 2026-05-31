@@ -1,0 +1,32 @@
+Package: roxyassert
+Title: Generate Runtime Assertions from roxygen2 Documentation
+Version: 0.0.0.9000
+URL: https://dereckscompany.github.io/roxyassert,
+    https://github.com/dereckscompany/roxyassert
+BugReports: https://github.com/dereckscompany/roxyassert/issues
+Authors@R:
+    person(given = "Dereck",
+           family = "Mezquita",
+           role = c("aut", "cre"),
+           email = "dereck@mezquita.io",
+           comment = c(ORCID = "0000-0002-9307-6762"))
+Description: Generate runtime assertions from structured type annotations in roxygen2 documentation.
+License: MIT + file LICENSE
+Encoding: UTF-8
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 7.3.3
+Suggests:
+    box,
+    ggplot2,
+    knitr,
+    microbenchmark,
+    pkgdown,
+    rmarkdown,
+    testthat (>= 3.0.0)
+VignetteBuilder: knitr
+Config/testthat/edition: 3
+LinkingTo:
+    Rcpp
+Imports:
+    Rcpp
+

@@ -1,0 +1,95 @@
+---
+title: "Demonstrating roxyassert"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Demonstrating roxyassert}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include=FALSE}
+knitr::opts_chunk$set(
+  warning = FALSE,
+  message = FALSE,
+  fig.align = "center",
+  fig.width = 8,
+  fig.height = 5,
+  dpi = 150,
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+## Introduction
+
+This vignette demonstrates the two main functions in `roxyassert`:
+
+1. `add()` - A simple R function to add two numbers
+2. `sum_array_cpp()` - An Rcpp function to sum a numeric vector using loop unrolling
+
+```{r setup}
+box::use(roxyassert[ add, sum_array_cpp ])
+```
+
+## Using the add() function
+
+The `add()` function is a simple R function that adds two numbers:
+```{r add-demo}
+add(2, 3)
+add(10.5, 20.3)
+add(-5, 5)
+```
+
+## Using the sum_array_cpp() function
+
+The `sum_array_cpp()` function sums a numeric vector using C++ with loop unrolling for performance:
+
+```{r sum-demo}
+sum_array_cpp(1:10)
+sum_array_cpp(c(1.5, 2.5, 3.5))
+
+# Works with larger vectors
+x <- rnorm(1000)
+sum_array_cpp(x)
+```
+
+## Benchmarking: Rcpp vs Base R
+
+Let's compare the performance of `sum_array_cpp()` against base R's `sum()`:
+
+```{r benchmark}
+box::use(microbenchmark[ microbenchmark ])
+box::use(ggplot2[ autoplot, labs, theme_minimal ])
+
+# Create test vectors of different sizes
+set.seed(42)
+small <- rnorm(1e3)
+medium <- rnorm(1e5)
+large <- rnorm(1e6)
+
+# Benchmark with a large vector
+mb <- microbenchmark(
+  "Base R sum()" = sum(large),
+  "Rcpp sum_array_cpp()" = sum_array_cpp(large),
+  times = 100
+)
+
+print(mb)
+```
+
+```{r benchmark-plot}
+autoplot(mb) +
+  labs(
+    title = "Performance Comparison: Base R vs Rcpp",
+    subtitle = "Summing 1 million random numbers (100 iterations)"
+  ) +
+  theme_minimal()
+```
+
+## Verify correctness
+
+Both functions should return the same result:
+
+```{r verify}
+all.equal(sum(large), sum_array_cpp(large))
+```
