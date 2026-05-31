@@ -28,11 +28,13 @@ the checks, so they cannot disagree.
   `as.POSIXct("2024-01-01", tz = "America/New_York")` and roxyassert
   pastes it — it never guesses a format, a constructor, or a time zone
   on your behalf.
-- **An open type universe.** Because those bounds and set elements are
-  arbitrary R, *any* type with a constructor works — `Date`, `POSIXct`,
+- **An open *value* universe.** Interval bounds and set elements are
+  arbitrary R, so you can range- or membership-check against *any* value
+  type — `Date`, `POSIXct`,
   [`lubridate`](https://lubridate.tidyverse.org/), `bit64`, your own
-  S4/R6 — not a fixed built-in list. roxyassert never has to “know
-  about” your type to range-check it.
+  classes — without roxyassert having to “know about” it. (The set of
+  *declared* types is fixed; `any` is the wildcard for a value you
+  deliberately don’t constrain.)
 - **Readable, debuggable output.** The generated helpers are ordinary
   `assert` calls in a committed file you can open, read, and step
   through.
@@ -91,15 +93,17 @@ reference](https://dereckscompany.github.io/roxyassert/articles/grammar.html)
 (formal EBNF, type categories, precedence, and exhaustive demos) is the
 authoritative specification.
 
-**Default arity follows R: a bare type is a *vector* of any length.** A
-scalar (length 1) is declared explicitly with `scalar<...>`.
+**Default arity follows R: a bare *atomic* type is a *vector* of any
+length.** A scalar (length 1) is declared explicitly with `scalar<...>`.
+(Reference types — `function`/`R6` — are length-1, and a bare composite
+is an unconstrained list/table.)
 
 The `<>` generic wraps the **element type** (and, for `vector`, its
 length); the whole-argument modifiers sit outside it:
 
 - **Shape (`<>`):** `scalar<...>`, `vector<..., length>`, `R6<...>`. A
-  **bare type is already a vector**, so you only reach for `<>` when you
-  need length 1 (`scalar`), an explicit length, or an R6 class.
+  **bare *atomic* type is already a vector**, so you only reach for `<>`
+  when you need length 1 (`scalar`), an explicit length, or an R6 class.
 - **Element constraints:** `in <interval-or-set>` and `| NA` attach to
   the *element type* — **bare or wrapped**. `(numeric in [0, Inf[)` is a
   non-negative numeric vector; `(scalar<numeric in [0, Inf[>)` is a
@@ -128,7 +132,9 @@ a **type union**.
 
 ### Base types
 
-Valid wherever a `<type>` appears (inline, or in a column/field bullet):
+The type token in an annotation or a column/field bullet (subject to the
+per-category rules — `scalar<>`/`vector<>` wrap only atomics and `any`;
+`function`/`R6`/`list`/`data.*` are written bare):
 
 | Type | R meaning |
 |----|----|
@@ -141,6 +147,7 @@ Valid wherever a `<type>` appears (inline, or in a column/field bullet):
 | `factor` | factor |
 | `Date` | `Date` vector |
 | `POSIXct` | date-time vector |
+| `any` | any R object — no type check (the wildcard) |
 | `list` | list (see composite form) |
 | `function` | a function/closure (a bare, length-1 reference) |
 | `data.table` | a `data.table` (see composite form) |
@@ -150,9 +157,12 @@ Valid wherever a `<type>` appears (inline, or in a column/field bullet):
 `function` and `R6<Class>` are **reference types**: written bare
 (`(function)`, `(R6<Engine>)`), nullable as a slot (`(R6<Engine>?)`),
 never wrapped in `scalar<>`/`vector<>` and never carrying
-`in`/`| NA`/length. Intervals (`in [ , ]`) apply to ordered types
-(`integer`/`numeric`/`Date`/`POSIXct`); sets (`in c(...)`) apply to
-atomics; see the [grammar
+`in`/`| NA`/length. Intervals (`in [ , ]`) apply to the ordered types
+(`integer`/`numeric`/`Date`/`POSIXct`); sets (`in c(...)`) apply to the
+ordered and enumerable atomics
+(`integer`/`numeric`/`Date`/`POSIXct`/`character`/`factor`) — `complex`,
+`logical`, `raw`, and `any` take no set. `any` asserts nothing about
+type (length/nullability only). See the [grammar
 reference](https://dereckscompany.github.io/roxyassert/articles/grammar.html)
 for the full per-category rules.
 
@@ -183,23 +193,34 @@ allowed.
 `list`, `data.table`, and `data.frame` describe their contents as a
 **markdown bullet list** beneath the tag. Bullets nest arbitrarily, so
 you can compose tables inside lists inside lists. Each bullet is
-`- name (type): description`; **bold around the name is optional**
-(`- **name** (type): ...` also works).
+`- name (type) description`; a `:` after the `)` is tolerated but
+optional, and **bold around the name is optional**
+(`- **name** (type) ...` also works).
 
 ``` r
 #' @return (list) the query result:
-#' - ok (scalar<logical>): whether the query succeeded.
-#' - rows (data.table): matched rows:
-#'   - id (character): row identifier.
-#'   - value (numeric in [0, Inf[): the (non-negative) value.
-#' - meta (list): pagination metadata:
-#'   - page (scalar<integer in [1, Inf[>): current page.
-#'   - cursor (scalar<character>?): next-page cursor, or NULL at the end.
+#' - ok (scalar<logical>) whether the query succeeded.
+#' - rows (data.table) matched rows:
+#'   - id (character) row identifier.
+#'   - value (numeric in [0, Inf[) the (non-negative) value.
+#' - meta (list) pagination metadata:
+#'   - page (scalar<integer in [1, Inf[>) current page.
+#'   - cursor (scalar<character>?) next-page cursor, or NULL at the end.
 ```
 
-Because each leaf is checked for an atomic type, **list-columns are
-rejected by construction** — a column declared `(numeric)` that holds a
-list fails.
+A column declared with an **atomic** type is checked for that type, so a
+column declared `(numeric)` that actually holds a list **fails** — the
+intended way to catch an accidental list-column. To declare one *on
+purpose*, type it `list<T>` (each cell a `T`) or `list<any>` (arbitrary
+cells). `list<T>` is also how you write any homogeneous list —
+`list<function>` (callbacks), `list<R6<Model>>` (model objects):
+
+``` r
+#' @return (data.table) rows:
+#' - id (character) identifier.
+#' - tags (list<character>) a list-column; each cell a character vector.
+#' - meta (list<any>) a list-column of arbitrary cells (unchecked).
+```
 
 ## Quick example
 
@@ -211,10 +232,10 @@ list fails.
 #' @param quantity (scalar<numeric in ]0, Inf[>) order size (positive).
 #' @param price_limit (scalar<numeric in ]0, Inf[>?) limit price; `NULL` for market orders.
 #' @return (data.table) the accepted order:
-#' - order_id (character): exchange order id.
-#' - status (character): order status.
-#' - quantity (numeric): accepted size.
-#' - datetime (POSIXct): acceptance time.
+#' - order_id (character) exchange order id.
+#' - status (character) order status.
+#' - quantity (numeric) accepted size.
+#' - datetime (POSIXct) acceptance time.
 #' @export
 submit_order <- function(symbol, side, quantity, price_limit = NULL) {
   assert_args_submit_order(symbol, side, quantity, price_limit)   # generated
@@ -233,19 +254,19 @@ submit_order <- function(symbol, side, quantity, price_limit = NULL) {
 #' @param symbols (character) one or more `BASE/QUOTE` pairs.
 #' @param top_n (scalar<integer in [1, Inf[>) how many rows to keep.
 #' @return (list) the report:
-#' - status (scalar<character in c("ok", "partial", "failed")>): outcome.
-#' - result (list): the payload:
-#'   - rows (data.table): ranked rows:
-#'     - symbol (character): the pair.
-#'     - score (numeric in [0, Inf[): rank score.
-#'   - pagination (list): cursor state:
-#'     - page (scalar<integer in [1, Inf[>): current page.
-#'     - cursor (scalar<character>?): next cursor, or NULL at the end.
-#' - diagnostics (list): run diagnostics:
-#'   - warnings (character): messages (possibly length 0).
-#'   - timings (list): millisecond timings:
-#'     - parse_ms (scalar<numeric in [0, Inf[>): parse time.
-#'     - run_ms (scalar<numeric in [0, Inf[>): run time.
+#' - status (scalar<character in c("ok", "partial", "failed")>) outcome.
+#' - result (list) the payload:
+#'   - rows (data.table) ranked rows:
+#'     - symbol (character) the pair.
+#'     - score (numeric in [0, Inf[) rank score.
+#'   - pagination (list) cursor state:
+#'     - page (scalar<integer in [1, Inf[>) current page.
+#'     - cursor (scalar<character>?) next cursor, or NULL at the end.
+#' - diagnostics (list) run diagnostics:
+#'   - warnings (character) messages (possibly length 0).
+#'   - timings (list) millisecond timings:
+#'     - parse_ms (scalar<numeric in [0, Inf[>) parse time.
+#'     - run_ms (scalar<numeric in [0, Inf[>) run time.
 #' @export
 report <- function(symbols, top_n) {
   assert_args_report(symbols, top_n)
@@ -262,11 +283,11 @@ report <- function(symbols, top_n) {
 #' @param symbol (scalar<character>) the pair.
 #' @param statuses (character in c("OPEN", "PARTIALLY_FILLED")) statuses to include.
 #' @return (data.table) the open orders, newest first:
-#' - order_id (character): exchange id.
-#' - side (factor): BUY or SELL.
-#' - quantity (numeric in ]0, Inf[): remaining size.
-#' - reduce_only (logical): reduce-only flag.
-#' - created_at (POSIXct): submission time.
+#' - order_id (character) exchange id.
+#' - side (factor) BUY or SELL.
+#' - quantity (numeric in ]0, Inf[) remaining size.
+#' - reduce_only (logical) reduce-only flag.
+#' - created_at (POSIXct) submission time.
 #' @export
 open_orders <- function(symbol, statuses) {
   assert_args_open_orders(symbol, statuses)
