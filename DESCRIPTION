@@ -10,23 +10,25 @@ Authors@R:
            role = c("aut", "cre"),
            email = "dereck@mezquita.io",
            comment = c(ORCID = "0000-0002-9307-6762"))
-Description: Generate runtime assertions from structured type annotations in roxygen2 documentation.
+Description: A roxygen2 roclet that turns structured type annotations in
+    '@param' and '@return' documentation into per-function argument and return
+    assertion helpers, generated at 'document()' time. The generated checks are
+    calls to the 'assert' package, so a function's documented contract and its
+    runtime validation come from a single source and cannot drift apart.
 License: MIT + file LICENSE
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
 RoxygenNote: 7.3.3
+Imports:
+    assert,
+    roxygen2
+Remotes:
+    dereckscompany/assert
 Suggests:
-    box,
-    ggplot2,
     knitr,
-    microbenchmark,
     pkgdown,
     rmarkdown,
     testthat (>= 3.0.0)
 VignetteBuilder: knitr
 Config/testthat/edition: 3
-LinkingTo:
-    Rcpp
-Imports:
-    Rcpp
 

@@ -1,95 +1,60 @@
 ---
-title: "Demonstrating roxyassert"
+title: "Getting started with roxyassert"
 output: rmarkdown::html_vignette
 vignette: >
-  %\VignetteIndexEntry{Demonstrating roxyassert}
+  %\VignetteIndexEntry{Getting started with roxyassert}
   %\VignetteEngine{knitr::rmarkdown}
   %\VignetteEncoding{UTF-8}
 ---
 
 ```{r, include=FALSE}
 knitr::opts_chunk$set(
-  warning = FALSE,
-  message = FALSE,
-  fig.align = "center",
-  fig.width = 8,
-  fig.height = 5,
-  dpi = 150,
   collapse = TRUE,
-  comment = "#>"
+  comment = "#>",
+  eval = FALSE
 )
 ```
 
-## Introduction
+## What roxyassert does
 
-This vignette demonstrates the two main functions in `roxyassert`:
+`roxyassert` reads structured type annotations in your roxygen2 documentation and, at `document()` time, generates per-function argument and return assertion helpers. The generated checks are calls to the [`assert`](https://github.com/dereckscompany/assert) package, so a function's documented contract and its runtime validation come from one source.
 
-1. `add()` - A simple R function to add two numbers
-2. `sum_array_cpp()` - An Rcpp function to sum a numeric vector using loop unrolling
+See the [README](https://github.com/dereckscompany/roxyassert) for the full annotation grammar; this vignette is a short tour.
 
-```{r setup}
-box::use(roxyassert[ add, sum_array_cpp ])
+## Setup
+
+Register the roclet in `DESCRIPTION`:
+
+```dcf
+Roxygen: list(markdown = TRUE, roclets = c("namespace", "rd", "roxyassert::contract_roclet"))
 ```
 
-## Using the add() function
+## Annotate a function
 
-The `add()` function is a simple R function that adds two numbers:
-```{r add-demo}
-add(2, 3)
-add(10.5, 20.3)
-add(-5, 5)
+A type annotation is a parenthesised token at the start of a `@param` or `@return` description:
+
+```r
+#' Submit an order.
+#'
+#' @param symbol (scalar<character>) normalised `BASE/QUOTE` pair.
+#' @param quantity (scalar<numeric>) order size.
+#' @param price_limit (scalar<numeric>?) limit price; `NULL` for market orders.
+#' @return (data.table) the accepted order:
+#' - **order_id** (character): exchange order id.
+#' - **quantity** (numeric): accepted size.
+#' - **datetime** (POSIXct): acceptance time.
+#' @export
+submit_order <- function(symbol, quantity, price_limit = NULL) {
+  assert_args_submit_order(symbol, quantity, price_limit)   # generated
+  result <- ...
+  return(assert_return_submit_order(result))                # generated
+}
 ```
 
-## Using the sum_array_cpp() function
+## Generate the checks
 
-The `sum_array_cpp()` function sums a numeric vector using C++ with loop unrolling for performance:
-
-```{r sum-demo}
-sum_array_cpp(1:10)
-sum_array_cpp(c(1.5, 2.5, 3.5))
-
-# Works with larger vectors
-x <- rnorm(1000)
-sum_array_cpp(x)
+```r
+devtools::document()
 ```
 
-## Benchmarking: Rcpp vs Base R
-
-Let's compare the performance of `sum_array_cpp()` against base R's `sum()`:
-
-```{r benchmark}
-box::use(microbenchmark[ microbenchmark ])
-box::use(ggplot2[ autoplot, labs, theme_minimal ])
-
-# Create test vectors of different sizes
-set.seed(42)
-small <- rnorm(1e3)
-medium <- rnorm(1e5)
-large <- rnorm(1e6)
-
-# Benchmark with a large vector
-mb <- microbenchmark(
-  "Base R sum()" = sum(large),
-  "Rcpp sum_array_cpp()" = sum_array_cpp(large),
-  times = 100
-)
-
-print(mb)
-```
-
-```{r benchmark-plot}
-autoplot(mb) +
-  labs(
-    title = "Performance Comparison: Base R vs Rcpp",
-    subtitle = "Summing 1 million random numbers (100 iterations)"
-  ) +
-  theme_minimal()
-```
-
-## Verify correctness
-
-Both functions should return the same result:
-
-```{r verify}
-all.equal(sum(large), sum_array_cpp(large))
-```
+This (re)writes `R/contracts-generated.R` with `assert_args_submit_order()` and `assert_return_submit_order()` — committed alongside `NAMESPACE`. Edit the docs, re-document, and the checks stay in sync.
