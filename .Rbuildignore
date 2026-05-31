@@ -12,3 +12,10 @@
 ^local$
 ^dev$
 ^scripts$
+^air\.toml$
+^README\.html$
+^README\.Rmd$
+^\.cruft\.json$
+^\.lintr$
+^.*\.tar\.gz$
+^.*\.Rcheck$

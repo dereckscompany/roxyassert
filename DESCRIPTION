@@ -1,6 +1,6 @@
 Package: roxyassert
 Title: Generate Runtime Assertions from roxygen2 Documentation
-Version: 0.0.0.9000
+Version: 0.1.0
 URL: https://dereckscompany.github.io/roxyassert,
     https://github.com/dereckscompany/roxyassert
 BugReports: https://github.com/dereckscompany/roxyassert/issues
@@ -19,11 +19,11 @@ License: MIT + file LICENSE
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
 Imports:
-    assert,
     roxygen2
 Remotes:
     dereckscompany/assert
 Suggests:
+    assert,
     knitr,
     pkgdown,
     rmarkdown,

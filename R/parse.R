@@ -580,7 +580,7 @@ parse_annotation <- function(text) {
   }
   if (base == "integer") {
     if (!grepl("^-?[0-9]+$", txt)) {
-      .ra_err(p, paste0("integer bound must be a whole number or '±Inf', got '", txt, "'"))
+      .ra_err(p, paste0("integer bound must be a whole number or -Inf/Inf, got '", txt, "'"))
     }
   } else if (base %in% .ra_temporal) {
     if (grepl("^-?[0-9]+(\\.[0-9]+)?$", txt)) {
