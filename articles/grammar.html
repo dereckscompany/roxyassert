@@ -98,23 +98,26 @@ left, before any slot-level <code>|</code> union or <code>?</code>.</li>
 <strong>The language is recursive.</strong> A composite contains
 <em>full annotations</em> in its bullets, to any depth.</li>
 <li>
-<strong>Sets are R; intervals are math.</strong> A set is an R
-expression emitted verbatim (<code>c(...)</code> or a bare name); an
-interval is ISO/Bourbaki bracket notation. A bound or set element must
-evaluate to the <strong>same type</strong> as the atom it constrains — a
-static rule (S2), since <code>rexpr</code> is opaque.</li>
+<strong>Values are copied verbatim; the generator never
+coerces.</strong> Every value the user writes — an interval bound, a set
+element — is an R expression emitted into the generated check exactly as
+written (<code>0</code>, <code>as.Date("2024-01-01")</code>,
+<code>c("BUY", "SELL")</code>, <code>ORDER_SIDE</code>). roxyassert
+performs no coercion and invents no time zone or format; the user writes
+a valid R expression of the matching type. Intervals are ISO/Bourbaki
+bracket notation around two such expressions. Element/atom type
+agreement is a static rule (S2), since <code>rexpr</code> is
+opaque.</li>
 <li>
 <strong>A type may only carry what its category supports</strong>
 (§2). The grammar makes <em>category-level</em> nonsense unrepresentable
 — an interval on <code>complex</code>, a set on
 <code>logical</code>/<code>raw</code>, a fractional bound on
 <code>integer</code>, a <code>vector</code> of <code>function</code>,
-<code>| NA</code> on <code>raw</code>. Element-type agreement for
-<strong>literal</strong> bounds is grammar- enforced too (a
-<code>numeric</code> literal cannot bound a <code>Date</code>, nor an
-ISO string a <code>numeric</code> — the <code>bound</code> productions
-are split by type); only an opaque R-expression bound defers to static
-rule S2.</li>
+<code>| NA</code> on <code>raw</code>. A bare <em>numeric literal</em>
+cannot bound a <code>Date</code> (the <code>bound</code> productions are
+split by type); whether an opaque R-expression bound is of the right
+class defers to static rule S2.</li>
 </ol>
 </div>
 <div class="section level2">
@@ -222,25 +225,25 @@ rule S2.</li>
 </table>
 <p>¹ Sets compare with <code>==</code>/<code>%in%</code> and apply no
 normalisation. <code>integer</code> and <code>Date</code> sets are
-<strong>exact</strong> (both are whole-number doubles) and fine;
-<code>numeric</code> sets are floating-point-fragile and
-<code>POSIXct</code> sets are sub-second/time-zone-fragile, so both are
-<strong>discouraged</strong> — prefer intervals. Interval bounds for
-<code>Date</code>/<code>POSIXct</code> are written as <strong>ISO 8601
-string literals</strong>
-(<code>Date in ["2024-01-01", "2026-12-31"]</code>, coerced by the
-check) or as an explicit R expression (<code>as.Date(...)</code>) for a
-non-default format/time zone; see S2/S2a. <code>integer</code> bounds
-are whole numbers (the grammar rejects fractional integer bounds).
+<strong>exact</strong> and fine; <code>numeric</code> sets are
+floating-point-fragile and <code>POSIXct</code> sets are
+sub-second/time-zone-fragile, so both are <strong>discouraged</strong> —
+prefer intervals. Interval bounds and set elements for
+<code>Date</code>/<code>POSIXct</code> are written as ordinary R
+expressions of the matching class — <code>as.Date("2024-01-01")</code>,
+<code>as.POSIXct("2024-01-01 09:00", tz = "America/New_York")</code> —
+and copied verbatim, so the user (not roxyassert) chooses the
+constructor, format, and time zone (S2). <code>integer</code> bounds are
+whole numbers (the grammar rejects fractional integer bounds).
 <code>Inf</code> and <code>-Inf</code> are open-end
-<strong>sentinels</strong> — an unbounded side, not a value — so on
-<code>integer</code> they denote “no bound on that side” and the
-generated check simply omits that comparison. See static rule S2. ² On
-<code>character</code> and <code>factor</code> a set constrains the
-<strong>realised values</strong>
-(<code>as.character(x) %in% set</code>), so the two behave identically;
-it does <strong>not</strong> assert a factor’s declared
-<code><a href="https://rdrr.io/r/base/levels.html" class="external-link">levels()</a></code> — for that, use prose (out of scope, §12).</p>
+<strong>sentinels</strong> — an unbounded side, not a value — so they
+denote “no bound on that side” and the generated check simply omits that
+comparison. See static rule S2. ² On <code>character</code> and
+<code>factor</code> a set constrains the <strong>realised
+values</strong> (<code>as.character(x) %in% set</code>), so the two
+behave identically; it does <strong>not</strong> assert a factor’s
+declared <code><a href="https://rdrr.io/r/base/levels.html" class="external-link">levels()</a></code> — for that, use prose (out of scope,
+§12).</p>
 <p><code>complex</code>/<code>logical</code>/<code>raw</code> take no
 set (degenerate or floating-point-fragile), and <code>raw</code> has no
 <code>NA</code> representation in R, so these are not value-constrained;
@@ -290,11 +293,13 @@ low            ::= "["    (* closed *) | "]"   (* open *)
 high           ::= "]"    (* closed *) | "["   (* open *)
 int_bound      ::= "-"? digit+ | "Inf" | "-Inf"
 num_bound      ::= signed_number | "Inf" | "-Inf" | rexpr
-time_bound     ::= iso_string | "Inf" | "-Inf" | rexpr
-                   (* iso_string is coerced via as.Date()/as.POSIXct(); a full R
-                      expr (as.Date(...)) is also accepted for explicit tz/format;
-                      see S2. The split makes a numeric bound on a Date — or vice
-                      versa — ungrammatical, not merely a static error. *)
+time_bound     ::= "Inf" | "-Inf" | rexpr
+                   (* a Date/POSIXct bound is an R expression of the matching
+                      class, emitted verbatim: as.Date("2024-01-01"),
+                      as.POSIXct("2024-01-01 09:00", tz = "America/New_York"),
+                      lubridate::ymd_hms("..."). The user supplies the
+                      constructor and time zone; roxyassert never coerces. The
+                      split keeps a bare numeric literal from bounding a Date. *)
 
 set            ::= name_set | call_set
 name_set       ::= ident       (* a bare constant; a single maximal-munch token,
@@ -315,8 +320,6 @@ name           ::= ident | "**" ident "**"   (* bold optional, no semantic effec
 int            ::= digit+
 signed_number  ::= "-"? digit+ ( "." digit+ )?
 ident          ::= letter ( letter | digit | "." | "_" )*
-iso_string     ::= '"' ISO-8601-date-or-datetime '"'
-                   (* "YYYY", "YYYY-MM", "YYYY-MM-DD", or "YYYY-MM-DDThh:mm:ss" *)
 rexpr          ::= (* any valid R expression; opaque, emitted verbatim *)
 description    ::= (* free text; the remainder of the same physical line *)</code></pre>
 <p>Tokenizing rules (so the grammar is deterministic in practice):</p>
@@ -429,30 +432,20 @@ other slot is a leaf and takes no children;
 <code>(data.table | data.frame)</code> with bullets is rejected (which
 field-set would they describe?).</li>
 <li>
-<strong>S2 — bound/set element type.</strong> Interval bounds and
-set elements must evaluate to the constrained atom’s type:
-<code>signed_number</code>/<code>±Inf</code> for <code>numeric</code>;
-whole numbers/<code>±Inf</code> for <code>integer</code> (also enforced
-by the grammar via <code>int_bound</code>); for
-<code>Date</code>/<code>POSIXct</code>, either an <strong>ISO 8601
-string literal</strong> — coerced by the generated check via
-<code><a href="https://rdrr.io/r/base/as.Date.html" class="external-link">as.Date()</a></code> / <code>as.POSIXct(..., tz = "UTC")</code> — or a
-class-matching R expression (<code>as.Date(...)</code>) when a
-non-default format or time zone is needed; the literal element type for
-<code>character</code>/<code>factor</code>/<code>integer</code> sets. S2
-inspects literal/inline forms; a bare <code>name_set</code> (and any
-other opaque <code>rexpr</code>) is taken on trust — prefer an inline
-literal where checkability matters.</li>
-<li>
-<strong>S2a — partial dates resolve to period edges.</strong> A
-partial <code>iso_string</code> (<code>"2024"</code>,
-<code>"2024-06"</code>) denotes a whole period; as a
-<strong>low</strong> bound it resolves to that period’s
-<strong>first</strong> instant and as a <strong>high</strong> bound to
-its <strong>last</strong>, so <code>Date in ["2024", "2026"]</code>
-means <code>[2024-01-01, 2026-12-31]</code> (“all of 2024 through all of
-2026”). A full <code>"YYYY-MM-DD"</code> is exact and unambiguous; use
-it when you do not want period expansion.</li>
+<strong>S2 — bound/set element type.</strong> Every interval bound
+and set element is an R expression <strong>emitted verbatim</strong> —
+roxyassert never coerces. It must evaluate to the constrained atom’s
+type: a number/<code>±Inf</code> for <code>numeric</code>, a whole
+number/<code>±Inf</code> for <code>integer</code> (also grammar-enforced
+via <code>int_bound</code>), a class-matching expression for
+<code>Date</code>/<code>POSIXct</code> (<code>as.Date(...)</code>,
+<code>as.POSIXct(..., tz = ...)</code>,
+<code>lubridate::ymd_hms(...)</code> — the user owns the constructor,
+format, and time zone), and the matching literal type for
+<code>character</code>/<code>factor</code> sets. The agreement is
+checkable for inline literals; a bare <code>name_set</code> (or any
+opaque <code>rexpr</code>) is taken on trust — prefer an inline literal
+where it matters.</li>
 <li>
 <strong>S3 — named composite fields.</strong> A bulleted
 <code>list</code>/<code>data.table</code>/<code>data.frame</code>
@@ -671,47 +664,45 @@ binds to <code>character</code> only — a numeric vector,
 <span id="cb2-41"><a href="#cb2-41" tabindex="-1"></a>(scalar<span class="sc">&lt;</span>numeric <span class="cf">in</span> ]<span class="sc">-</span><span class="cn">Inf</span>, <span class="dv">0</span>]<span class="sc">&gt;</span>)    <span class="co"># x &lt;= 0  (-Inf lower sentinel)</span></span>
 <span id="cb2-42"><a href="#cb2-42" tabindex="-1"></a>(scalar<span class="sc">&lt;</span>integer <span class="cf">in</span> [<span class="dv">1</span>, <span class="cn">Inf</span>[<span class="sc">&gt;</span>)     <span class="co"># x &gt;= 1  (integer bounds are whole numbers)</span></span>
 <span id="cb2-43"><a href="#cb2-43" tabindex="-1"></a>(numeric <span class="cf">in</span> [<span class="dv">0</span>, <span class="dv">1</span>])               <span class="co"># every element in [0, 1]</span></span>
-<span id="cb2-44"><a href="#cb2-44" tabindex="-1"></a>(scalar<span class="sc">&lt;</span>Date <span class="cf">in</span> [<span class="st">"2024-01-01"</span>, <span class="st">"2026-12-31"</span>]<span class="sc">&gt;</span>)    <span class="co"># ISO string bounds (coerced)</span></span>
-<span id="cb2-45"><a href="#cb2-45" tabindex="-1"></a>(scalar<span class="sc">&lt;</span>Date <span class="cf">in</span> [<span class="st">"2024"</span>, <span class="st">"2026"</span>]<span class="sc">&gt;</span>)                <span class="co"># partial dates: all of 2024..2026 (S2a)</span></span>
-<span id="cb2-46"><a href="#cb2-46" tabindex="-1"></a>(scalar<span class="sc">&lt;</span>Date <span class="cf">in</span> [<span class="st">"2024-01-01"</span>, <span class="cn">Inf</span>[<span class="sc">&gt;</span>)             <span class="co"># on or after a date (Inf sentinel)</span></span>
-<span id="cb2-47"><a href="#cb2-47" tabindex="-1"></a>(scalar<span class="sc">&lt;</span>Date <span class="cf">in</span> [<span class="fu">as.Date</span>(<span class="st">"2024-01-01"</span>), <span class="fu">as.Date</span>(<span class="st">"2024-12-31"</span>)]<span class="sc">&gt;</span>)        <span class="co"># explicit as.Date form</span></span>
-<span id="cb2-48"><a href="#cb2-48" tabindex="-1"></a>(scalar<span class="sc">&lt;</span>POSIXct <span class="cf">in</span> [<span class="st">"2024-01-01T00:00:00"</span>, <span class="st">"2024-12-31T23:59:59"</span>]<span class="sc">&gt;</span>)     <span class="co"># ISO date-time (UTC)</span></span>
-<span id="cb2-49"><a href="#cb2-49" tabindex="-1"></a>(scalar<span class="sc">&lt;</span>POSIXct <span class="cf">in</span> [<span class="fu">as.POSIXct</span>(<span class="st">"2024-01-01 00:00:00"</span>, <span class="at">tz =</span> <span class="st">"America/New_York"</span>), <span class="cn">Inf</span>[<span class="sc">&gt;</span>)  <span class="co"># explicit tz</span></span>
-<span id="cb2-50"><a href="#cb2-50" tabindex="-1"></a></span>
-<span id="cb2-51"><a href="#cb2-51" tabindex="-1"></a><span class="co"># --- sets / enums (ordered + enumerable atomics) ---</span></span>
-<span id="cb2-52"><a href="#cb2-52" tabindex="-1"></a>(scalar<span class="sc">&lt;</span>character <span class="cf">in</span> <span class="fu">c</span>(<span class="st">"BUY"</span>, <span class="st">"SELL"</span>)<span class="sc">&gt;</span>)   <span class="co"># inline set, scalar</span></span>
-<span id="cb2-53"><a href="#cb2-53" tabindex="-1"></a>(character <span class="cf">in</span> <span class="fu">c</span>(<span class="st">"BUY"</span>, <span class="st">"SELL"</span>))           <span class="co"># vector, every element in the set</span></span>
-<span id="cb2-54"><a href="#cb2-54" tabindex="-1"></a>(scalar<span class="sc">&lt;</span>character <span class="cf">in</span> ORDER_SIDE<span class="sc">&gt;</span>)         <span class="co"># set from a bare constant name</span></span>
-<span id="cb2-55"><a href="#cb2-55" tabindex="-1"></a>(integer <span class="cf">in</span> <span class="fu">c</span>(<span class="dv">1</span><span class="dt">L</span>, <span class="dv">2</span><span class="dt">L</span>, <span class="dv">3</span><span class="dt">L</span>))                <span class="co"># exact integer enum (bare vector)</span></span>
-<span id="cb2-56"><a href="#cb2-56" tabindex="-1"></a>(scalar<span class="sc">&lt;</span>integer <span class="cf">in</span> <span class="fu">c</span>(<span class="dv">1</span><span class="dt">L</span>, <span class="dv">2</span><span class="dt">L</span>, <span class="dv">3</span><span class="dt">L</span>)<span class="sc">&gt;</span>)        <span class="co"># exact integer enum (scalar)</span></span>
-<span id="cb2-57"><a href="#cb2-57" tabindex="-1"></a>(factor <span class="cf">in</span> <span class="fu">c</span>(<span class="st">"low"</span>, <span class="st">"med"</span>, <span class="st">"high"</span>))       <span class="co"># constrains realised values (footnote 2)</span></span>
-<span id="cb2-58"><a href="#cb2-58" tabindex="-1"></a>(Date <span class="cf">in</span> <span class="fu">c</span>(<span class="st">"2024-01-01"</span>, <span class="st">"2024-06-30"</span>))   <span class="co"># ISO-string set, coerced; exact at day resolution</span></span>
-<span id="cb2-59"><a href="#cb2-59" tabindex="-1"></a>(numeric <span class="cf">in</span> <span class="fu">c</span>(<span class="fl">0.25</span>, <span class="fl">0.5</span>, <span class="fl">1.0</span>))            <span class="co"># discouraged: floating-point ==</span></span>
-<span id="cb2-60"><a href="#cb2-60" tabindex="-1"></a></span>
-<span id="cb2-61"><a href="#cb2-61" tabindex="-1"></a><span class="co"># --- NA permission (atomics except raw; default: NA not allowed) ---</span></span>
-<span id="cb2-62"><a href="#cb2-62" tabindex="-1"></a>(numeric <span class="sc">|</span> <span class="cn">NA</span>)                    <span class="co"># numeric vector, NAs allowed</span></span>
-<span id="cb2-63"><a href="#cb2-63" tabindex="-1"></a>(scalar<span class="sc">&lt;</span>numeric <span class="sc">|</span> <span class="cn">NA</span><span class="sc">&gt;</span>)            <span class="co"># one numeric or NA</span></span>
-<span id="cb2-64"><a href="#cb2-64" tabindex="-1"></a>(scalar<span class="sc">&lt;</span>integer <span class="sc">|</span> <span class="cn">NA</span><span class="sc">&gt;</span>)            <span class="co"># one integer or NA</span></span>
-<span id="cb2-65"><a href="#cb2-65" tabindex="-1"></a>(scalar<span class="sc">&lt;</span>POSIXct <span class="sc">|</span> <span class="cn">NA</span><span class="sc">&gt;</span>)            <span class="co"># one timestamp or NA</span></span>
-<span id="cb2-66"><a href="#cb2-66" tabindex="-1"></a>(complex <span class="sc">|</span> <span class="cn">NA</span>)                    <span class="co"># complex vector, NAs allowed</span></span>
-<span id="cb2-67"><a href="#cb2-67" tabindex="-1"></a>(vector<span class="sc">&lt;</span>numeric <span class="sc">|</span> <span class="cn">NA</span>, <span class="dv">10</span><span class="sc">&gt;</span>)        <span class="co"># 10 numerics, NAs allowed</span></span>
-<span id="cb2-68"><a href="#cb2-68" tabindex="-1"></a>(numeric <span class="cf">in</span> [<span class="dv">0</span>, <span class="dv">1</span>] <span class="sc">|</span> <span class="cn">NA</span>)          <span class="co"># constrained + NA-allowed</span></span>
-<span id="cb2-69"><a href="#cb2-69" tabindex="-1"></a>(factor <span class="cf">in</span> <span class="fu">c</span>(<span class="st">"low"</span>, <span class="st">"med"</span>, <span class="st">"high"</span>) <span class="sc">|</span> <span class="cn">NA</span>)   <span class="co"># missing-category factor</span></span>
-<span id="cb2-70"><a href="#cb2-70" tabindex="-1"></a></span>
-<span id="cb2-71"><a href="#cb2-71" tabindex="-1"></a><span class="co"># --- nullable slot (whole argument) ---</span></span>
-<span id="cb2-72"><a href="#cb2-72" tabindex="-1"></a>(scalar<span class="sc">&lt;</span>numeric<span class="sc">&gt;</span>?)                <span class="co"># one numeric, or NULL</span></span>
-<span id="cb2-73"><a href="#cb2-73" tabindex="-1"></a>(scalar<span class="sc">&lt;</span>numeric<span class="sc">&gt;</span> <span class="er">|</span> <span class="cn">NULL</span>)          <span class="co"># identical to the above (use one, not both)</span></span>
-<span id="cb2-74"><a href="#cb2-74" tabindex="-1"></a>(character?)                      <span class="co"># character vector, or NULL</span></span>
-<span id="cb2-75"><a href="#cb2-75" tabindex="-1"></a></span>
-<span id="cb2-76"><a href="#cb2-76" tabindex="-1"></a><span class="co"># --- type unions (slot level) ---</span></span>
-<span id="cb2-77"><a href="#cb2-77" tabindex="-1"></a>(numeric <span class="sc">|</span> character)             <span class="co"># a numeric vector OR a character vector</span></span>
-<span id="cb2-78"><a href="#cb2-78" tabindex="-1"></a>(numeric <span class="sc">|</span> character <span class="sc">|</span> <span class="cn">NA</span>)        <span class="co"># numeric, OR character with NAs allowed</span></span>
-<span id="cb2-79"><a href="#cb2-79" tabindex="-1"></a>(R6<span class="sc">&lt;</span>Reader<span class="sc">&gt;</span> <span class="er">|</span> R6<span class="sc">&lt;</span>Writer<span class="sc">&gt;</span>)         <span class="co"># either R6 class</span></span>
-<span id="cb2-80"><a href="#cb2-80" tabindex="-1"></a>(data.table <span class="sc">|</span> <span class="cn">NULL</span>)               <span class="co"># a data.table or NULL</span></span>
-<span id="cb2-81"><a href="#cb2-81" tabindex="-1"></a></span>
-<span id="cb2-82"><a href="#cb2-82" tabindex="-1"></a><span class="co"># --- everything at once ---</span></span>
-<span id="cb2-83"><a href="#cb2-83" tabindex="-1"></a>(vector<span class="sc">&lt;</span>numeric <span class="cf">in</span> ]<span class="dv">0</span>, <span class="dv">1</span>] <span class="sc">|</span> <span class="cn">NA</span>, <span class="dv">1</span>..<span class="dv">100</span><span class="sc">&gt;</span>?)</span>
-<span id="cb2-84"><a href="#cb2-84" tabindex="-1"></a><span class="co"># NULL, OR a numeric vector of length 1..100 whose elements lie in (0,1] and may be NA</span></span></code></pre></div>
+<span id="cb2-44"><a href="#cb2-44" tabindex="-1"></a>(scalar<span class="sc">&lt;</span>Date <span class="cf">in</span> [<span class="fu">as.Date</span>(<span class="st">"2024-01-01"</span>), <span class="fu">as.Date</span>(<span class="st">"2026-12-31"</span>)]<span class="sc">&gt;</span>)        <span class="co"># bounds are R exprs, verbatim</span></span>
+<span id="cb2-45"><a href="#cb2-45" tabindex="-1"></a>(scalar<span class="sc">&lt;</span>Date <span class="cf">in</span> [<span class="fu">as.Date</span>(<span class="st">"2024-01-01"</span>), <span class="cn">Inf</span>[<span class="sc">&gt;</span>)                          <span class="co"># on or after a date (Inf sentinel)</span></span>
+<span id="cb2-46"><a href="#cb2-46" tabindex="-1"></a>(scalar<span class="sc">&lt;</span>POSIXct <span class="cf">in</span> [<span class="fu">as.POSIXct</span>(<span class="st">"2024-01-01 00:00"</span>, <span class="at">tz =</span> <span class="st">"America/New_York"</span>), <span class="cn">Inf</span>[<span class="sc">&gt;</span>)  <span class="co"># user owns the tz</span></span>
+<span id="cb2-47"><a href="#cb2-47" tabindex="-1"></a>(scalar<span class="sc">&lt;</span>POSIXct <span class="cf">in</span> [lubridate<span class="sc">::</span><span class="fu">ymd_hms</span>(<span class="st">"2024-01-01 00:00:00"</span>), lubridate<span class="sc">::</span><span class="fu">ymd_hms</span>(<span class="st">"2025-01-01 00:00:00"</span>)[<span class="sc">&gt;</span>)  <span class="co"># any constructor</span></span>
+<span id="cb2-48"><a href="#cb2-48" tabindex="-1"></a></span>
+<span id="cb2-49"><a href="#cb2-49" tabindex="-1"></a><span class="co"># --- sets / enums (ordered + enumerable atomics) ---</span></span>
+<span id="cb2-50"><a href="#cb2-50" tabindex="-1"></a>(scalar<span class="sc">&lt;</span>character <span class="cf">in</span> <span class="fu">c</span>(<span class="st">"BUY"</span>, <span class="st">"SELL"</span>)<span class="sc">&gt;</span>)   <span class="co"># inline set, scalar</span></span>
+<span id="cb2-51"><a href="#cb2-51" tabindex="-1"></a>(character <span class="cf">in</span> <span class="fu">c</span>(<span class="st">"BUY"</span>, <span class="st">"SELL"</span>))           <span class="co"># vector, every element in the set</span></span>
+<span id="cb2-52"><a href="#cb2-52" tabindex="-1"></a>(scalar<span class="sc">&lt;</span>character <span class="cf">in</span> ORDER_SIDE<span class="sc">&gt;</span>)         <span class="co"># set from a bare constant name</span></span>
+<span id="cb2-53"><a href="#cb2-53" tabindex="-1"></a>(integer <span class="cf">in</span> <span class="fu">c</span>(<span class="dv">1</span><span class="dt">L</span>, <span class="dv">2</span><span class="dt">L</span>, <span class="dv">3</span><span class="dt">L</span>))                <span class="co"># exact integer enum (bare vector)</span></span>
+<span id="cb2-54"><a href="#cb2-54" tabindex="-1"></a>(scalar<span class="sc">&lt;</span>integer <span class="cf">in</span> <span class="fu">c</span>(<span class="dv">1</span><span class="dt">L</span>, <span class="dv">2</span><span class="dt">L</span>, <span class="dv">3</span><span class="dt">L</span>)<span class="sc">&gt;</span>)        <span class="co"># exact integer enum (scalar)</span></span>
+<span id="cb2-55"><a href="#cb2-55" tabindex="-1"></a>(factor <span class="cf">in</span> <span class="fu">c</span>(<span class="st">"low"</span>, <span class="st">"med"</span>, <span class="st">"high"</span>))       <span class="co"># constrains realised values (footnote 2)</span></span>
+<span id="cb2-56"><a href="#cb2-56" tabindex="-1"></a>(Date <span class="cf">in</span> <span class="fu">c</span>(<span class="fu">as.Date</span>(<span class="st">"2024-01-01"</span>), <span class="fu">as.Date</span>(<span class="st">"2024-06-30"</span>)))   <span class="co"># set elements are R exprs, verbatim</span></span>
+<span id="cb2-57"><a href="#cb2-57" tabindex="-1"></a>(numeric <span class="cf">in</span> <span class="fu">c</span>(<span class="fl">0.25</span>, <span class="fl">0.5</span>, <span class="fl">1.0</span>))            <span class="co"># discouraged: floating-point ==</span></span>
+<span id="cb2-58"><a href="#cb2-58" tabindex="-1"></a></span>
+<span id="cb2-59"><a href="#cb2-59" tabindex="-1"></a><span class="co"># --- NA permission (atomics except raw; default: NA not allowed) ---</span></span>
+<span id="cb2-60"><a href="#cb2-60" tabindex="-1"></a>(numeric <span class="sc">|</span> <span class="cn">NA</span>)                    <span class="co"># numeric vector, NAs allowed</span></span>
+<span id="cb2-61"><a href="#cb2-61" tabindex="-1"></a>(scalar<span class="sc">&lt;</span>numeric <span class="sc">|</span> <span class="cn">NA</span><span class="sc">&gt;</span>)            <span class="co"># one numeric or NA</span></span>
+<span id="cb2-62"><a href="#cb2-62" tabindex="-1"></a>(scalar<span class="sc">&lt;</span>integer <span class="sc">|</span> <span class="cn">NA</span><span class="sc">&gt;</span>)            <span class="co"># one integer or NA</span></span>
+<span id="cb2-63"><a href="#cb2-63" tabindex="-1"></a>(scalar<span class="sc">&lt;</span>POSIXct <span class="sc">|</span> <span class="cn">NA</span><span class="sc">&gt;</span>)            <span class="co"># one timestamp or NA</span></span>
+<span id="cb2-64"><a href="#cb2-64" tabindex="-1"></a>(complex <span class="sc">|</span> <span class="cn">NA</span>)                    <span class="co"># complex vector, NAs allowed</span></span>
+<span id="cb2-65"><a href="#cb2-65" tabindex="-1"></a>(vector<span class="sc">&lt;</span>numeric <span class="sc">|</span> <span class="cn">NA</span>, <span class="dv">10</span><span class="sc">&gt;</span>)        <span class="co"># 10 numerics, NAs allowed</span></span>
+<span id="cb2-66"><a href="#cb2-66" tabindex="-1"></a>(numeric <span class="cf">in</span> [<span class="dv">0</span>, <span class="dv">1</span>] <span class="sc">|</span> <span class="cn">NA</span>)          <span class="co"># constrained + NA-allowed</span></span>
+<span id="cb2-67"><a href="#cb2-67" tabindex="-1"></a>(factor <span class="cf">in</span> <span class="fu">c</span>(<span class="st">"low"</span>, <span class="st">"med"</span>, <span class="st">"high"</span>) <span class="sc">|</span> <span class="cn">NA</span>)   <span class="co"># missing-category factor</span></span>
+<span id="cb2-68"><a href="#cb2-68" tabindex="-1"></a></span>
+<span id="cb2-69"><a href="#cb2-69" tabindex="-1"></a><span class="co"># --- nullable slot (whole argument) ---</span></span>
+<span id="cb2-70"><a href="#cb2-70" tabindex="-1"></a>(scalar<span class="sc">&lt;</span>numeric<span class="sc">&gt;</span>?)                <span class="co"># one numeric, or NULL</span></span>
+<span id="cb2-71"><a href="#cb2-71" tabindex="-1"></a>(scalar<span class="sc">&lt;</span>numeric<span class="sc">&gt;</span> <span class="er">|</span> <span class="cn">NULL</span>)          <span class="co"># identical to the above (use one, not both)</span></span>
+<span id="cb2-72"><a href="#cb2-72" tabindex="-1"></a>(character?)                      <span class="co"># character vector, or NULL</span></span>
+<span id="cb2-73"><a href="#cb2-73" tabindex="-1"></a></span>
+<span id="cb2-74"><a href="#cb2-74" tabindex="-1"></a><span class="co"># --- type unions (slot level) ---</span></span>
+<span id="cb2-75"><a href="#cb2-75" tabindex="-1"></a>(numeric <span class="sc">|</span> character)             <span class="co"># a numeric vector OR a character vector</span></span>
+<span id="cb2-76"><a href="#cb2-76" tabindex="-1"></a>(numeric <span class="sc">|</span> character <span class="sc">|</span> <span class="cn">NA</span>)        <span class="co"># numeric, OR character with NAs allowed</span></span>
+<span id="cb2-77"><a href="#cb2-77" tabindex="-1"></a>(R6<span class="sc">&lt;</span>Reader<span class="sc">&gt;</span> <span class="er">|</span> R6<span class="sc">&lt;</span>Writer<span class="sc">&gt;</span>)         <span class="co"># either R6 class</span></span>
+<span id="cb2-78"><a href="#cb2-78" tabindex="-1"></a>(data.table <span class="sc">|</span> <span class="cn">NULL</span>)               <span class="co"># a data.table or NULL</span></span>
+<span id="cb2-79"><a href="#cb2-79" tabindex="-1"></a></span>
+<span id="cb2-80"><a href="#cb2-80" tabindex="-1"></a><span class="co"># --- everything at once ---</span></span>
+<span id="cb2-81"><a href="#cb2-81" tabindex="-1"></a>(vector<span class="sc">&lt;</span>numeric <span class="cf">in</span> ]<span class="dv">0</span>, <span class="dv">1</span>] <span class="sc">|</span> <span class="cn">NA</span>, <span class="dv">1</span>..<span class="dv">100</span><span class="sc">&gt;</span>?)</span>
+<span id="cb2-82"><a href="#cb2-82" tabindex="-1"></a><span class="co"># NULL, OR a numeric vector of length 1..100 whose elements lie in (0,1] and may be NA</span></span></code></pre></div>
 </div>
 <div class="section level2">
 <h2 id="demo-1-every-inline-form-on-one-function">8. Demo 1 — every inline form on one function<a class="anchor" aria-label="anchor" href="#demo-1-every-inline-form-on-one-function"></a>
@@ -756,7 +747,7 @@ binds to <code>character</code> only — a numeric vector,
 <span><span class="co">#' @return (list) the report:</span></span>
 <span><span class="co">#' - **status** (scalar&lt;character in c("ok", "partial", "failed")&gt;): overall outcome.</span></span>
 <span><span class="co">#' - generated_at (scalar&lt;POSIXct&gt;): when the report was produced.</span></span>
-<span><span class="co">#' - window (scalar&lt;Date in ["2000-01-01", "2100-01-01"]&gt;): as-of date.</span></span>
+<span><span class="co">#' - window (scalar&lt;Date in [as.Date("2000-01-01"), as.Date("2100-01-01")]&gt;): as-of date.</span></span>
 <span><span class="co">#' - sections (list): one entry per requested view:</span></span>
 <span><span class="co">#'   - matches (data.table): ranked matches:</span></span>
 <span><span class="co">#'     - symbol (character): the pair.</span></span>
@@ -929,9 +920,9 @@ category (§2); every modifier it carries is a ✅ in that category’s row
 only on
 <code>integer</code>/<code>numeric</code>/<code>Date</code>/<code>POSIXct</code>;
 integer bounds are whole numbers; <code>Date</code>/<code>POSIXct</code>
-bounds are ISO strings (coerced) or class-matching expressions;
-<code>bound</code> productions are split by type so literal mismatches
-are ungrammatical (S2/S2a).</label></li>
+bounds are class-matching R expressions emitted verbatim (no coercion);
+<code>bound</code> productions are split by type so a numeric-literal
+bound on a <code>Date</code> is ungrammatical (S2).</label></li>
 <li><label><input type="checkbox"><code>in c(set)</code> appears only
 on ordered + enumerable atomics; never on
 <code>complex</code>/<code>logical</code>/<code>raw</code>; exact on

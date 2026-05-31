@@ -22,19 +22,22 @@ can be audited against itself — it must agree with itself everywhere.
     or `?`.
 5.  **The language is recursive.** A composite contains *full
     annotations* in its bullets, to any depth.
-6.  **Sets are R; intervals are math.** A set is an R expression emitted
-    verbatim (`c(...)` or a bare name); an interval is ISO/Bourbaki
-    bracket notation. A bound or set element must evaluate to the **same
-    type** as the atom it constrains — a static rule (S2), since `rexpr`
-    is opaque.
+6.  **Values are copied verbatim; the generator never coerces.** Every
+    value the user writes — an interval bound, a set element — is an R
+    expression emitted into the generated check exactly as written (`0`,
+    `as.Date("2024-01-01")`, `c("BUY", "SELL")`, `ORDER_SIDE`).
+    roxyassert performs no coercion and invents no time zone or format;
+    the user writes a valid R expression of the matching type. Intervals
+    are ISO/Bourbaki bracket notation around two such expressions.
+    Element/atom type agreement is a static rule (S2), since `rexpr` is
+    opaque.
 7.  **A type may only carry what its category supports** (§2). The
     grammar makes *category-level* nonsense unrepresentable — an
     interval on `complex`, a set on `logical`/`raw`, a fractional bound
-    on `integer`, a `vector` of `function`, `| NA` on `raw`.
-    Element-type agreement for **literal** bounds is grammar- enforced
-    too (a `numeric` literal cannot bound a `Date`, nor an ISO string a
-    `numeric` — the `bound` productions are split by type); only an
-    opaque R-expression bound defers to static rule S2.
+    on `integer`, a `vector` of `function`, `| NA` on `raw`. A bare
+    *numeric literal* cannot bound a `Date` (the `bound` productions are
+    split by type); whether an opaque R-expression bound is of the right
+    class defers to static rule S2.
 
 ## 2. Type categories
 
@@ -51,20 +54,21 @@ per-type exceptions) decides which modifiers are legal:
 | **Composite** | `list` `data.table` `data.frame` | ❌ | ❌ | ❌ | ❌ | bare, or refined by **nested bullets** |
 
 ¹ Sets compare with `==`/`%in%` and apply no normalisation. `integer`
-and `Date` sets are **exact** (both are whole-number doubles) and fine;
-`numeric` sets are floating-point-fragile and `POSIXct` sets are
+and `Date` sets are **exact** and fine; `numeric` sets are
+floating-point-fragile and `POSIXct` sets are
 sub-second/time-zone-fragile, so both are **discouraged** — prefer
-intervals. Interval bounds for `Date`/`POSIXct` are written as **ISO
-8601 string literals** (`Date in ["2024-01-01", "2026-12-31"]`, coerced
-by the check) or as an explicit R expression (`as.Date(...)`) for a
-non-default format/time zone; see S2/S2a. `integer` bounds are whole
-numbers (the grammar rejects fractional integer bounds). `Inf` and
-`-Inf` are open-end **sentinels** — an unbounded side, not a value — so
-on `integer` they denote “no bound on that side” and the generated check
-simply omits that comparison. See static rule S2. ² On `character` and
-`factor` a set constrains the **realised values**
-(`as.character(x) %in% set`), so the two behave identically; it does
-**not** assert a factor’s declared
+intervals. Interval bounds and set elements for `Date`/`POSIXct` are
+written as ordinary R expressions of the matching class —
+`as.Date("2024-01-01")`,
+`as.POSIXct("2024-01-01 09:00", tz = "America/New_York")` — and copied
+verbatim, so the user (not roxyassert) chooses the constructor, format,
+and time zone (S2). `integer` bounds are whole numbers (the grammar
+rejects fractional integer bounds). `Inf` and `-Inf` are open-end
+**sentinels** — an unbounded side, not a value — so they denote “no
+bound on that side” and the generated check simply omits that
+comparison. See static rule S2. ² On `character` and `factor` a set
+constrains the **realised values** (`as.character(x) %in% set`), so the
+two behave identically; it does **not** assert a factor’s declared
 [`levels()`](https://rdrr.io/r/base/levels.html) — for that, use prose
 (out of scope, §12).
 
@@ -114,11 +118,13 @@ the residual element-type rules are static (§4).
     high           ::= "]"    (* closed *) | "["   (* open *)
     int_bound      ::= "-"? digit+ | "Inf" | "-Inf"
     num_bound      ::= signed_number | "Inf" | "-Inf" | rexpr
-    time_bound     ::= iso_string | "Inf" | "-Inf" | rexpr
-                       (* iso_string is coerced via as.Date()/as.POSIXct(); a full R
-                          expr (as.Date(...)) is also accepted for explicit tz/format;
-                          see S2. The split makes a numeric bound on a Date — or vice
-                          versa — ungrammatical, not merely a static error. *)
+    time_bound     ::= "Inf" | "-Inf" | rexpr
+                       (* a Date/POSIXct bound is an R expression of the matching
+                          class, emitted verbatim: as.Date("2024-01-01"),
+                          as.POSIXct("2024-01-01 09:00", tz = "America/New_York"),
+                          lubridate::ymd_hms("..."). The user supplies the
+                          constructor and time zone; roxyassert never coerces. The
+                          split keeps a bare numeric literal from bounding a Date. *)
 
     set            ::= name_set | call_set
     name_set       ::= ident       (* a bare constant; a single maximal-munch token,
@@ -139,8 +145,6 @@ the residual element-type rules are static (§4).
     int            ::= digit+
     signed_number  ::= "-"? digit+ ( "." digit+ )?
     ident          ::= letter ( letter | digit | "." | "_" )*
-    iso_string     ::= '"' ISO-8601-date-or-datetime '"'
-                       (* "YYYY", "YYYY-MM", "YYYY-MM-DD", or "YYYY-MM-DDThh:mm:ss" *)
     rexpr          ::= (* any valid R expression; opaque, emitted verbatim *)
     description    ::= (* free text; the remainder of the same physical line *)
 
@@ -217,25 +221,17 @@ are *specified rules*, not stylistic suggestions.
   (`list`/`data.table`/`data.frame`). Any other slot is a leaf and takes
   no children; `(data.table | data.frame)` with bullets is rejected
   (which field-set would they describe?).
-- **S2 — bound/set element type.** Interval bounds and set elements must
-  evaluate to the constrained atom’s type: `signed_number`/`±Inf` for
-  `numeric`; whole numbers/`±Inf` for `integer` (also enforced by the
-  grammar via `int_bound`); for `Date`/`POSIXct`, either an **ISO 8601
-  string literal** — coerced by the generated check via
-  [`as.Date()`](https://rdrr.io/r/base/as.Date.html) /
-  `as.POSIXct(..., tz = "UTC")` — or a class-matching R expression
-  (`as.Date(...)`) when a non-default format or time zone is needed; the
-  literal element type for `character`/`factor`/`integer` sets. S2
-  inspects literal/inline forms; a bare `name_set` (and any other opaque
-  `rexpr`) is taken on trust — prefer an inline literal where
-  checkability matters.
-- **S2a — partial dates resolve to period edges.** A partial
-  `iso_string` (`"2024"`, `"2024-06"`) denotes a whole period; as a
-  **low** bound it resolves to that period’s **first** instant and as a
-  **high** bound to its **last**, so `Date in ["2024", "2026"]` means
-  `[2024-01-01, 2026-12-31]` (“all of 2024 through all of 2026”). A full
-  `"YYYY-MM-DD"` is exact and unambiguous; use it when you do not want
-  period expansion.
+- **S2 — bound/set element type.** Every interval bound and set element
+  is an R expression **emitted verbatim** — roxyassert never coerces. It
+  must evaluate to the constrained atom’s type: a number/`±Inf` for
+  `numeric`, a whole number/`±Inf` for `integer` (also grammar-enforced
+  via `int_bound`), a class-matching expression for `Date`/`POSIXct`
+  (`as.Date(...)`, `as.POSIXct(..., tz = ...)`,
+  `lubridate::ymd_hms(...)` — the user owns the constructor, format, and
+  time zone), and the matching literal type for `character`/`factor`
+  sets. The agreement is checkable for inline literals; a bare
+  `name_set` (or any opaque `rexpr`) is taken on trust — prefer an
+  inline literal where it matters.
 - **S3 — named composite fields.** A bulleted
   `list`/`data.table`/`data.frame` asserts the presence of the **named**
   fields/columns listed (`all(<names> %in% names(x))`, and the
@@ -344,12 +340,10 @@ list/table.
 (scalar<numeric in ]-Inf, 0]>)    # x <= 0  (-Inf lower sentinel)
 (scalar<integer in [1, Inf[>)     # x >= 1  (integer bounds are whole numbers)
 (numeric in [0, 1])               # every element in [0, 1]
-(scalar<Date in ["2024-01-01", "2026-12-31"]>)    # ISO string bounds (coerced)
-(scalar<Date in ["2024", "2026"]>)                # partial dates: all of 2024..2026 (S2a)
-(scalar<Date in ["2024-01-01", Inf[>)             # on or after a date (Inf sentinel)
-(scalar<Date in [as.Date("2024-01-01"), as.Date("2024-12-31")]>)        # explicit as.Date form
-(scalar<POSIXct in ["2024-01-01T00:00:00", "2024-12-31T23:59:59"]>)     # ISO date-time (UTC)
-(scalar<POSIXct in [as.POSIXct("2024-01-01 00:00:00", tz = "America/New_York"), Inf[>)  # explicit tz
+(scalar<Date in [as.Date("2024-01-01"), as.Date("2026-12-31")]>)        # bounds are R exprs, verbatim
+(scalar<Date in [as.Date("2024-01-01"), Inf[>)                          # on or after a date (Inf sentinel)
+(scalar<POSIXct in [as.POSIXct("2024-01-01 00:00", tz = "America/New_York"), Inf[>)  # user owns the tz
+(scalar<POSIXct in [lubridate::ymd_hms("2024-01-01 00:00:00"), lubridate::ymd_hms("2025-01-01 00:00:00")[>)  # any constructor
 
 # --- sets / enums (ordered + enumerable atomics) ---
 (scalar<character in c("BUY", "SELL")>)   # inline set, scalar
@@ -358,7 +352,7 @@ list/table.
 (integer in c(1L, 2L, 3L))                # exact integer enum (bare vector)
 (scalar<integer in c(1L, 2L, 3L)>)        # exact integer enum (scalar)
 (factor in c("low", "med", "high"))       # constrains realised values (footnote 2)
-(Date in c("2024-01-01", "2024-06-30"))   # ISO-string set, coerced; exact at day resolution
+(Date in c(as.Date("2024-01-01"), as.Date("2024-06-30")))   # set elements are R exprs, verbatim
 (numeric in c(0.25, 0.5, 1.0))            # discouraged: floating-point ==
 
 # --- NA permission (atomics except raw; default: NA not allowed) ---
@@ -431,7 +425,7 @@ place_batch <- function(symbol, sides, quantities, limits, leverage = NULL,
 #' @return (list) the report:
 #' - **status** (scalar<character in c("ok", "partial", "failed")>): overall outcome.
 #' - generated_at (scalar<POSIXct>): when the report was produced.
-#' - window (scalar<Date in ["2000-01-01", "2100-01-01"]>): as-of date.
+#' - window (scalar<Date in [as.Date("2000-01-01"), as.Date("2100-01-01")]>): as-of date.
 #' - sections (list): one entry per requested view:
 #'   - matches (data.table): ranked matches:
 #'     - symbol (character): the pair.
@@ -593,9 +587,10 @@ Every base type sits in exactly one category (§2); every modifier it
 carries is a ✅ in that category’s row — no per-type exceptions.
 
 `in [interval]` appears only on `integer`/`numeric`/`Date`/`POSIXct`;
-integer bounds are whole numbers; `Date`/`POSIXct` bounds are ISO
-strings (coerced) or class-matching expressions; `bound` productions are
-split by type so literal mismatches are ungrammatical (S2/S2a).
+integer bounds are whole numbers; `Date`/`POSIXct` bounds are
+class-matching R expressions emitted verbatim (no coercion); `bound`
+productions are split by type so a numeric-literal bound on a `Date` is
+ungrammatical (S2).
 
 `in c(set)` appears only on ordered + enumerable atomics; never on
 `complex`/`logical`/`raw`; exact on `integer`/`Date`, discouraged on
