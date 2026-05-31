@@ -107,18 +107,22 @@ length); the whole-argument modifiers sit outside it:
 - **Slot (whole argument):** a trailing `?` (may be `NULL`) and `|`
   type-unions.
 
-| Bracket / token | Meaning |
-|----|----|
-| `< >` | generics: `scalar` / `vector` wrap the element type (+ length), `R6` names a class |
-| `[ ] / ] [` | a numeric **interval** — `[`/`]` closed, `]`/`[` open (ISO/Bourbaki) |
-| `in` | a value-constraint on the element type: an interval, or an R set |
-| `c(...)` / a name | a **set** of allowed values (an enum) |
-| `,` | a vector **length** (inside `<>`) |
-| `\| NA` | elements may be `NA` (bare or wrapped) — default: **not** allowed |
-| `?` / `\| NULL` | the whole argument may be `NULL` (slot level) |
-| `\| <type>` | a union with another type, e.g. `numeric \| character` |
+The bracket / token reference:
 
-The `\|` operator is read by what follows it: **`NA`** = elements may be
+- `< >` — generics: `scalar` / `vector` wrap the element type (+
+  length), `R6` names a class.
+- `[ ] / ] [` — a numeric **interval** (`[`/`]` closed, `]`/`[` open,
+  ISO/Bourbaki).
+- `in` — a value-constraint on the element type: an interval, or an R
+  set.
+- `c(...)` / a name — a **set** of allowed values (an enum).
+- `,` — a vector **length** (inside `<>`).
+- `| NA` — elements may be `NA` (bare or wrapped); default: **not**
+  allowed.
+- `?` / `| NULL` — the whole argument may be `NULL` (slot level).
+- `| <type>` — a union with another type, e.g. `numeric | character`.
+
+The `|` operator is read by what follows it: **`NA`** = elements may be
 missing, **`NULL`** = the whole argument may be `NULL`, anything else =
 a **type union**.
 
@@ -154,22 +158,21 @@ for the full per-category rules.
 
 ### Inline forms
 
-| Intent | Annotation |
-|----|----|
-| vector of any length (default) | `(character)` |
-| scalar — length 1 | `(scalar<character>)` |
-| exactly *n* | `(vector<numeric, 10>)` |
-| length range / at least *n* | `(vector<numeric, 1..10>)` / `(vector<numeric, 2..>)` |
-| between 1 and 5 (inclusive) | `(scalar<numeric in [1, 5]>)` |
-| greater than 0 | `(scalar<numeric in ]0, Inf[>)` |
-| at most 1 | `(scalar<numeric in ]-Inf, 1]>)` |
-| every element of a vector in a range | `(numeric in [1, 5])` |
-| enum — inline set (scalar) | `(scalar<character in c("BUY", "SELL")>)` |
-| enum — vector from a constant | `(character in ORDER_SIDE)` |
-| `NA` elements allowed | `(numeric \| NA)` |
-| nullable slot | `(scalar<numeric>?)` ≡ `(scalar<numeric> \| NULL)` |
-| union of types | `(numeric \| character)` |
-| R6 instance | `(R6<Engine>)` |
+- vector of any length (default) — `(character)`
+- scalar (length 1) — `(scalar<character>)`
+- exactly *n* — `(vector<numeric, 10>)`
+- length range / at least *n* — `(vector<numeric, 1..10>)` /
+  `(vector<numeric, 2..>)`
+- between 1 and 5 (inclusive) — `(scalar<numeric in [1, 5]>)`
+- greater than 0 — `(scalar<numeric in ]0, Inf[>)`
+- at most 1 — `(scalar<numeric in ]-Inf, 1]>)`
+- every element of a vector in a range — `(numeric in [1, 5])`
+- enum, inline set (scalar) — `(scalar<character in c("BUY", "SELL")>)`
+- enum, vector from a constant — `(character in ORDER_SIDE)`
+- `NA` elements allowed — `(numeric | NA)`
+- nullable slot — `(scalar<numeric>?)` ≡ `(scalar<numeric> | NULL)`
+- union of types — `(numeric | character)`
+- R6 instance — `(R6<Engine>)`
 
 Everything composes. For example `(vector<numeric in ]0, 1] | NA, 10>)`
 means: a numeric vector of length 10, every element in `(0, 1]`, `NA`
