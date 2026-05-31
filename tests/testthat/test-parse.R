@@ -251,27 +251,23 @@ test_that("a trailing-comma inline set does not raise a misleading empty-element
   expect_error(parse_annotation("(integer in c(1, ))"), "L") # still requires L suffix
 })
 
-# ---- promise<T> (sync-or-async returns) -------------------------------------
+# ---- promise<T> (sync-or-async results) -------------------------------------
 
-test_that("promise<T> records async and collapses to its resolved type", {
+test_that("promise<T> collapses to its resolved type", {
   a <- parse_annotation("(promise<data.table>)")
-  expect_true(a$async)
   expect_equal(length(a$alternatives), 1L)
   expect_equal(a$alternatives[[1]]$kind, "composite")
   expect_equal(a$alternatives[[1]]$base, "data.table")
   b <- parse_annotation("(promise<scalar<numeric>>)")
-  expect_true(b$async)
   expect_equal(b$alternatives[[1]]$shape, "scalar")
   expect_equal(b$alternatives[[1]]$base, "numeric")
 })
 
-test_that("the T | promise<T> union collapses to a single resolved T (async)", {
+test_that("the T | promise<T> union collapses to a single resolved T", {
   a <- parse_annotation("(data.table | promise<data.table>)")
-  expect_true(a$async)
   expect_equal(length(a$alternatives), 1L)
   expect_equal(a$alternatives[[1]]$base, "data.table")
   b <- parse_annotation("(promise<data.table> | data.table)")
-  expect_true(b$async)
   expect_equal(length(b$alternatives), 1L)
 })
 
@@ -282,11 +278,6 @@ test_that("promise<T> carries field bullets into the resolved composite", {
   expect_equal(node$base, "data.table")
   expect_equal(length(node$fields), 2L)
   expect_equal(node$fields[[2]]$name, "score")
-})
-
-test_that("a non-async slot has async = FALSE", {
-  expect_false(parse_annotation("(scalar<numeric>)")$async)
-  expect_false(parse_annotation("(data.table | NULL)")$async)
 })
 
 test_that("promise<T> needs <T>, and a heterogeneous promise union is rejected", {

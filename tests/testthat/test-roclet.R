@@ -141,12 +141,16 @@ test_that("a promise<T> @return generates a plain resolved-value validator", {
   expect_false(any(grepl("promises::then|is\\.promise", code)))
 })
 
-test_that("a promise<T> on @param is rejected (return-only)", {
+test_that("a promise<T> @param is allowed — it lowers to the resolved-type check", {
+  # a helper that takes a promise input is valid; roxyassert generates the
+  # resolved-value validator and the user applies it however they like.
   text <- "
-    #' Bad.
-    #' @param p (promise<data.table>) not allowed here.
+    #' Add a callback.
+    #' @param p (promise<data.table>) the bars promise.
     #' @export
-    bad <- function(p) NULL
+    with_logging <- function(p) NULL
   "
-  expect_error(roxygen2::roc_proc_text(contract_roclet(), text), "only valid on @return")
+  code <- unlist(roxygen2::roc_proc_text(contract_roclet(), text), use.names = FALSE)
+  expect_true(any(grepl("^assert_args_with_logging <- function\\(p\\)", code)))
+  expect_true(any(grepl("assert_data_table\\(p\\)", code)))
 })

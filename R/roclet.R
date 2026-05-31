@@ -149,14 +149,6 @@ roclet_output.roclet_contract <- function(x, results, base_path, ...) {
   if (is.null(ast)) {
     return(out)
   }
-  if (isTRUE(ast$async)) {
-    stop(
-      "roxyassert: in ",
-      where,
-      ": promise<T> is only valid on @return, not @param (argument checks are synchronous)",
-      call. = FALSE
-    )
-  }
   for (nm in strsplit(names, "\\s*,\\s*")[[1]]) {
     out[[length(out) + 1L]] <- list(name = nm, ast = ast)
   }

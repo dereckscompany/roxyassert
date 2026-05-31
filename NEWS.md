@@ -6,7 +6,6 @@
   switch). roxyassert generates a plain value-validator for the resolved type
   `T` and stays promise-agnostic — you compose the async yourself
   (`promises::then(impl, assert_return_fn)`, or your own sync/async helper).
-  Allowed in `@return` position only.
 
 # roxyassert 0.1.0
 

@@ -403,14 +403,15 @@ parse_annotation <- function(text) {
       break
     }
   }
-  return(list(kind = "slot", alternatives = alts, null_ok = null_ok, async = FALSE))
+  return(list(kind = "slot", alternatives = alts, null_ok = null_ok))
 }
 
-# A promise<T> denotes the resolved type T plus an async marker; a union mixing
-# promise<X> with a bare X (the "sync-or-async delivery" pattern) collapses to a
-# single X. roxyassert validates only the resolved value and emits no promise
-# code (the caller wires the async); this just records `async = TRUE` and reduces
-# the slot to its resolved type, so generation and field bullets see plain T.
+# A promise<T> denotes the resolved type T; a union mixing promise<X> with a bare
+# X (the "sync-or-async delivery" pattern) collapses to a single X. roxyassert
+# validates only the resolved value and emits no promise code (the caller wires
+# the async), so this just reduces the slot to its resolved type — generation and
+# field bullets then see plain T. Allowed in any position (the caller decides how
+# to apply the generated validator to a value or a promise).
 .ra_normalize_promise <- function(ast) {
   has_promise <- any(vapply(ast$alternatives, function(a) identical(a$kind, "promise"), logical(1)))
   if (!has_promise) {
@@ -426,7 +427,6 @@ parse_annotation <- function(text) {
     )
   }
   ast$alternatives <- list(first)
-  ast$async <- TRUE
   return(ast)
 }
 
