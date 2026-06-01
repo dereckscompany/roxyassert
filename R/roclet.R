@@ -303,11 +303,10 @@ roxy_tag_parse.roxy_tag_type <- function(x) {
 # Group the block's method-level @param/@return tags by method name, in source
 # order, returning method -> list(params = list(list(name=, ast=)), ret = ast).
 .ra_r6_collect <- function(block, methods) {
-  tag_type <- .ra_ns_fn("r6_tag_type")
   find_method <- .ra_ns_fn("find_method_for_tag")
   by_method <- list()
   for (tag in block$tags) {
-    if (!(tag$tag %in% c("param", "return")) || !identical(tag_type(tag, block), "method")) {
+    if (!(tag$tag %in% c("param", "return")) || !.ra_r6_is_method_tag(tag, block)) {
       next
     }
     method <- if (!is.null(tag$r6method)) tag$r6method else find_method(methods, tag)
@@ -326,6 +325,22 @@ roxy_tag_parse.roxy_tag_type <- function(x) {
     }
   }
   return(by_method)
+}
+
+# Does a @param / @return tag document an R6 *method* (rather than the class /
+# constructor)? True when roxygen2 has already bound it to a method (`$r6method`)
+# or it sits inline in the class body (at or below the class's definition line).
+# This is roxygen2's own `r6_tag_type()` rule for these two tag kinds, computed
+# directly from `tag$line` / `block$line` so we do not depend on that internal
+# (it was added in roxygen2 8.0.0 and is absent in 7.x).
+.ra_r6_is_method_tag <- function(tag, block) {
+  if (!is.null(tag$r6method)) {
+    return(TRUE)
+  }
+  if (is.null(block$line) || is.na(tag$line)) {
+    return(FALSE)
+  }
+  return(tag$line >= block$line)
 }
 
 # The `.r6data` tag roxygen2 attaches to an R6 class block, or NULL.

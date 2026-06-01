@@ -93,6 +93,21 @@ test_that("R6 methods generate <Class>__<method> helpers", {
   expect_true(any(grepl("^assert_return_Store__count <- function\\(value\\)", code)))
 })
 
+test_that(".ra_r6_is_method_tag classifies method vs class tags across roxygen2 versions", {
+  # An explicit r6method binding (roxygen2 >= 8.0.0) is always a method tag.
+  expect_true(.ra_r6_is_method_tag(list(r6method = "get", line = 1L), list(line = 99L)))
+  # Otherwise the rule is positional: a tag inline in the class body (at or below
+  # the class's definition line) documents a method; one above documents the
+  # class / constructor. This is computed directly, so it holds on roxygen2 7.x
+  # (which lacks the `r6_tag_type` internal) as well as 8.x.
+  expect_true(.ra_r6_is_method_tag(list(line = 12L), list(line = 10L)))
+  expect_true(.ra_r6_is_method_tag(list(line = 10L), list(line = 10L)))
+  expect_false(.ra_r6_is_method_tag(list(line = 4L), list(line = 10L)))
+  # Degenerate inputs never misfire as a method tag.
+  expect_false(.ra_r6_is_method_tag(list(line = NA_integer_), list(line = 10L)))
+  expect_false(.ra_r6_is_method_tag(list(line = 5L), list()))
+})
+
 test_that("annotation text + names are read from raw, not markdown-rewritten val", {
   # roxygen2 rewrites $val through markdown when enabled, mangling `<...>` into
   # `\if{html}{\out{<...>}}`; the roclet must read the pristine $raw instead.

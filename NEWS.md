@@ -1,3 +1,11 @@
+# roxyassert 0.3.1
+
+* R6 contract generation now works on roxygen2 7.x as well as 8.x. The method
+    detection no longer calls roxygen2's internal `r6_tag_type()` (added in
+    8.0.0); it derives the same method-vs-class classification directly from the
+    tag and class source lines, so packages pinned to roxygen2 7.3.x can
+    generate R6 method contracts.
+
 # roxyassert 0.3.0
 
 * New `@type` tag: declare a reusable named type/shape once and reference it by
