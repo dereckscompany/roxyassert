@@ -372,8 +372,9 @@ test_that("every intentionally-invalid form is rejected", {
     "(vector<function, 3>)", # function is length-1
     "(R6 | NULL)", # R6 must name a class
     "(data.table | NA)", # | NA is element-level, not composite
-    "(vector<numeric>)", # vector<> requires a length
-    "(frobnicate)" # unknown type
+    "(vector<numeric>)" # vector<> requires a length
+    # NB: an unknown bare word (e.g. "frobnicate") is NOT a parse error — it is a
+    # deferred named-type reference, caught at resolution/generation instead.
   )
   for (a in invalid) {
     expect_error(parse_annotation(a), info = a)

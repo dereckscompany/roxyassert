@@ -86,6 +86,15 @@ generate_checks <- function(ast, expr) {
     # element, and rejected inside scalar<>/vector<>. Validate the resolved value,
     # never the promise wrapper, should that invariant ever change.
     promise = .rg_type(node$inner, expr),
+    # A named type that reached generation unresolved: not a built-in and not a
+    # registered @type. (The roclet resolves named types first; this is the path
+    # for an undefined reference.)
+    named = stop(
+      "roxyassert: unknown type '",
+      node$name,
+      "' (not a built-in type; define it with @type)",
+      call. = FALSE
+    ),
     stop("roxyassert: cannot generate for node kind '", node$kind, "'", call. = FALSE)
   ))
 }
