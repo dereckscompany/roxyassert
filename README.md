@@ -415,14 +415,7 @@ If you don’t track the mode explicitly, branch on the value instead —
 `if (promises::is.promise(result)) promises::then(result, assert_return_ohlcv) else assert_return_ohlcv(result)`.
 
 In all cases the generated validator is identical; only *your* one-line
-wiring differs.
-
-> **Known limitation:** a *list of un-resolved promises* —
-> `list<promise<T>>` — is rejected, because each element would be an
-> unresolved promise that can’t be checked synchronously (and roxyassert
-> never emits per-element `then()` wiring). Await them first
-> (e.g. `promises::promise_all`) and annotate the result as
-> `promise<list<T>>`. We’ll revisit this if there’s demand.
+wiring differs. (See **Known limitations** for `list<promise<T>>`.)
 
 ## Generated functions — conventions
 
@@ -458,6 +451,18 @@ written. `roxyassert` keeps your R code exactly as it is and treats the
 documentation you already write as the contract — and because the checks
 are generated *for* you, you never write a validation function by hand
 again, even if you choose not to call every one.
+
+## Known limitations
+
+Things deliberately not supported yet — each is rejected with a clear
+error, and we’ll revisit any of them if there’s demand. (The grammar
+reference’s *Non-goals* section is the full formal list.)
+
+- **A list of un-resolved promises** (`list<promise<T>>`) — each element
+  would be an unresolved promise that can’t be checked synchronously,
+  and roxyassert never emits per-element `then()` wiring. Await them
+  (e.g. `promises::promise_all`) and annotate the result as
+  `promise<list<T>>`.
 
 ## Status
 
