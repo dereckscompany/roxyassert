@@ -123,7 +123,13 @@ test_that("invalid annotations are rejected with clear errors", {
   expect_error(parse_annotation("(numeric | NULL?)"), "nothing may follow")
   expect_error(parse_annotation("(R6)"), "must name a class")
   expect_error(parse_annotation("(scalar<numeric, 1>)"), "expected '>'")
-  expect_error(parse_annotation("(frobnicate)"), "unknown type")
+})
+
+test_that("an unknown bare word is a deferred named type; it errors only when unresolved", {
+  # parse no longer rejects it — it may be a @type defined elsewhere
+  expect_equal(parse_annotation("(frobnicate)")$alternatives[[1]]$kind, "named")
+  # but lowering it without a definition is an unknown-type error
+  expect_error(genf("(frobnicate)"), "unknown type")
 })
 
 # ---- nested field bullets (S1 / S3) -----------------------------------------

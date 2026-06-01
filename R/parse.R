@@ -23,6 +23,9 @@
 .ra_set_ok <- c(.ra_ordered_num, .ra_temporal, .ra_enumerable) # accept `in c(..)`
 .ra_na_ok <- c(.ra_ordered_num, .ra_temporal, .ra_enumerable, .ra_plain) # accept `| NA`
 
+# Built-in type words a @type name may not shadow.
+.ra_type_reserved <- c(.ra_atomic, .ra_composite, "any", "function", "R6", "scalar", "vector", "promise")
+
 # ---- cursor over the annotation text ----------------------------------------
 
 .ra_cursor <- function(s) {
@@ -474,6 +477,43 @@ parse_annotation <- function(text) {
   return(paste(deparse(expr[[1]]), collapse = ""))
 }
 
+# ---- named-type resolution (@type) ------------------------------------------
+#
+# `registry` maps a @type name to its (single-type) AST node. Resolution replaces
+# every `named` node with the registered type, inline and recursively, so the
+# generator only ever sees built-in nodes. A @type may reference another (the
+# substituted node is itself resolved, with `stack` tracking the chain to catch
+# cycles); an unknown name is reported here. Used by the roclet on each annotation
+# AND on the registry entries themselves (so chained types resolve).
+
+.ra_resolve_slot <- function(ast, registry, stack = character()) {
+  ast$alternatives <- lapply(ast$alternatives, function(a) .ra_resolve_node(a, registry, stack))
+  return(ast)
+}
+
+.ra_resolve_node <- function(node, registry, stack = character()) {
+  if (identical(node$kind, "named")) {
+    nm <- node$name
+    if (nm %in% stack) {
+      stop("roxyassert: cyclic @type definition: ", paste(c(stack, nm), collapse = " -> "), call. = FALSE)
+    }
+    if (is.null(registry[[nm]])) {
+      stop("roxyassert: unknown type '", nm, "' (not a built-in type; define it with @type)", call. = FALSE)
+    }
+    return(.ra_resolve_node(registry[[nm]], registry, c(stack, nm)))
+  }
+  if (!is.null(node$element)) {
+    node$element <- .ra_resolve_node(node$element, registry, stack)
+  }
+  if (!is.null(node$fields)) {
+    node$fields <- lapply(node$fields, function(f) {
+      f$ast <- .ra_resolve_slot(f$ast, registry, stack)
+      return(f)
+    })
+  }
+  return(node)
+}
+
 # ---- type --------------------------------------------------------------------
 
 .ra_parse_type <- function(p) {
@@ -552,7 +592,11 @@ parse_annotation <- function(text) {
     node$length <- NULL
     return(node)
   }
-  return(.ra_err(p, paste0("unknown type '", w, "'")))
+  # Not a built-in: a deferred reference to a @type-defined named type. The roclet
+  # resolves it against the type registry; if it is never defined, resolution (or
+  # generation) reports it as an unknown type. A named type takes no in/| NA — it
+  # stands for its whole definition (refine in the @type, not at the use site).
+  return(list(kind = "named", name = w))
 }
 
 # Inside scalar<...> / vector<...>: an atom or the `any` wildcard.

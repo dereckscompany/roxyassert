@@ -25,9 +25,10 @@ contract_roclet <- function() {
 
 #' @exportS3Method roxygen2::roclet_process
 roclet_process.roclet_contract <- function(x, blocks, env, base_path) {
+  registry <- .ra_type_registry(blocks)
   helpers <- list()
   for (block in blocks) {
-    code <- .ra_block_contract(block)
+    code <- .ra_block_contract(block, registry)
     if (length(code) > 0L) {
       helpers[[length(helpers) + 1L]] <- code
     }
@@ -54,11 +55,70 @@ roclet_output.roclet_contract <- function(x, results, base_path, ...) {
   return(path)
 }
 
+# ---- @type: reusable named types --------------------------------------------
+
+#' @exportS3Method roxygen2::roxy_tag_parse
+roxy_tag_parse.roxy_tag_type <- function(x) {
+  x$val <- x$raw
+  return(x)
+}
+
+# Collect every @type definition into a name -> type-node registry, so a bare
+# name in an annotation can be resolved (inline) to its definition. Each
+# definition is then resolved eagerly — references between @types are expanded
+# (R/parse.R), so an unknown name or cycle is an error at document() time even
+# when the @type is never used; the returned nodes are fully built-in.
+.ra_type_registry <- function(blocks) {
+  raw <- list()
+  for (block in blocks) {
+    for (tag in roxygen2::block_get_tags(block, "type")) {
+      entry <- .ra_type_def(tag)
+      if (!is.null(raw[[entry$name]])) {
+        stop("roxyassert: duplicate @type '", entry$name, "'", call. = FALSE)
+      }
+      raw[[entry$name]] <- entry$node
+    }
+  }
+  registry <- list()
+  for (nm in names(raw)) {
+    registry[[nm]] <- .ra_resolve_node(raw[[nm]], raw, nm)
+  }
+  return(registry)
+}
+
+# Parse one @type tag into list(name=, node=): a leading name then a single-type
+# annotation. Errors on a missing name/type, a shadowed built-in, or a multi-
+# alternative / nullable definition (those modifiers belong at the use site).
+.ra_type_def <- function(tag) {
+  raw <- .ra_tag_text(tag)
+  m <- regmatches(raw, regexec("^\\s*([A-Za-z.][A-Za-z0-9._]*)\\s+([\\s\\S]*)$", raw, perl = TRUE))[[1]]
+  if (length(m) != 3L) {
+    stop("roxyassert: @type needs a name and a type, e.g. @type OrderAck (data.table)", call. = FALSE)
+  }
+  name <- m[[2]]
+  if (name %in% .ra_type_reserved) {
+    stop("roxyassert: @type cannot shadow the built-in type '", name, "'", call. = FALSE)
+  }
+  ast <- .ra_parse_or_stop(m[[3]], sprintf("@type '%s'", name))
+  if (is.null(ast)) {
+    stop("roxyassert: @type '", name, "' has no parseable (type)", call. = FALSE)
+  }
+  if (length(ast$alternatives) != 1L || isTRUE(ast$null_ok)) {
+    stop(
+      "roxyassert: @type '",
+      name,
+      "' must define a single type (no '|' union, '?' or '| NULL'; add those where you use it)",
+      call. = FALSE
+    )
+  }
+  return(list(name = name, node = ast$alternatives[[1]]))
+}
+
 # ---- per-block: build the helper(s) for one documented object ---------------
 
-.ra_block_contract <- function(block) {
+.ra_block_contract <- function(block, registry = list()) {
   if (inherits(block$object, "r6class")) {
-    return(.ra_block_r6(block))
+    return(.ra_block_r6(block, registry))
   }
 
   fn <- .ra_block_name(block)
@@ -66,9 +126,23 @@ roclet_output.roclet_contract <- function(x, results, base_path, ...) {
     return(character())
   }
 
-  params <- .ra_block_params(block)
+  params <- lapply(.ra_block_params(block), function(p) {
+    p$ast <- .ra_resolve_or_stop(p$ast, registry, sprintf("@param '%s'", p$name))
+    return(p)
+  })
   ret <- .ra_block_return(block)
+  if (!is.null(ret)) {
+    ret <- .ra_resolve_or_stop(ret, registry, "@return")
+  }
   return(.ra_assemble(fn, params, ret))
+}
+
+# Resolve a parsed annotation's named types against the registry, re-raising any
+# error (unknown type, cycle) with the documentation location.
+.ra_resolve_or_stop <- function(ast, registry, where) {
+  return(tryCatch(.ra_resolve_slot(ast, registry), error = function(e) {
+    stop("roxyassert: in ", where, ": ", conditionMessage(e), call. = FALSE)
+  }))
 }
 
 # Stitch a function's annotated params + return into its helper code (shared by
@@ -197,7 +271,7 @@ roclet_output.roclet_contract <- function(x, results, base_path, ...) {
 # roxygen2's own tag->method association so the split matches its RD output, then
 # emit assert_args_<Class>__<method> / assert_return_<Class>__<method> per method.
 
-.ra_block_r6 <- function(block) {
+.ra_block_r6 <- function(block, registry = list()) {
   r6 <- .ra_r6_data(block)
   if (is.null(r6)) {
     return(character())
@@ -212,7 +286,13 @@ roclet_output.roclet_contract <- function(x, results, base_path, ...) {
   out <- character()
   for (method in names(by_method)) {
     info <- by_method[[method]]
-    code <- .ra_assemble(paste0(class, "__", method), info$params, info$ret)
+    where <- sprintf("method %s()", method)
+    params <- lapply(info$params, function(p) {
+      p$ast <- .ra_resolve_or_stop(p$ast, registry, sprintf("@param '%s' of %s", p$name, where))
+      return(p)
+    })
+    ret <- if (!is.null(info$ret)) .ra_resolve_or_stop(info$ret, registry, sprintf("@return of %s", where)) else NULL
+    code <- .ra_assemble(paste0(class, "__", method), params, ret)
     if (length(code) > 0L) {
       out <- c(if (length(out) > 0L) c(out, "") else out, code)
     }
