@@ -502,7 +502,13 @@ parse_annotation <- function(text) {
       # promise<T> stands for a whole (sync-or-async) slot value, not an element:
       # a list of promises can't be validated synchronously per element.
       if (identical(element$kind, "promise")) {
-        .ra_err(p, "promise<T> cannot be a list element; it stands for a whole slot value")
+        .ra_err(
+          p,
+          paste0(
+            "promise<T> cannot be a list element; await the promises ",
+            "(e.g. promises::promise_all) and use promise<list<T>>"
+          )
+        )
       }
       .ra_expect(p, ">")
     }

@@ -715,6 +715,11 @@ model objects are **no longer** here — they are now `list<T>`, e.g.
   `list<T>`.)
 - **A factor's declared `levels()`** — a set checks realised values, not the
   level schema (footnote 2).
+- **A list of un-resolved promises** — `list<promise<T>>` is rejected: each
+  element would be an unresolved promise, which can't be validated synchronously,
+  and roxyassert never emits the per-element `then()` wiring (S5). Await the
+  promises (e.g. `promises::promise_all`) and annotate the result as
+  `promise<list<T>>`. (If there's real demand, a future version could relax this.)
 
 ## 13. Self-consistency checklist
 

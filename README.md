@@ -417,6 +417,13 @@ If you don’t track the mode explicitly, branch on the value instead —
 In all cases the generated validator is identical; only *your* one-line
 wiring differs.
 
+> **Known limitation:** a *list of un-resolved promises* —
+> `list<promise<T>>` — is rejected, because each element would be an
+> unresolved promise that can’t be checked synchronously (and roxyassert
+> never emits per-element `then()` wiring). Await them first
+> (e.g. `promises::promise_all`) and annotate the result as
+> `promise<list<T>>`. We’ll revisit this if there’s demand.
+
 ## Generated functions — conventions
 
 - **Two helpers, each optional.** `assert_args_<fn>` is emitted only if
