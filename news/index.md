@@ -1,5 +1,16 @@
 # Changelog
 
+## roxyassert 0.3.0
+
+- New `@type` tag: declare a reusable named type/shape once and
+  reference it by name anywhere a type appears
+  (`@return (promise<OrderAck>)`, `(Bps)`, `list<OrderAck>`), instead of
+  repeating the annotation. Names resolve at `document()` time by inline
+  expansion (no runtime cost); a `@type` may build on another, with
+  cycles and unknown names reported as errors. Package-local. Use-site
+  refinement of a named type (e.g. `(Price in [0, 1])`) is not supported
+  in this version — see Known limitations in the README.
+
 ## roxyassert 0.2.0
 
 - New `promise<T>` type (and the `T | promise<T>` union), most natural

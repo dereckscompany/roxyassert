@@ -105,7 +105,12 @@ residual element-type rules are static (§4).
                           written EITHER as a "| NULL" alternative OR a trailing "?",
                           never both *)
 
-    type           ::= atomic | wildcard | reference | composite | promise
+    type           ::= atomic | wildcard | reference | composite | promise | named
+    named          ::= ident
+                       (* an identifier that is not a built-in type: a reference to a
+                          type declared elsewhere with `@type` (S6). Resolved inline at
+                          document() time; takes no in / | NA / bullets at the use site
+                          (refine in the @type, not here). *)
 
     atomic         ::= atom
                      | "scalar" "<" atom ">"
@@ -347,6 +352,20 @@ are *specified rules*, not stylistic suggestions.
   `numeric in c(1,2)` match, while `[0, 1]` and `]0, 1[` do not. The
   emitted check still uses the verbatim text you wrote (§1.6); only the
   equality test parses.
+- **S6 — named types (`@type`).** A `@type Name (type)` block declares a
+  reusable named type; a bare `Name` (anything that is not a built-in
+  type) in an annotation is a reference, **resolved inline** at
+  document() time — the generated checks are exactly those of the named
+  type’s definition (no runtime cost). A `@type` defines a **single
+  type**: no slot-level `|` union, `?`, or `| NULL` in the definition
+  (those go at the use site). A reference is usable bare, nullable, in a
+  union, and inside `list<…>` / `promise<…>`, but **not** inside
+  `scalar<>`/`vector<>` (define a scalar/vector alias directly) and it
+  takes **no use-site refinement** (`in` / `| NA` / bullets) — the shape
+  lives only in the definition. A `@type` may reference another
+  (resolved transitively); a **cycle**, an **unknown** name, a
+  **duplicate** `@type`, and a name that **shadows a built-in** are all
+  errors. Types are **package-local**.
 
 ## 5. Binding & precedence (why `|` is never ambiguous)
 
@@ -747,6 +766,11 @@ are now `list<T>`, e.g. `list<scalar<numeric>>`, `list<function>`,
   wiring (S5). Await the promises (e.g. `promises::promise_all`) and
   annotate the result as `promise<list<T>>`. (If there’s real demand, a
   future version could relax this.)
+- **Refining a named type at the use site** — a `@type` reference (S6)
+  expands to its definition as-is; `(Price in [0, 1])` on a named
+  `Price` is not allowed. Put the refinement in the `@type`, define
+  another `@type`, or write the refined type inline. **Cross-package**
+  named types are also out of scope — `@type` is package-local.
 
 ## 13. Self-consistency checklist
 
@@ -815,6 +839,13 @@ collapses to the resolved `T`, nested `promise<promise<T>>` collapses
 too, and a promise unioned with a *different* type is rejected;
 `promise<T>` is a whole-slot value, so it is rejected as a list element
 or inside `scalar<>`/`vector<>` (S5).
+
+a bare identifier that is not a built-in type is a `@type` reference
+(S6), resolved inline to its definition; a `@type` is a single type (no
+use-site `?`/`|`/`| NULL` in the def), usable bare / nullable / unioned
+/ inside `list<>`/`promise<>` but not inside `scalar<>`/`vector<>`, with
+no use-site refinement; unknown names, duplicates, built-in shadowing,
+and cycles are errors; package-local.
 
 generated names are `assert_args_<fn>` / `assert_return_<fn>`, and
 `assert_args_<Class>__<method>` / `assert_return_<Class>__<method>` for

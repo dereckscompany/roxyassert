@@ -23,7 +23,7 @@
 
     <a class="navbar-brand me-2" href="index.html">roxyassert</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.2.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.3.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -455,11 +455,31 @@
 <span>  <span class="kw"><a href="https://rdrr.io/r/base/function.html" class="external-link">return</a></span><span class="op">(</span><span class="fu">then_or_now</span><span class="op">(</span><span class="va">private</span><span class="op">$</span><span class="fu">.impl_ohlcv</span><span class="op">(</span><span class="va">symbol</span><span class="op">)</span>, <span class="va">assert_return_ohlcv</span>, <span class="va">private</span><span class="op">$</span><span class="va">.is_async</span><span class="op">)</span><span class="op">)</span></span>
 <span><span class="op">}</span></span></code></pre></div>
 <p>If you don’t track the mode explicitly, branch on the value instead — <code>if (promises::is.promise(result)) promises::then(result, assert_return_ohlcv) else assert_return_ohlcv(result)</code>.</p>
-<p>In all cases the generated validator is identical; only <em>your</em> one-line wiring differs.</p>
-<blockquote>
-<p><strong>Known limitation:</strong> a <em>list of un-resolved promises</em> — <code>list&lt;promise&lt;T&gt;&gt;</code> — is rejected, because each element would be an unresolved promise that can’t be checked synchronously (and roxyassert never emits per-element <code>then()</code> wiring). Await them first (e.g. <code>promises::promise_all</code>) and annotate the result as <code>promise&lt;list&lt;T&gt;&gt;</code>. We’ll revisit this if there’s demand.</p>
-</blockquote>
+<p>In all cases the generated validator is identical; only <em>your</em> one-line wiring differs. (See <strong>Known limitations</strong> for <code>list&lt;promise&lt;T&gt;&gt;</code>.)</p>
 </div>
+</div>
+<div class="section level2">
+<h2 id="reusable-types--type">Reusable types — <code>@type</code>
+<a class="anchor" aria-label="anchor" href="#reusable-types--type"></a>
+</h2>
+<p>Repeating the same shape across many functions is tedious and drifts. Declare it once with <code>@type</code> and reference it by name anywhere a type appears.</p>
+<p>Define (anywhere — e.g. <code>R/types.R</code>):</p>
+<div class="sourceCode" id="cb14"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="co">#' @type OrderAck (data.table) an order acknowledgement:</span></span>
+<span><span class="co">#' - order_id (character) the exchange id.</span></span>
+<span><span class="co">#' - status (scalar&lt;character in c("FILLED", "REJECTED")&gt;) outcome.</span></span>
+<span><span class="cn">NULL</span></span>
+<span></span>
+<span><span class="co">#' @type Bps (scalar&lt;numeric in [0, Inf[&gt;)</span></span>
+<span><span class="cn">NULL</span></span></code></pre></div>
+<p>Use anywhere a type goes:</p>
+<div class="sourceCode" id="cb15"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="co">#' @param ack (OrderAck) the ack.</span></span>
+<span><span class="co">#' @param slippage (Bps) allowed slippage.</span></span>
+<span><span class="co">#' @return (promise&lt;OrderAck&gt;) the ack, async.</span></span>
+<span><span class="co">#' @return (list&lt;OrderAck&gt;) a batch.</span></span></code></pre></div>
+<p>A <code>@type</code> resolves at <code>document()</code> time by <strong>inline expansion</strong> — the generated checks are identical to writing the shape out, with no runtime cost. A <code>@type</code> may build on another (<code>@type Row (data.table) - score (Score) ...</code>); cycles, unknown names, and duplicate definitions are reported as errors.</p>
+<p>Rules: a <code>@type</code> defines a <em>single type</em> — add <code>?</code> / <code>| NULL</code> / unions at the <strong>use site</strong>, not the definition; references work bare, nullable, in a union, and inside <code>list&lt;…&gt;</code> / <code>promise&lt;…&gt;</code>, but not inside <code>scalar&lt;&gt;</code> / <code>vector&lt;&gt;</code> (define a scalar alias directly, like <code>Bps</code>). Types are package-local.</p>
 </div>
 <div class="section level2">
 <h2 id="generated-functions--conventions">Generated functions — conventions<a class="anchor" aria-label="anchor" href="#generated-functions--conventions"></a>
@@ -487,6 +507,19 @@
 <p>Packages like <a href="https://github.com/moodymudskipper/typed" class="external-link"><code>typed</code></a> declare types inside the function body with a custom operator. That works and checks at runtime, but it changes how every function is written. <code>roxyassert</code> keeps your R code exactly as it is and treats the documentation you already write as the contract — and because the checks are generated <em>for</em> you, you never write a validation function by hand again, even if you choose not to call every one.</p>
 </div>
 <div class="section level2">
+<h2 id="known-limitations">Known limitations<a class="anchor" aria-label="anchor" href="#known-limitations"></a>
+</h2>
+<p>Things deliberately not supported yet — each is rejected with a clear error, and we’ll revisit any of them if there’s demand. (The grammar reference’s <em>Non-goals</em> section is the full formal list.)</p>
+<ul>
+<li>
+<strong>A list of un-resolved promises</strong> (<code>list&lt;promise&lt;T&gt;&gt;</code>) — each element would be an unresolved promise that can’t be checked synchronously, and roxyassert never emits per-element <code>then()</code> wiring. Await them (e.g. <code>promises::promise_all</code>) and annotate the result as <code>promise&lt;list&lt;T&gt;&gt;</code>.</li>
+<li>
+<strong>Refining a named type at the use site</strong> — once <code>@type Price (scalar&lt;numeric&gt;)</code> is defined you can’t write <code>(Price in [0, 1])</code>; the refinement must live in the definition (define a second <code>@type</code>, or write the refined type inline). Named types are also package-local (no cross-package reuse yet).</li>
+<li>
+<strong>A named type shows as its bare name in rendered docs</strong> — <code>@type</code> is resolved only for the generated checks, so a help page / pkgdown site shows <code>(OrderAck)</code> verbatim, not its expanded shape, with no auto-generated topic or link. To give a type a help page, document its <code>@type</code> block like any object (add a title/description and <code>@name</code>); reference it as a markdown link (<code>[OrderAck]</code>) for a clickable cross-reference. (Auto-generated type pages and links may come later.)</li>
+</ul>
+</div>
+<div class="section level2">
 <h2 id="status">Status<a class="anchor" aria-label="anchor" href="#status"></a>
 </h2>
 <p>Early development — the annotation grammar and generation conventions documented here are the design under active implementation.</p>
@@ -499,7 +532,7 @@
 <div class="section level2">
 <h2 id="citation">Citation<a class="anchor" aria-label="anchor" href="#citation"></a>
 </h2>
-<div class="sourceCode" id="cb14"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb16"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/utils/citation.html" class="external-link">citation</a></span><span class="op">(</span><span class="st">"roxyassert"</span><span class="op">)</span></span></code></pre></div>
 </div>
 </div>

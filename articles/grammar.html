@@ -20,7 +20,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">roxyassert</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.2.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.3.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -58,7 +58,7 @@
       <img src="../logo.png" class="logo" alt=""><h1>The roxyassert annotation grammar — complete reference</h1>
             
       
-      <small class="dont-index">Source: <a href="https://github.com/dereckscompany/roxyassert/blob/v0.2.0/vignettes/grammar.Rmd" class="external-link"><code>vignettes/grammar.Rmd</code></a></small>
+      <small class="dont-index">Source: <a href="https://github.com/dereckscompany/roxyassert/blob/v0.3.0/vignettes/grammar.Rmd" class="external-link"><code>vignettes/grammar.Rmd</code></a></small>
       <div class="d-none name"><code>grammar.Rmd</code></div>
     </div>
 
@@ -303,7 +303,12 @@ slot           ::= type ( "|" type )*  ( ( "|" "NULL" ) | "?" )?
                       written EITHER as a "| NULL" alternative OR a trailing "?",
                       never both *)
 
-type           ::= atomic | wildcard | reference | composite | promise
+type           ::= atomic | wildcard | reference | composite | promise | named
+named          ::= ident
+                   (* an identifier that is not a built-in type: a reference to a
+                      type declared elsewhere with `@type` (S6). Resolved inline at
+                      document() time; takes no in / | NA / bullets at the use site
+                      (refine in the @type, not here). *)
 
 atomic         ::= atom
                  | "scalar" "&lt;" atom "&gt;"
@@ -612,6 +617,26 @@ is peeled to <code>T</code>. Refinements (sets, bounds) are compared by
 match, while <code>[0, 1]</code> and <code>]0, 1[</code> do not. The
 emitted check still uses the verbatim text you wrote (§1.6); only the
 equality test parses.</li>
+<li>
+<strong>S6 — named types (<code>@type</code>).</strong> A
+<code>@type Name (type)</code> block declares a reusable named type; a
+bare <code>Name</code> (anything that is not a built-in type) in an
+annotation is a reference, <strong>resolved inline</strong> at
+document() time — the generated checks are exactly those of the named
+type’s definition (no runtime cost). A <code>@type</code> defines a
+<strong>single type</strong>: no slot-level <code>|</code> union,
+<code>?</code>, or <code>| NULL</code> in the definition (those go at
+the use site). A reference is usable bare, nullable, in a union, and
+inside <code>list&lt;…&gt;</code> / <code>promise&lt;…&gt;</code>, but
+<strong>not</strong> inside
+<code>scalar&lt;&gt;</code>/<code>vector&lt;&gt;</code> (define a
+scalar/vector alias directly) and it takes <strong>no use-site
+refinement</strong> (<code>in</code> / <code>| NA</code> / bullets) —
+the shape lives only in the definition. A <code>@type</code> may
+reference another (resolved transitively); a <strong>cycle</strong>, an
+<strong>unknown</strong> name, a <strong>duplicate</strong>
+<code>@type</code>, and a name that <strong>shadows a built-in</strong>
+are all errors. Types are <strong>package-local</strong>.</li>
 </ul>
 </div>
 <div class="section level2">
@@ -1138,6 +1163,14 @@ and roxyassert never emits the per-element <code>then()</code> wiring
 (S5). Await the promises (e.g. <code>promises::promise_all</code>) and
 annotate the result as <code>promise&lt;list&lt;T&gt;&gt;</code>. (If
 there’s real demand, a future version could relax this.)</li>
+<li>
+<strong>Refining a named type at the use site</strong> — a
+<code>@type</code> reference (S6) expands to its definition as-is;
+<code>(Price in [0, 1])</code> on a named <code>Price</code> is not
+allowed. Put the refinement in the <code>@type</code>, define another
+<code>@type</code>, or write the refined type inline.
+<strong>Cross-package</strong> named types are also out of scope —
+<code>@type</code> is package-local.</li>
 </ul>
 </div>
 <div class="section level2">
@@ -1226,6 +1259,15 @@ promise unioned with a <em>different</em> type is rejected;
 as a list element or inside
 <code>scalar&lt;&gt;</code>/<code>vector&lt;&gt;</code>
 (S5).</label></li>
+<li><label><input type="checkbox">a bare identifier that is not a
+built-in type is a <code>@type</code> reference (S6), resolved inline to
+its definition; a <code>@type</code> is a single type (no use-site
+<code>?</code>/<code>|</code>/<code>| NULL</code> in the def), usable
+bare / nullable / unioned / inside
+<code>list&lt;&gt;</code>/<code>promise&lt;&gt;</code> but not inside
+<code>scalar&lt;&gt;</code>/<code>vector&lt;&gt;</code>, with no
+use-site refinement; unknown names, duplicates, built-in shadowing, and
+cycles are errors; package-local.</label></li>
 <li><label><input type="checkbox">generated names are
 <code>assert_args_&lt;fn&gt;</code> /
 <code>assert_return_&lt;fn&gt;</code>, and

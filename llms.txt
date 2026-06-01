@@ -426,14 +426,48 @@ If you don’t track the mode explicitly, branch on the value instead —
 `if (promises::is.promise(result)) promises::then(result, assert_return_ohlcv) else assert_return_ohlcv(result)`.
 
 In all cases the generated validator is identical; only *your* one-line
-wiring differs.
+wiring differs. (See **Known limitations** for `list<promise<T>>`.)
 
-> **Known limitation:** a *list of un-resolved promises* —
-> `list<promise<T>>` — is rejected, because each element would be an
-> unresolved promise that can’t be checked synchronously (and roxyassert
-> never emits per-element `then()` wiring). Await them first
-> (e.g. `promises::promise_all`) and annotate the result as
-> `promise<list<T>>`. We’ll revisit this if there’s demand.
+## Reusable types — `@type`
+
+Repeating the same shape across many functions is tedious and drifts.
+Declare it once with `@type` and reference it by name anywhere a type
+appears.
+
+Define (anywhere — e.g. `R/types.R`):
+
+``` r
+
+#' @type OrderAck (data.table) an order acknowledgement:
+#' - order_id (character) the exchange id.
+#' - status (scalar<character in c("FILLED", "REJECTED")>) outcome.
+NULL
+
+#' @type Bps (scalar<numeric in [0, Inf[>)
+NULL
+```
+
+Use anywhere a type goes:
+
+``` r
+
+#' @param ack (OrderAck) the ack.
+#' @param slippage (Bps) allowed slippage.
+#' @return (promise<OrderAck>) the ack, async.
+#' @return (list<OrderAck>) a batch.
+```
+
+A `@type` resolves at `document()` time by **inline expansion** — the
+generated checks are identical to writing the shape out, with no runtime
+cost. A `@type` may build on another
+(`@type Row (data.table) - score (Score) ...`); cycles, unknown names,
+and duplicate definitions are reported as errors.
+
+Rules: a `@type` defines a *single type* — add `?` / `| NULL` / unions
+at the **use site**, not the definition; references work bare, nullable,
+in a union, and inside `list<…>` / `promise<…>`, but not inside
+`scalar<>` / `vector<>` (define a scalar alias directly, like `Bps`).
+Types are package-local.
 
 ## Generated functions — conventions
 
@@ -471,6 +505,30 @@ written. `roxyassert` keeps your R code exactly as it is and treats the
 documentation you already write as the contract — and because the checks
 are generated *for* you, you never write a validation function by hand
 again, even if you choose not to call every one.
+
+## Known limitations
+
+Things deliberately not supported yet — each is rejected with a clear
+error, and we’ll revisit any of them if there’s demand. (The grammar
+reference’s *Non-goals* section is the full formal list.)
+
+- **A list of un-resolved promises** (`list<promise<T>>`) — each element
+  would be an unresolved promise that can’t be checked synchronously,
+  and roxyassert never emits per-element `then()` wiring. Await them
+  (e.g. `promises::promise_all`) and annotate the result as
+  `promise<list<T>>`.
+- **Refining a named type at the use site** — once
+  `@type Price (scalar<numeric>)` is defined you can’t write
+  `(Price in [0, 1])`; the refinement must live in the definition
+  (define a second `@type`, or write the refined type inline). Named
+  types are also package-local (no cross-package reuse yet).
+- **A named type shows as its bare name in rendered docs** — `@type` is
+  resolved only for the generated checks, so a help page / pkgdown site
+  shows `(OrderAck)` verbatim, not its expanded shape, with no
+  auto-generated topic or link. To give a type a help page, document its
+  `@type` block like any object (add a title/description and `@name`);
+  reference it as a markdown link (`[OrderAck]`) for a clickable
+  cross-reference. (Auto-generated type pages and links may come later.)
 
 ## Status
 
