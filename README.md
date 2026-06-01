@@ -507,6 +507,13 @@ reference’s *Non-goals* section is the full formal list.)
   `(Price in [0, 1])`; the refinement must live in the definition
   (define a second `@type`, or write the refined type inline). Named
   types are also package-local (no cross-package reuse yet).
+- **A named type shows as its bare name in rendered docs** — `@type` is
+  resolved only for the generated checks, so a help page / pkgdown site
+  shows `(OrderAck)` verbatim, not its expanded shape, with no
+  auto-generated topic or link. To give a type a help page, document its
+  `@type` block like any object (add a title/description and `@name`);
+  reference it as a markdown link (`[OrderAck]`) for a clickable
+  cross-reference. (Auto-generated type pages and links may come later.)
 
 ## Status
 
