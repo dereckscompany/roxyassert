@@ -417,6 +417,45 @@ If you don’t track the mode explicitly, branch on the value instead —
 In all cases the generated validator is identical; only *your* one-line
 wiring differs. (See **Known limitations** for `list<promise<T>>`.)
 
+## Reusable types — `@type`
+
+Repeating the same shape across many functions is tedious and drifts.
+Declare it once with `@type` and reference it by name anywhere a type
+appears.
+
+Define (anywhere — e.g. `R/types.R`):
+
+``` r
+#' @type OrderAck (data.table) an order acknowledgement:
+#' - order_id (character) the exchange id.
+#' - status (scalar<character in c("FILLED", "REJECTED")>) outcome.
+NULL
+
+#' @type Bps (scalar<numeric in [0, Inf[>)
+NULL
+```
+
+Use anywhere a type goes:
+
+``` r
+#' @param ack (OrderAck) the ack.
+#' @param slippage (Bps) allowed slippage.
+#' @return (promise<OrderAck>) the ack, async.
+#' @return (list<OrderAck>) a batch.
+```
+
+A `@type` resolves at `document()` time by **inline expansion** — the
+generated checks are identical to writing the shape out, with no runtime
+cost. A `@type` may build on another
+(`@type Row (data.table) - score (Score) ...`); cycles, unknown names,
+and duplicate definitions are reported as errors.
+
+Rules: a `@type` defines a *single type* — add `?` / `| NULL` / unions
+at the **use site**, not the definition; references work bare, nullable,
+in a union, and inside `list<…>` / `promise<…>`, but not inside
+`scalar<>` / `vector<>` (define a scalar alias directly, like `Bps`).
+Types are package-local.
+
 ## Generated functions — conventions
 
 - **Two helpers, each optional.** `assert_args_<fn>` is emitted only if
@@ -463,6 +502,11 @@ reference’s *Non-goals* section is the full formal list.)
   and roxyassert never emits per-element `then()` wiring. Await them
   (e.g. `promises::promise_all`) and annotate the result as
   `promise<list<T>>`.
+- **Refining a named type at the use site** — once
+  `@type Price (scalar<numeric>)` is defined you can’t write
+  `(Price in [0, 1])`; the refinement must live in the definition
+  (define a second `@type`, or write the refined type inline). Named
+  types are also package-local (no cross-package reuse yet).
 
 ## Status
 
