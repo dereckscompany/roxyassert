@@ -429,17 +429,49 @@ parse_annotation <- function(text) {
     return(ast)
   }
   resolved <- lapply(ast$alternatives, .ra_unwrap_promise)
-  first <- resolved[[1]]
-  if (!all(vapply(resolved, function(a) identical(a, first), logical(1)))) {
+  # Compare the alternatives by their CANONICAL form (refinement text parsed, so
+  # cosmetic spacing in a set / bound does not read as a different type), but keep
+  # the first alternative's ORIGINAL verbatim text for emission.
+  keys <- lapply(resolved, .ra_canonicalize)
+  if (!all(vapply(keys, function(k) identical(k, keys[[1]]), logical(1)))) {
     stop(
-      "roxyassert: every alternative of a promise union must be the identical type ",
-      "(same base AND refinements), e.g. (numeric in [0, 1] | promise<numeric in [0, 1]>); ",
+      "roxyassert: every alternative of a promise union must be the same type ",
+      "(same base, shape AND refinement values), e.g. (numeric in [0, 1] | promise<numeric in [0, 1]>); ",
       "here they differ.",
       call. = FALSE
     )
   }
-  ast$alternatives <- list(first)
+  ast$alternatives <- list(resolved[[1]])
   return(ast)
+}
+
+# Canonicalise a type node for promise-union equality: replace each verbatim
+# refinement string (a set, an interval bound) with its parsed-then-deparsed form
+# so `c(1,2)` and `c(1, 2)` compare equal, recursing into a list<T> element.
+# Structural fields (base, shape, openness, sentinels, |NA, length, class) already
+# compare directly. Used ONLY for the comparison — emission keeps the verbatim text.
+.ra_canonicalize <- function(node) {
+  if (!is.null(node$set)) {
+    node$set$text <- .ra_normexpr(node$set$text)
+  }
+  if (!is.null(node$interval)) {
+    node$interval$lo$text <- .ra_normexpr(node$interval$lo$text)
+    node$interval$hi$text <- .ra_normexpr(node$interval$hi$text)
+  }
+  if (!is.null(node$element)) {
+    node$element <- .ra_canonicalize(node$element)
+  }
+  return(node)
+}
+
+# A refinement expression normalised to a canonical string (whitespace-insensitive
+# via parse/deparse). Falls back to the raw text if it is not a single expression.
+.ra_normexpr <- function(txt) {
+  expr <- tryCatch(parse(text = txt, keep.source = FALSE), error = function(e) NULL)
+  if (is.null(expr) || length(expr) != 1L) {
+    return(txt)
+  }
+  return(paste(deparse(expr[[1]]), collapse = ""))
 }
 
 # ---- type --------------------------------------------------------------------

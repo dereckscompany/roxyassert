@@ -282,7 +282,7 @@ test_that("promise<T> carries field bullets into the resolved composite", {
 
 test_that("promise<T> needs <T>, and a heterogeneous promise union is rejected", {
   expect_error(parse_annotation("(promise)"), "resolved type")
-  expect_error(parse_annotation("(numeric | promise<character>)"), "identical type")
+  expect_error(parse_annotation("(numeric | promise<character>)"), "same type")
 })
 
 # ---- promise<T> edge cases (self-review round) -------------------------------
@@ -302,13 +302,13 @@ test_that("promise<T> is a whole-slot value: rejected as a list element / inside
 
 test_that("a promise union must be the identical type on every alternative", {
   expect_equal(parse_annotation("(promise<numeric> | promise<numeric>)")$alternatives[[1]]$base, "numeric")
-  expect_error(parse_annotation("(promise<numeric> | promise<character>)"), "identical type")
-  expect_error(parse_annotation("(numeric in [0, 1] | promise<numeric>)"), "identical type")
+  expect_error(parse_annotation("(promise<numeric> | promise<character>)"), "same type")
+  expect_error(parse_annotation("(numeric in [0, 1] | promise<numeric>)"), "same type")
 })
 
 test_that("promise normalisation reaches field bullets", {
   # a heterogeneous promise union in a field is rejected, like at the top level
-  expect_error(parse_annotation("(data.table)\n- x (numeric | promise<character>) c."), "identical type")
+  expect_error(parse_annotation("(data.table)\n- x (numeric | promise<character>) c."), "same type")
   # a promise<data.table> field collapses, so it can carry its own column bullets
   rows <- parse_annotation("(list)\n- rows (promise<data.table>) r:\n  - id (character) i.")$alternatives[[1]]$fields[[
     1
@@ -323,8 +323,19 @@ test_that("a refined / shape / reference / element promise union collapses iff a
   expect_silent(parse_annotation("(R6<Engine> | promise<R6<Engine>>)"))
   expect_silent(parse_annotation("(list<character> | promise<list<character>>)"))
   # any divergence — refinement value, shape, R6 class, list element — is rejected
-  expect_error(parse_annotation("(numeric in [0, 1] | promise<numeric in ]0, 1[>)"), "identical type")
-  expect_error(parse_annotation("(numeric | promise<scalar<numeric>>)"), "identical type")
-  expect_error(parse_annotation("(R6<A> | promise<R6<B>>)"), "identical type")
-  expect_error(parse_annotation("(list<numeric> | promise<list<integer>>)"), "identical type")
+  expect_error(parse_annotation("(numeric in [0, 1] | promise<numeric in ]0, 1[>)"), "same type")
+  expect_error(parse_annotation("(numeric | promise<scalar<numeric>>)"), "same type")
+  expect_error(parse_annotation("(R6<A> | promise<R6<B>>)"), "same type")
+  expect_error(parse_annotation("(list<numeric> | promise<list<integer>>)"), "same type")
+})
+
+test_that("a promise union compares by meaning, so cosmetic spacing differs harmlessly", {
+  # same set/bound written with different spacing on the two halves still collapses
+  expect_silent(parse_annotation("(numeric in c(1,2) | promise<numeric in c(1, 2)>)"))
+  expect_silent(parse_annotation("(numeric in [0,1] | promise<numeric in [0, 1]>)"))
+  # the emitted check keeps the verbatim text of the first (sync) alternative
+  g <- generate_checks(parse_annotation("(numeric in c(1,2) | promise<numeric in c(1, 2)>)"), "x")
+  expect_true(any(g == "assert_values_in_set(x, c(1,2))"))
+  # a genuine difference in the refinement value is still rejected
+  expect_error(parse_annotation("(numeric in [0, 1] | promise<numeric in ]0, 1[>)"), "same type")
 })

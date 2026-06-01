@@ -327,12 +327,12 @@ These context-sensitive constraints are checked by the generator; they are
   value). It stands for a **whole slot value**, so it may not be a `list<>`
   element or sit inside `scalar<>`/`vector<>` (a list of promises cannot be
   validated synchronously per element). The `T | promise<T>` union must resolve to
-  a single `T` — every alternative must be the *identical* type, same base and
-  refinements (a promise unioned with a different type is rejected); nested
-  `promise<promise<T>>` is peeled to `T`. Because refinements (sets, bounds) are
-  compared as the **verbatim text** you wrote (never re-parsed, per §1.6), the two
-  alternatives must be spelled byte-identically: `numeric in c(1, 2)` and
-  `numeric in c(1,2)` do not match — keep them character-for-character the same.
+  a single `T` — every alternative must be the *same* type, same base, shape and
+  refinement values (a promise unioned with a different type is rejected); nested
+  `promise<promise<T>>` is peeled to `T`. Refinements (sets, bounds) are compared
+  by **parsing** them, so cosmetic spacing differs harmlessly — `numeric in c(1, 2)`
+  and `numeric in c(1,2)` match, while `[0, 1]` and `]0, 1[` do not. The emitted
+  check still uses the verbatim text you wrote (§1.6); only the equality test parses.
 
 ## 5. Binding & precedence (why `|` is never ambiguous)
 
