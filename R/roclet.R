@@ -101,7 +101,7 @@ roxy_tag_parse.roxy_tag_type <- function(x) {
     stop(
       "roxyassert: @type '",
       name,
-      "' must define a single type (no '|' union, '?' or '| NULL' — add those where you use it)",
+      "' must define a single type (no '|' union, '?' or '| NULL'; add those where you use it)",
       call. = FALSE
     )
   }
