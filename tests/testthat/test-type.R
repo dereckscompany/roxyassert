@@ -71,6 +71,15 @@ test_that("@type errors: unknown, duplicate, shadow, non-single-type, cycle", {
   expect_match(err(paste0("#' @type A (B)\nNULL\n#' @type B (A)\nNULL\n", use_a)), "cyclic")
 })
 
+test_that("a broken or cyclic @type errors even when never referenced", {
+  err <- function(text) tryCatch(rt(text), error = function(e) conditionMessage(e))
+  noref <- "#' F.\n#' @export\nf <- function() NULL"
+  # an unused @type whose definition references an unknown type
+  expect_match(err(paste0("#' @type A (Nope)\nNULL\n", noref)), "unknown type")
+  # an unused cyclic pair, not referenced by any function
+  expect_match(err(paste0("#' @type A (B)\nNULL\n#' @type B (A)\nNULL\n", noref)), "cyclic")
+})
+
 test_that("a named type cannot sit inside scalar<>/vector<>", {
   err <- function(text) tryCatch(rt(text), error = function(e) conditionMessage(e))
   def_a <- "#' @type A (numeric)\nNULL\n"

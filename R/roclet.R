@@ -64,18 +64,24 @@ roxy_tag_parse.roxy_tag_type <- function(x) {
 }
 
 # Collect every @type definition into a name -> type-node registry, so a bare
-# name in an annotation can be resolved (inline) to its definition. References
-# between @types are resolved later, with cycle detection (R/parse.R).
+# name in an annotation can be resolved (inline) to its definition. Each
+# definition is then resolved eagerly — references between @types are expanded
+# (R/parse.R), so an unknown name or cycle is an error at document() time even
+# when the @type is never used; the returned nodes are fully built-in.
 .ra_type_registry <- function(blocks) {
-  registry <- list()
+  raw <- list()
   for (block in blocks) {
     for (tag in roxygen2::block_get_tags(block, "type")) {
       entry <- .ra_type_def(tag)
-      if (!is.null(registry[[entry$name]])) {
+      if (!is.null(raw[[entry$name]])) {
         stop("roxyassert: duplicate @type '", entry$name, "'", call. = FALSE)
       }
-      registry[[entry$name]] <- entry$node
+      raw[[entry$name]] <- entry$node
     }
+  }
+  registry <- list()
+  for (nm in names(raw)) {
+    registry[[nm]] <- .ra_resolve_node(raw[[nm]], raw, nm)
   }
   return(registry)
 }
