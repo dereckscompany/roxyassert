@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">roxyassert</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.1.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.2.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -32,9 +32,13 @@
 <div class="row">
   <main id="main" class="col-md-9"><div class="page-header">
       <img src="../logo.png" class="logo" alt=""><h1>Changelog</h1>
-      <small>Source: <a href="https://github.com/dereckscompany/roxyassert/blob/v0.1.0/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
+      <small>Source: <a href="https://github.com/dereckscompany/roxyassert/blob/v0.2.0/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
     </div>
 
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.2.0" id="roxyassert-020">roxyassert 0.2.0<a class="anchor" aria-label="anchor" href="#roxyassert-020"></a></h2>
+<ul><li>New <code>promise&lt;T&gt;</code> type (and the <code>T | promise&lt;T&gt;</code> union), most natural on <code>@return</code>, for functions whose result may be delivered synchronously <strong>or</strong> as a <code>promises::promise</code> that resolves to the same value (e.g. an exchange wrapper with an <code>async</code> switch). roxyassert generates a plain value-validator for the resolved type <code>T</code> and stays promise-agnostic — you compose the async yourself (<code>promises::then(impl, assert_return_fn)</code>, or your own sync/async helper).</li>
+</ul></div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.1.0" id="roxyassert-010">roxyassert 0.1.0<a class="anchor" aria-label="anchor" href="#roxyassert-010"></a></h2>
 <p>Initial release.</p>

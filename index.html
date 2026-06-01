@@ -23,7 +23,7 @@
 
     <a class="navbar-brand me-2" href="index.html">roxyassert</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.1.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.2.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -249,6 +249,10 @@
 <td><code>R6&lt;Class&gt;</code></td>
 <td>an R6 instance inheriting <code>Class</code> (a bare, length-1 reference)</td>
 </tr>
+<tr>
+<td><code>promise&lt;T&gt;</code></td>
+<td>a result resolving to <code>T</code>, delivered sync or async (see <strong>Asynchronous returns</strong> below)</td>
+</tr>
 </tbody>
 </table>
 <p><code>function</code> and <code>R6&lt;Class&gt;</code> are <strong>reference types</strong>: written bare (<code>(function)</code>, <code>(R6&lt;Engine&gt;)</code>), nullable as a slot (<code>(R6&lt;Engine&gt;?)</code>), never wrapped in <code>scalar&lt;&gt;</code>/<code>vector&lt;&gt;</code> and never carrying <code>in</code>/<code>| NA</code>/length. Intervals (<code>in [ , ]</code>) apply to the ordered types (<code>integer</code>/<code>numeric</code>/<code>Date</code>/<code>POSIXct</code>); sets (<code>in c(...)</code>) apply to the ordered and enumerable atomics (<code>integer</code>/<code>numeric</code>/<code>Date</code>/<code>POSIXct</code>/<code>character</code>/<code>factor</code>) — <code>complex</code>, <code>logical</code>, <code>raw</code>, and <code>any</code> take no set. <code>any</code> asserts nothing about type (length/nullability only). See the <a href="https://dereckscompany.github.io/roxyassert/articles/grammar.html">grammar reference</a> for the full per-category rules.</p>
@@ -391,6 +395,73 @@
 </div>
 </div>
 <div class="section level2">
+<h2 id="asynchronous-returns--promiset">Asynchronous returns — <code>promise&lt;T&gt;</code>
+<a class="anchor" aria-label="anchor" href="#asynchronous-returns--promiset"></a>
+</h2>
+<p>Many APIs return a result either <strong>synchronously</strong> (the value) or <strong>asynchronously</strong> (a <a href="https://rstudio.github.io/promises/" class="external-link"><code>promises::promise</code></a> that resolves to the <em>same</em> value). roxyassert supports this with two forms:</p>
+<ul>
+<li>
+<code>promise&lt;T&gt;</code> — the function always returns a promise resolving to <code>T</code>.</li>
+<li>
+<code>T | promise&lt;T&gt;</code> — the function returns <code>T</code> directly <strong>or</strong> a promise resolving to <code>T</code> (e.g. a client with a per-instance <code>async</code> switch).</li>
+</ul>
+<p><strong>The key idea: roxyassert stays promise-agnostic.</strong> It generates a <em>plain value-validator</em> for the resolved type <code>T</code> — <code>assert_return_fn(value)</code> validates a <code>T</code> and returns it. It never emits <code>then()</code> or <code>is.promise()</code>. <strong>You</strong> decide how to apply that validator to your promise; because the helper is a <code>function(value) value</code>, it is <em>exactly</em> the callback <code>promises::then()</code> wants.</p>
+<blockquote>
+<p><strong>Note:</strong> <code>promise&lt;T&gt;</code> is most natural on <code>@return</code>, but roxyassert doesn’t police it — it’s allowed anywhere. A helper that takes a promise <em>input</em> (say, to attach a callback) is a fine use case; you just apply the generated validator to the resolved value yourself (e.g. inside your own <code>promises::then(p, ...)</code>).</p>
+</blockquote>
+<div class="section level3">
+<h3 id="always-async-promiset">Always-async (<code>promise&lt;T&gt;</code>)<a class="anchor" aria-label="anchor" href="#always-async-promiset"></a>
+</h3>
+<div class="sourceCode" id="cb11"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="co">#' Fetch OHLCV bars.</span></span>
+<span><span class="co">#'</span></span>
+<span><span class="co">#' @param symbol (scalar&lt;character&gt;) the pair.</span></span>
+<span><span class="co">#' @return (promise&lt;data.table&gt;) bars:</span></span>
+<span><span class="co">#' - timestamp (POSIXct) candle open time.</span></span>
+<span><span class="co">#' - close (numeric in ]0, Inf[) close price.</span></span>
+<span><span class="co">#' @export</span></span>
+<span><span class="va">ohlcv</span> <span class="op">=</span> <span class="kw">function</span><span class="op">(</span><span class="va">symbol</span><span class="op">)</span> <span class="op">{</span></span>
+<span>  <span class="fu">assert_args_ohlcv</span><span class="op">(</span><span class="va">symbol</span><span class="op">)</span></span>
+<span>  <span class="co"># validator is a then()-callback: validates on resolution, rejects on failure</span></span>
+<span>  <span class="kw"><a href="https://rdrr.io/r/base/function.html" class="external-link">return</a></span><span class="op">(</span><span class="fu">promises</span><span class="fu">::</span><span class="fu">then</span><span class="op">(</span><span class="va">private</span><span class="op">$</span><span class="fu">.impl_ohlcv</span><span class="op">(</span><span class="va">symbol</span><span class="op">)</span>, <span class="va">assert_return_ohlcv</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="op">}</span></span></code></pre></div>
+<p>The generated <code>assert_return_ohlcv()</code> is just the <code>data.table</code> + column checks (no promise code). Dropped into <code>then()</code>, it validates the resolved table and passes it through; a failing check rejects the returned promise — it never blocks.</p>
+</div>
+<div class="section level3">
+<h3 id="sync-or-async-t--promiset">Sync-or-async (<code>T | promise&lt;T&gt;</code>)<a class="anchor" aria-label="anchor" href="#sync-or-async-t--promiset"></a>
+</h3>
+<p>When the same method can return either shape, document the union and branch on the mode you already know (a constructor flag, here <code>private$.is_async</code>):</p>
+<div class="sourceCode" id="cb12"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="co">#' @return (data.table | promise&lt;data.table&gt;) bars:</span></span>
+<span><span class="co">#' - timestamp (POSIXct) candle open time.</span></span>
+<span><span class="co">#' - close (numeric in ]0, Inf[) close price.</span></span>
+<span><span class="va">ohlcv</span> <span class="op">=</span> <span class="kw">function</span><span class="op">(</span><span class="va">symbol</span><span class="op">)</span> <span class="op">{</span></span>
+<span>  <span class="fu">assert_args_ohlcv</span><span class="op">(</span><span class="va">symbol</span><span class="op">)</span></span>
+<span>  <span class="va">result</span> <span class="op">&lt;-</span> <span class="va">private</span><span class="op">$</span><span class="fu">.impl_ohlcv</span><span class="op">(</span><span class="va">symbol</span><span class="op">)</span>      <span class="co"># a data.table OR a promise of one</span></span>
+<span>  <span class="kw">if</span> <span class="op">(</span><span class="va">private</span><span class="op">$</span><span class="va">.is_async</span><span class="op">)</span> <span class="op">{</span></span>
+<span>    <span class="kw"><a href="https://rdrr.io/r/base/function.html" class="external-link">return</a></span><span class="op">(</span><span class="fu">promises</span><span class="fu">::</span><span class="fu">then</span><span class="op">(</span><span class="va">result</span>, <span class="va">assert_return_ohlcv</span><span class="op">)</span><span class="op">)</span>  <span class="co"># async: validate on resolve</span></span>
+<span>  <span class="op">}</span></span>
+<span>  <span class="kw"><a href="https://rdrr.io/r/base/function.html" class="external-link">return</a></span><span class="op">(</span><span class="fu">assert_return_ohlcv</span><span class="op">(</span><span class="va">result</span><span class="op">)</span><span class="op">)</span>                    <span class="co"># sync: validate now</span></span>
+<span><span class="op">}</span></span></code></pre></div>
+<p>A tidy way to capture that branch once is a tiny helper (drop it in your package):</p>
+<div class="sourceCode" id="cb13"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">then_or_now</span> <span class="op">&lt;-</span> <span class="kw">function</span><span class="op">(</span><span class="va">x</span>, <span class="va">fn</span>, <span class="va">is_async</span><span class="op">)</span> <span class="op">{</span></span>
+<span>  <span class="kw">if</span> <span class="op">(</span><span class="va">is_async</span><span class="op">)</span> <span class="kw"><a href="https://rdrr.io/r/base/function.html" class="external-link">return</a></span><span class="op">(</span><span class="fu">promises</span><span class="fu">::</span><span class="fu">then</span><span class="op">(</span><span class="va">x</span>, <span class="va">fn</span><span class="op">)</span><span class="op">)</span></span>
+<span>  <span class="kw"><a href="https://rdrr.io/r/base/function.html" class="external-link">return</a></span><span class="op">(</span><span class="fu">fn</span><span class="op">(</span><span class="va">x</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="op">}</span></span>
+<span></span>
+<span><span class="va">ohlcv</span> <span class="op">=</span> <span class="kw">function</span><span class="op">(</span><span class="va">symbol</span><span class="op">)</span> <span class="op">{</span></span>
+<span>  <span class="fu">assert_args_ohlcv</span><span class="op">(</span><span class="va">symbol</span><span class="op">)</span></span>
+<span>  <span class="kw"><a href="https://rdrr.io/r/base/function.html" class="external-link">return</a></span><span class="op">(</span><span class="fu">then_or_now</span><span class="op">(</span><span class="va">private</span><span class="op">$</span><span class="fu">.impl_ohlcv</span><span class="op">(</span><span class="va">symbol</span><span class="op">)</span>, <span class="va">assert_return_ohlcv</span>, <span class="va">private</span><span class="op">$</span><span class="va">.is_async</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="op">}</span></span></code></pre></div>
+<p>If you don’t track the mode explicitly, branch on the value instead — <code>if (promises::is.promise(result)) promises::then(result, assert_return_ohlcv) else assert_return_ohlcv(result)</code>.</p>
+<p>In all cases the generated validator is identical; only <em>your</em> one-line wiring differs.</p>
+<blockquote>
+<p><strong>Known limitation:</strong> a <em>list of un-resolved promises</em> — <code>list&lt;promise&lt;T&gt;&gt;</code> — is rejected, because each element would be an unresolved promise that can’t be checked synchronously (and roxyassert never emits per-element <code>then()</code> wiring). Await them first (e.g. <code>promises::promise_all</code>) and annotate the result as <code>promise&lt;list&lt;T&gt;&gt;</code>. We’ll revisit this if there’s demand.</p>
+</blockquote>
+</div>
+</div>
+<div class="section level2">
 <h2 id="generated-functions--conventions">Generated functions — conventions<a class="anchor" aria-label="anchor" href="#generated-functions--conventions"></a>
 </h2>
 <ul>
@@ -428,7 +499,7 @@
 <div class="section level2">
 <h2 id="citation">Citation<a class="anchor" aria-label="anchor" href="#citation"></a>
 </h2>
-<div class="sourceCode" id="cb11"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb14"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/utils/citation.html" class="external-link">citation</a></span><span class="op">(</span><span class="st">"roxyassert"</span><span class="op">)</span></span></code></pre></div>
 </div>
 </div>

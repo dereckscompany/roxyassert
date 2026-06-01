@@ -181,6 +181,7 @@ by nested bullets, and `list` additionally as `list<T>`):
 | `data.table` | a `data.table` (see composite form) |
 | `data.frame` | a `data.frame` (see composite form) |
 | `R6<Class>` | an R6 instance inheriting `Class` (a bare, length-1 reference) |
+| `promise<T>` | a result resolving to `T`, delivered sync or async (see **Asynchronous returns** below) |
 
 `function` and `R6<Class>` are **reference types**: written bare
 (`(function)`, `(R6<Engine>)`), nullable as a slot (`(R6<Engine>?)`),
@@ -336,6 +337,103 @@ See the [Getting started
 vignette](https://dereckscompany.github.io/roxyassert/articles/demo.html)
 for a fuller pattern: an abstract class whose every method enforces its
 inputs and outputs from the docs.
+
+## Asynchronous returns — `promise<T>`
+
+Many APIs return a result either **synchronously** (the value) or
+**asynchronously** (a
+[`promises::promise`](https://rstudio.github.io/promises/) that resolves
+to the *same* value). roxyassert supports this with two forms:
+
+- `promise<T>` — the function always returns a promise resolving to `T`.
+- `T | promise<T>` — the function returns `T` directly **or** a promise
+  resolving to `T` (e.g. a client with a per-instance `async` switch).
+
+**The key idea: roxyassert stays promise-agnostic.** It generates a
+*plain value-validator* for the resolved type `T` —
+`assert_return_fn(value)` validates a `T` and returns it. It never emits
+`then()` or `is.promise()`. **You** decide how to apply that validator
+to your promise; because the helper is a `function(value) value`, it is
+*exactly* the callback `promises::then()` wants.
+
+> **Note:** `promise<T>` is most natural on `@return`, but roxyassert
+> doesn’t police it — it’s allowed anywhere. A helper that takes a
+> promise *input* (say, to attach a callback) is a fine use case; you
+> just apply the generated validator to the resolved value yourself
+> (e.g. inside your own `promises::then(p, ...)`).
+
+### Always-async (`promise<T>`)
+
+``` r
+
+#' Fetch OHLCV bars.
+#'
+#' @param symbol (scalar<character>) the pair.
+#' @return (promise<data.table>) bars:
+#' - timestamp (POSIXct) candle open time.
+#' - close (numeric in ]0, Inf[) close price.
+#' @export
+ohlcv = function(symbol) {
+  assert_args_ohlcv(symbol)
+  # validator is a then()-callback: validates on resolution, rejects on failure
+  return(promises::then(private$.impl_ohlcv(symbol), assert_return_ohlcv))
+}
+```
+
+The generated `assert_return_ohlcv()` is just the `data.table` + column
+checks (no promise code). Dropped into `then()`, it validates the
+resolved table and passes it through; a failing check rejects the
+returned promise — it never blocks.
+
+### Sync-or-async (`T | promise<T>`)
+
+When the same method can return either shape, document the union and
+branch on the mode you already know (a constructor flag, here
+`private$.is_async`):
+
+``` r
+
+#' @return (data.table | promise<data.table>) bars:
+#' - timestamp (POSIXct) candle open time.
+#' - close (numeric in ]0, Inf[) close price.
+ohlcv = function(symbol) {
+  assert_args_ohlcv(symbol)
+  result <- private$.impl_ohlcv(symbol)      # a data.table OR a promise of one
+  if (private$.is_async) {
+    return(promises::then(result, assert_return_ohlcv))  # async: validate on resolve
+  }
+  return(assert_return_ohlcv(result))                    # sync: validate now
+}
+```
+
+A tidy way to capture that branch once is a tiny helper (drop it in your
+package):
+
+``` r
+
+then_or_now <- function(x, fn, is_async) {
+  if (is_async) return(promises::then(x, fn))
+  return(fn(x))
+}
+
+ohlcv = function(symbol) {
+  assert_args_ohlcv(symbol)
+  return(then_or_now(private$.impl_ohlcv(symbol), assert_return_ohlcv, private$.is_async))
+}
+```
+
+If you don’t track the mode explicitly, branch on the value instead —
+`if (promises::is.promise(result)) promises::then(result, assert_return_ohlcv) else assert_return_ohlcv(result)`.
+
+In all cases the generated validator is identical; only *your* one-line
+wiring differs.
+
+> **Known limitation:** a *list of un-resolved promises* —
+> `list<promise<T>>` — is rejected, because each element would be an
+> unresolved promise that can’t be checked synchronously (and roxyassert
+> never emits per-element `then()` wiring). Await them first
+> (e.g. `promises::promise_all`) and annotate the result as
+> `promise<list<T>>`. We’ll revisit this if there’s demand.
 
 ## Generated functions — conventions
 

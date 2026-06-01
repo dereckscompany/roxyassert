@@ -59,6 +59,7 @@ per-type exceptions) decides which modifiers are legal:
 | **Wildcard** | `any` | ❌ | ❌ | ❌ | ✅ | bare / `scalar<>` / `vector<>` |
 | **Reference** | `function` `R6<Class>` | ❌ | ❌ | ❌ | ❌ | **bare only** (length-1 by nature) |
 | **Composite** | `list` `data.table` `data.frame` | ❌ | ❌ | ❌ | ❌ | bare, **nested bullets**, or `list<T>` (`list` only) |
+| **Promise** | `promise<T>` | ❌ | ❌ | ❌ | ❌ | wraps one resolved `type` `T`; collapses to `T` (S5) |
 
 ¹ Sets compare with `==`/`%in%` and apply no normalisation. `integer`
 and whole-day `Date` sets (from `as.Date`/`Sys.Date`) are **exact** and
@@ -104,7 +105,7 @@ residual element-type rules are static (§4).
                           written EITHER as a "| NULL" alternative OR a trailing "?",
                           never both *)
 
-    type           ::= atomic | wildcard | reference | composite
+    type           ::= atomic | wildcard | reference | composite | promise
 
     atomic         ::= atom
                      | "scalar" "<" atom ">"
@@ -138,6 +139,17 @@ residual element-type rules are static (§4).
                           list<R6<Engine>>, list<any>, list<data.table>. T is a `type`
                           (no slot-level union / `| NULL` / `?`); a `list<T>` is a leaf
                           and takes no bullets (S1, S3). *)
+    promise        ::= "promise" "<" type ">"
+                       (* a result resolving to the type T, delivered synchronously
+                          OR as a promises::promise (S5). T is a single `type` (no
+                          slot-level union / `| NULL` / `?` inside `<>`, as with
+                          list<T>; a data.table T may still take field bullets, which
+                          describe the resolved table). A union `T | promise<T>` (same
+                          T) is the sync-or-async pattern and collapses to the single
+                          resolved T; nested promise<promise<T>> collapses likewise.
+                          promise<T> stands for a whole slot value, so it may NOT be a
+                          list element or sit inside scalar<>/vector<>. Most natural on
+                          @return, but allowed anywhere. *)
 
     int_interval   ::= low int_lo  "," int_hi  high
     num_interval   ::= low num_lo  "," num_hi  high
@@ -311,6 +323,30 @@ are *specified rules*, not stylistic suggestions.
   check can never pass — is rejected at generation time. (A wrong-side
   sentinel such as `[Inf, 0]` is caught earlier, by the grammar.)
   `Date`/`POSIXct`/`rexpr` bounds are opaque and not range-checked.
+- **S5 — promise is the resolved type, async-agnostic.** A `promise<T>`
+  (and the union `T | promise<T>`, same T) lowers to the checks for the
+  resolved type `T` *only* — roxyassert never emits `promises::then()`
+  or `is.promise()`, because the same generated validator must serve a
+  function whether it works with `T` directly or a promise of `T`. The
+  caller wires the async by applying the generated
+  `function(value) value` validator however they need — it *is* a
+  `then()` callback, e.g. `promises::then(impl, assert_return_fn)` for
+  an always-async result, or branching on a known `async` flag for a
+  sync-or-async one. `promise<T>` is most natural on `@return` but is
+  **allowed in any slot position** (roxyassert does not police it: a
+  function that takes a promise input is valid; the caller decides how
+  to apply the generated check to the resolved value). It stands for a
+  **whole slot value**, so it may not be a `list<>` element or sit
+  inside `scalar<>`/`vector<>` (a list of promises cannot be validated
+  synchronously per element). The `T | promise<T>` union must resolve to
+  a single `T` — every alternative must be the *same* type, same base,
+  shape and refinement values (a promise unioned with a different type
+  is rejected); nested `promise<promise<T>>` is peeled to `T`.
+  Refinements (sets, bounds) are compared by **parsing** them, so
+  cosmetic spacing differs harmlessly — `numeric in c(1, 2)` and
+  `numeric in c(1,2)` match, while `[0, 1]` and `]0, 1[` do not. The
+  emitted check still uses the verbatim text you wrote (§1.6); only the
+  equality test parses.
 
 ## 5. Binding & precedence (why `|` is never ambiguous)
 
@@ -358,6 +394,7 @@ nearest type to its left, at most one per atom. Thus:
 | `list` | composite | a list — bare = unconstrained; `+ bullets` = named record (S3); `list<T>` = homogeneous (every element `T`) |
 | `data.table` | composite | a `data.table` (typed/list-columns when refined, S3) |
 | `data.frame` | composite | a `data.frame` (typed/list-columns when refined, S3) |
+| `promise<T>` | promise | a result resolving to `T`, sync or async (S5) |
 
 A `list`/`data.table`/`data.frame` **with** nested bullets is a fixed
 named-field structure; **without** bullets it is an unconstrained
@@ -406,6 +443,11 @@ list-column) whose every element is `T` (e.g. `list<character>`,
 (list<function>)                  # a list of callbacks
 (list<any>)                       # a list of anything (= bare list at runtime)
 (list<data.table>)                # a list of data.tables
+
+# --- promise returns: resolved type, sync or async ---
+(promise<data.table>)             # a promise resolving to a data.table
+(promise<scalar<numeric>>)        # a promise resolving to one number
+(data.table | promise<data.table>)  # a data.table OR a promise of one (sync-or-async)
 
 # --- vector with explicit length (every atom type) ---
 (vector<numeric, 10>)             # exactly 10
@@ -672,6 +714,10 @@ AbstractStore <- R6::R6Class(
 # (data.table | data.frame): ...  # S1: bullets need a single bare composite
 # (vector<numeric>)               # vector<> requires a length — use bare (numeric)
 # (list<numeric>): ...            # S1: list<T> is a leaf and takes no bullets
+# (promise)                       # promise must name its resolved type: promise<T>
+# (numeric | promise<character>)  # S5: a promise union must resolve to one type
+# (list<promise<numeric>>)        # promise<T> is a whole-slot value, not a list element
+# (scalar<promise<numeric>>)      # scalar<>/vector<> wrap an atom or `any`, not a promise
 ```
 
 ## 12. Non-goals (deliberately inexpressible)
@@ -695,6 +741,12 @@ are now `list<T>`, e.g. `list<scalar<numeric>>`, `list<function>`,
 - **A factor’s declared
   [`levels()`](https://rdrr.io/r/base/levels.html)** — a set checks
   realised values, not the level schema (footnote 2).
+- **A list of un-resolved promises** — `list<promise<T>>` is rejected:
+  each element would be an unresolved promise, which can’t be validated
+  synchronously, and roxyassert never emits the per-element `then()`
+  wiring (S5). Await the promises (e.g. `promises::promise_all`) and
+  annotate the result as `promise<list<T>>`. (If there’s real demand, a
+  future version could relax this.)
 
 ## 13. Self-consistency checklist
 
@@ -756,6 +808,13 @@ and an atomic-typed column rejects list-cells.
 
 everything after `)` is free-text description (roxyassert ignores it); a
 `:` adjacent to it is cosmetic; canonical style omits it.
+
+`promise<T>` lowers to `T`’s checks with no `then()`/`is.promise()`
+emitted (the caller wires the async); `T | promise<T>` (same T)
+collapses to the resolved `T`, nested `promise<promise<T>>` collapses
+too, and a promise unioned with a *different* type is rejected;
+`promise<T>` is a whole-slot value, so it is rejected as a list element
+or inside `scalar<>`/`vector<>` (S5).
 
 generated names are `assert_args_<fn>` / `assert_return_<fn>`, and
 `assert_args_<Class>__<method>` / `assert_return_<Class>__<method>` for
