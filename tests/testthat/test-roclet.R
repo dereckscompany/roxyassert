@@ -103,9 +103,14 @@ test_that(".ra_r6_is_method_tag classifies method vs class tags across roxygen2 
   expect_true(.ra_r6_is_method_tag(list(line = 12L), list(line = 10L)))
   expect_true(.ra_r6_is_method_tag(list(line = 10L), list(line = 10L)))
   expect_false(.ra_r6_is_method_tag(list(line = 4L), list(line = 10L)))
-  # Degenerate inputs never misfire as a method tag.
+  # Degenerate inputs never misfire as a method tag, and never error: a missing
+  # or NA line on either the tag or the class returns FALSE rather than tripping
+  # the comparison (note `is.na(NULL)` is logical(0), which would break an `if`).
   expect_false(.ra_r6_is_method_tag(list(line = NA_integer_), list(line = 10L)))
+  expect_false(.ra_r6_is_method_tag(list(line = 5L), list(line = NA_integer_)))
   expect_false(.ra_r6_is_method_tag(list(line = 5L), list()))
+  expect_false(.ra_r6_is_method_tag(list(), list(line = 10L)))
+  expect_false(.ra_r6_is_method_tag(list(), list()))
 })
 
 test_that("annotation text + names are read from raw, not markdown-rewritten val", {

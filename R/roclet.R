@@ -337,7 +337,11 @@ roxy_tag_parse.roxy_tag_type <- function(x) {
   if (!is.null(tag$r6method)) {
     return(TRUE)
   }
-  if (is.null(block$line) || is.na(tag$line)) {
+  # Without a binding, fall back to the positional rule. Treat any missing or
+  # NA source line (on either the tag or the class) as "cannot tell" -> not a
+  # method tag, rather than erroring. (`is.na(NULL)` is logical(0), which would
+  # break the `if`, so the NULL checks must come first.)
+  if (is.null(tag$line) || is.null(block$line) || is.na(tag$line) || is.na(block$line)) {
     return(FALSE)
   }
   return(tag$line >= block$line)
