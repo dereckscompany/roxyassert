@@ -316,3 +316,15 @@ test_that("promise normalisation reaches field bullets", {
   expect_equal(rows$base, "data.table")
   expect_equal(length(rows$fields), 1L)
 })
+
+test_that("a refined / shape / reference / element promise union collapses iff alternatives are identical", {
+  # identical refinements collapse to the refined T
+  expect_silent(parse_annotation("(numeric in [0, 1] | promise<numeric in [0, 1]>)"))
+  expect_silent(parse_annotation("(R6<Engine> | promise<R6<Engine>>)"))
+  expect_silent(parse_annotation("(list<character> | promise<list<character>>)"))
+  # any divergence — refinement value, shape, R6 class, list element — is rejected
+  expect_error(parse_annotation("(numeric in [0, 1] | promise<numeric in ]0, 1[>)"), "identical type")
+  expect_error(parse_annotation("(numeric | promise<scalar<numeric>>)"), "identical type")
+  expect_error(parse_annotation("(R6<A> | promise<R6<B>>)"), "identical type")
+  expect_error(parse_annotation("(list<numeric> | promise<list<integer>>)"), "identical type")
+})

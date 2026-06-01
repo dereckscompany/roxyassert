@@ -329,7 +329,10 @@ These context-sensitive constraints are checked by the generator; they are
   validated synchronously per element). The `T | promise<T>` union must resolve to
   a single `T` — every alternative must be the *identical* type, same base and
   refinements (a promise unioned with a different type is rejected); nested
-  `promise<promise<T>>` is peeled to `T`.
+  `promise<promise<T>>` is peeled to `T`. Because refinements (sets, bounds) are
+  compared as the **verbatim text** you wrote (never re-parsed, per §1.6), the two
+  alternatives must be spelled byte-identically: `numeric in c(1, 2)` and
+  `numeric in c(1,2)` do not match — keep them character-for-character the same.
 
 ## 5. Binding & precedence (why `|` is never ambiguous)
 

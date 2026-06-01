@@ -1,7 +1,8 @@
 # roxyassert 0.2.0
 
-* New `promise<T>` return type, and the `T | promise<T>` union, for functions
-  whose result may be delivered synchronously **or** as a `promises::promise`
+* New `promise<T>` type (and the `T | promise<T>` union), most natural on
+  `@return`, for functions whose result may be delivered synchronously **or** as
+  a `promises::promise`
   that resolves to the same value (e.g. an exchange wrapper with an `async`
   switch). roxyassert generates a plain value-validator for the resolved type
   `T` and stays promise-agnostic — you compose the async yourself

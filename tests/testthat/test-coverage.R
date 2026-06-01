@@ -411,3 +411,15 @@ test_that("promise<T> over a reference / nullable / nested resolved value", {
   expect_equal(genf("(promise<data.table>?)"), c("if (!is.null(x)) {", "  assert_data_table(x)", "}"))
   expect_equal(genf("(promise<promise<scalar<numeric>>>)"), "assert_scalar_double(x)")
 })
+
+test_that("a refined / reference / composite T | promise<T> union lowers to the resolved T", {
+  expect_equal(
+    genf("(numeric in [0, 1] | promise<numeric in [0, 1]>)"),
+    c("assert_double(x)", "assert_no_missing_values(x)", "assert_between(x, lower = 0, upper = 1)")
+  )
+  expect_equal(genf("(R6<Engine> | promise<R6<Engine>>)"), 'assert_class(x, "Engine")')
+  expect_equal(
+    genf("(list<character> | promise<list<character>>)"),
+    c("assert_list(x)", 'assert_list_of(x, "character")')
+  )
+})
