@@ -93,6 +93,66 @@ test_that("R6 methods generate <Class>__<method> helpers", {
   expect_true(any(grepl("^assert_return_Store__count <- function\\(value\\)", code)))
 })
 
+test_that("R6 method contracts generate through the real on-disk document() path", {
+  # The roc_proc_text() path above parses in-memory text, where the tag's file
+  # is "<text>" but the method's file is a tempfile. roxygen2 8.0.0 special-cases
+  # "<text>" in find_method_for_tag(); 7.3.x does not, so that path cannot
+  # exercise 7.x faithfully. A real package documents files on disk, where the
+  # tag and the method share the same source file -- the path that matters in
+  # production. This parses an on-disk package and runs the contract roclet over
+  # it, so the R6 method-tag association is tested end to end on whatever
+  # roxygen2 is installed (the original crash and the silent-empty failure both
+  # live here, not in the isolated .ra_r6_is_method_tag unit test).
+  dir <- withr::local_tempdir()
+  dir.create(file.path(dir, "R"))
+  writeLines(
+    c(
+      "Package: r6ondisk",
+      "Title: On-disk R6 generation fixture",
+      "Version: 0.0.0",
+      "Description: Test fixture.",
+      "License: MIT + file LICENSE",
+      "Encoding: UTF-8"
+    ),
+    file.path(dir, "DESCRIPTION")
+  )
+  writeLines(
+    c(
+      "#' @title Store",
+      "#' @description A store of records.",
+      "Store <- R6::R6Class('Store',",
+      "  public = list(",
+      "    #' @description Get records by key.",
+      "    #' @param keys (character) keys to fetch.",
+      "    #' @param limit (scalar<integer in [1, Inf[>?) optional max rows.",
+      "    #' @return (data.table) the records.",
+      "    get = function(keys, limit = NULL) NULL,",
+      "    #' @description Count records.",
+      "    #' @return (scalar<integer in [0, Inf[>) the count.",
+      "    count = function() NULL",
+      "  )",
+      ")"
+    ),
+    file.path(dir, "R", "Store.R")
+  )
+
+  # parse_package() reads the files from disk, so tags and methods carry the
+  # real source path (not "<text>"). roclet_process() for the contract roclet
+  # does not use `env`, so a dummy is fine.
+  blocks <- suppressMessages(roxygen2::parse_package(dir))
+  results <- roxygen2::roclet_process(contract_roclet(), blocks, env = NULL, base_path = dir)
+  code <- unlist(results, use.names = FALSE)
+
+  expect_true(any(grepl("^assert_args_Store__get <- function\\(keys, limit\\)", code)))
+  expect_true(any(grepl("assert_character\\(keys\\)", code)))
+  expect_true(any(grepl("assert_scalar_integer\\(limit\\)", code)))
+  expect_true(any(grepl("^assert_return_Store__get <- function\\(value\\)", code)))
+  expect_true(any(grepl("assert_data_table\\(value\\)", code)))
+  # count() has no params -> only a return helper, matching the method split.
+  expect_false(any(grepl("assert_args_Store__count", code)))
+  expect_true(any(grepl("^assert_return_Store__count <- function\\(value\\)", code)))
+})
+
 test_that(".ra_r6_is_method_tag classifies method vs class tags across roxygen2 versions", {
   # An explicit r6method binding (roxygen2 >= 8.0.0) is always a method tag.
   expect_true(.ra_r6_is_method_tag(list(r6method = "get", line = 1L), list(line = 99L)))

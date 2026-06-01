@@ -310,7 +310,10 @@ roxy_tag_parse.roxy_tag_type <- function(x) {
       next
     }
     method <- if (!is.null(tag$r6method)) tag$r6method else find_method(methods, tag)
-    if (is.null(method) || is.na(method)) {
+    # `method` is a single name, or NA/NULL/empty when the tag could not be
+    # associated with one. Length-guard before is.na(): is.na(NULL) and
+    # is.na(character(0)) are both logical(0), which would break the `if`.
+    if (length(method) != 1L || is.na(method)) {
       next
     }
     if (is.null(by_method[[method]])) {
