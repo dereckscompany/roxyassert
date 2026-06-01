@@ -1,6 +1,6 @@
 Package: roxyassert
 Title: Generate Runtime Assertions from roxygen2 Documentation
-Version: 0.3.0
+Version: 0.3.1
 URL: https://dereckscompany.github.io/roxyassert,
     https://github.com/dereckscompany/roxyassert
 BugReports: https://github.com/dereckscompany/roxyassert/issues
@@ -27,7 +27,8 @@ Suggests:
     knitr,
     pkgdown,
     rmarkdown,
-    testthat (>= 3.0.0)
+    testthat (>= 3.0.0),
+    withr
 VignetteBuilder: knitr
 Config/testthat/edition: 3
 Config/roxygen2/version: 8.0.0
