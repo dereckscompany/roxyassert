@@ -81,6 +81,11 @@ generate_checks <- function(ast, expr) {
     "function" = sprintf("assert_function(%s)", expr),
     r6 = sprintf('assert_class(%s, "%s")', expr, node$class),
     composite = .rg_composite(node, expr),
+    # Defensive only: parse_annotation never yields a promise node here. promise<T>
+    # is unwrapped (recursively) at slot and field level, rejected as a list
+    # element, and rejected inside scalar<>/vector<>. Validate the resolved value,
+    # never the promise wrapper, should that invariant ever change.
+    promise = .rg_type(node$inner, expr),
     stop("roxyassert: cannot generate for node kind '", node$kind, "'", call. = FALSE)
   ))
 }

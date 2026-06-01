@@ -250,3 +250,92 @@ test_that("a trailing-comma inline set does not raise a misleading empty-element
   expect_silent(parse_annotation("(integer in c(1L,))"))
   expect_error(parse_annotation("(integer in c(1, ))"), "L") # still requires L suffix
 })
+
+# ---- promise<T> (sync-or-async results) -------------------------------------
+
+test_that("promise<T> collapses to its resolved type", {
+  a <- parse_annotation("(promise<data.table>)")
+  expect_equal(length(a$alternatives), 1L)
+  expect_equal(a$alternatives[[1]]$kind, "composite")
+  expect_equal(a$alternatives[[1]]$base, "data.table")
+  b <- parse_annotation("(promise<scalar<numeric>>)")
+  expect_equal(b$alternatives[[1]]$shape, "scalar")
+  expect_equal(b$alternatives[[1]]$base, "numeric")
+})
+
+test_that("the T | promise<T> union collapses to a single resolved T", {
+  a <- parse_annotation("(data.table | promise<data.table>)")
+  expect_equal(length(a$alternatives), 1L)
+  expect_equal(a$alternatives[[1]]$base, "data.table")
+  b <- parse_annotation("(promise<data.table> | data.table)")
+  expect_equal(length(b$alternatives), 1L)
+})
+
+test_that("promise<T> carries field bullets into the resolved composite", {
+  node <- parse_annotation("(promise<data.table>)\n- id (character) i.\n- score (numeric in [0, 1]) s.")$alternatives[[
+    1
+  ]]
+  expect_equal(node$base, "data.table")
+  expect_equal(length(node$fields), 2L)
+  expect_equal(node$fields[[2]]$name, "score")
+})
+
+test_that("promise<T> needs <T>, and a heterogeneous promise union is rejected", {
+  expect_error(parse_annotation("(promise)"), "resolved type")
+  expect_error(parse_annotation("(numeric | promise<character>)"), "same type")
+})
+
+# ---- promise<T> edge cases (self-review round) -------------------------------
+
+test_that("nested promise<promise<T>> collapses to the innermost type", {
+  expect_equal(parse_annotation("(promise<promise<data.table>>)")$alternatives[[1]]$base, "data.table")
+  n <- parse_annotation("(promise<promise<data.table>>)\n- id (character) i.")$alternatives[[1]]
+  expect_equal(n$base, "data.table")
+  expect_equal(length(n$fields), 1L)
+})
+
+test_that("promise<T> is a whole-slot value: rejected as a list element / inside scalar<>/vector<>", {
+  expect_error(parse_annotation("(list<promise<numeric>>)"), "list element")
+  expect_error(parse_annotation("(scalar<promise<numeric>>)"), "atomic type or 'any'")
+  expect_error(parse_annotation("(vector<promise<numeric>, 3>)"), "atomic type or 'any'")
+})
+
+test_that("a promise union must be the identical type on every alternative", {
+  expect_equal(parse_annotation("(promise<numeric> | promise<numeric>)")$alternatives[[1]]$base, "numeric")
+  expect_error(parse_annotation("(promise<numeric> | promise<character>)"), "same type")
+  expect_error(parse_annotation("(numeric in [0, 1] | promise<numeric>)"), "same type")
+})
+
+test_that("promise normalisation reaches field bullets", {
+  # a heterogeneous promise union in a field is rejected, like at the top level
+  expect_error(parse_annotation("(data.table)\n- x (numeric | promise<character>) c."), "same type")
+  # a promise<data.table> field collapses, so it can carry its own column bullets
+  rows <- parse_annotation("(list)\n- rows (promise<data.table>) r:\n  - id (character) i.")$alternatives[[1]]$fields[[
+    1
+  ]]$ast$alternatives[[1]]
+  expect_equal(rows$base, "data.table")
+  expect_equal(length(rows$fields), 1L)
+})
+
+test_that("a refined / shape / reference / element promise union collapses iff alternatives are identical", {
+  # identical refinements collapse to the refined T
+  expect_silent(parse_annotation("(numeric in [0, 1] | promise<numeric in [0, 1]>)"))
+  expect_silent(parse_annotation("(R6<Engine> | promise<R6<Engine>>)"))
+  expect_silent(parse_annotation("(list<character> | promise<list<character>>)"))
+  # any divergence — refinement value, shape, R6 class, list element — is rejected
+  expect_error(parse_annotation("(numeric in [0, 1] | promise<numeric in ]0, 1[>)"), "same type")
+  expect_error(parse_annotation("(numeric | promise<scalar<numeric>>)"), "same type")
+  expect_error(parse_annotation("(R6<A> | promise<R6<B>>)"), "same type")
+  expect_error(parse_annotation("(list<numeric> | promise<list<integer>>)"), "same type")
+})
+
+test_that("a promise union compares by meaning, so cosmetic spacing differs harmlessly", {
+  # same set/bound written with different spacing on the two halves still collapses
+  expect_silent(parse_annotation("(numeric in c(1,2) | promise<numeric in c(1, 2)>)"))
+  expect_silent(parse_annotation("(numeric in [0,1] | promise<numeric in [0, 1]>)"))
+  # the emitted check keeps the verbatim text of the first (sync) alternative
+  g <- generate_checks(parse_annotation("(numeric in c(1,2) | promise<numeric in c(1, 2)>)"), "x")
+  expect_true(any(g == "assert_values_in_set(x, c(1,2))"))
+  # a genuine difference in the refinement value is still rejected
+  expect_error(parse_annotation("(numeric in [0, 1] | promise<numeric in ]0, 1[>)"), "same type")
+})

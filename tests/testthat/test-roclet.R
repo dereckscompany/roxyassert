@@ -122,3 +122,37 @@ test_that("a multi-name @param with a space ('a, b') validates both names", {
   expect_true(any(grepl("assert_scalar_double\\(a\\)", code)))
   expect_true(any(grepl("assert_scalar_double\\(b\\)", code)))
 })
+
+test_that("a promise<T> @return generates a plain resolved-value validator", {
+  text <- "
+    #' Fetch bars.
+    #' @param symbol (scalar<character>) the pair.
+    #' @return (promise<data.table>) bars:
+    #' - t (POSIXct) time.
+    #' - close (numeric in [0, Inf[) price.
+    #' @export
+    get_bars <- function(symbol) NULL
+  "
+  code <- unlist(roxygen2::roc_proc_text(contract_roclet(), text), use.names = FALSE)
+  expect_true(any(grepl("^assert_return_get_bars <- function\\(value\\)", code)))
+  expect_true(any(grepl("assert_data_table\\(value\\)", code)))
+  expect_true(any(grepl('assert_has_columns\\(value, c\\("t", "close"\\)\\)', code)))
+  # roxyassert stays promise-agnostic: no then()/is.promise in the generated code
+  expect_false(any(grepl("promises::then|is\\.promise", code)))
+})
+
+test_that("a promise<T> @param is allowed — it lowers to the resolved-type check", {
+  # a helper that takes a promise input is valid; roxyassert generates the
+  # resolved-value validator and the user applies it however they like.
+  text <- "
+    #' Add a callback.
+    #' @param p (promise<data.table>) the bars promise.
+    #' @export
+    with_logging <- function(p) NULL
+  "
+  code <- unlist(roxygen2::roc_proc_text(contract_roclet(), text), use.names = FALSE)
+  expect_true(any(grepl("^assert_args_with_logging <- function\\(p\\)", code)))
+  expect_true(any(grepl("assert_data_table\\(p\\)", code)))
+  # promise-agnostic in @param position too: no then()/is.promise emitted
+  expect_false(any(grepl("promises::then|is\\.promise", code)))
+})

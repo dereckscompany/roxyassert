@@ -385,3 +385,41 @@ test_that("invalid composite-bullet (S1) and misplaced-? forms are rejected", {
   expect_error(parse_annotation("(list<numeric>)\n- a (character) x."), "leaf")
   expect_error(parse_annotation("(list)\n- cur (scalar<character>)? next."), "must sit inside")
 })
+
+test_that("promise<T> / T | promise<T> lower to the resolved type's checks (no promise code)", {
+  expect_equal(genf("(promise<scalar<numeric>>)"), "assert_scalar_double(x)")
+  expect_equal(genf("(promise<data.table>)"), "assert_data_table(x)")
+  expect_equal(genf("(promise<list<character>>)"), c("assert_list(x)", 'assert_list_of(x, "character")'))
+  # the explicit union collapses to the same single validator
+  expect_equal(genf("(data.table | promise<data.table>)"), "assert_data_table(x)")
+  expect_equal(genf("(promise<data.table> | data.table)"), "assert_data_table(x)")
+  # promise<data.table> carries typed columns
+  expect_equal(
+    genf("(promise<data.table>)\n- id (character) i.\n- ok (scalar<logical>) o."),
+    c(
+      "assert_data_table(x)",
+      'assert_has_columns(x, c("id", "ok"))',
+      'assert_character(x[["id"]])',
+      'assert_no_missing_values(x[["id"]])',
+      'assert_scalar_logical(x[["ok"]])'
+    )
+  )
+})
+
+test_that("promise<T> over a reference / nullable / nested resolved value", {
+  expect_equal(genf("(promise<R6<Engine>>)"), 'assert_class(x, "Engine")')
+  expect_equal(genf("(promise<data.table>?)"), c("if (!is.null(x)) {", "  assert_data_table(x)", "}"))
+  expect_equal(genf("(promise<promise<scalar<numeric>>>)"), "assert_scalar_double(x)")
+})
+
+test_that("a refined / reference / composite T | promise<T> union lowers to the resolved T", {
+  expect_equal(
+    genf("(numeric in [0, 1] | promise<numeric in [0, 1]>)"),
+    c("assert_double(x)", "assert_no_missing_values(x)", "assert_between(x, lower = 0, upper = 1)")
+  )
+  expect_equal(genf("(R6<Engine> | promise<R6<Engine>>)"), 'assert_class(x, "Engine")')
+  expect_equal(
+    genf("(list<character> | promise<list<character>>)"),
+    c("assert_list(x)", 'assert_list_of(x, "character")')
+  )
+})

@@ -245,6 +245,7 @@ parse_annotation <- function(text) {
   if (!.ra_eof(sp)) {
     .ra_err(sp, paste0("unexpected trailing input: '", substr(sp$s, sp$pos, sp$n), "'"))
   }
+  ast <- .ra_normalize_promise(ast)
   # Everything after the closing ')' is free-text description, which may carry
   # nested `- name (slot)` field bullets (a composite record / typed columns, S1).
   rest <- if (p$pos < p$n) substr(p$s, p$pos + 1L, p$n) else ""
@@ -322,6 +323,10 @@ parse_annotation <- function(text) {
   if (!.ra_eof(sp)) {
     .ra_err(sp, paste0("unexpected trailing input in field slot: '", substr(sp$s, sp$pos, sp$n), "'"))
   }
+  # normalise promises here too, so a field's slot gets the same S5 treatment as
+  # the top level: a heterogeneous promise union is rejected, and a
+  # promise<composite> field collapses to its composite so it can take children.
+  ast <- .ra_normalize_promise(ast)
   if (length(node$children) > 0L) {
     ast <- .ra_attach_fields(ast, lapply(node$children, .ra_finalize_bullet))
   }
@@ -405,6 +410,70 @@ parse_annotation <- function(text) {
   return(list(kind = "slot", alternatives = alts, null_ok = null_ok))
 }
 
+# A promise<T> denotes the resolved type T; a union mixing promise<X> with a bare
+# X (the "sync-or-async delivery" pattern) collapses to a single X. roxyassert
+# validates only the resolved value and emits no promise code (the caller wires
+# the async), so this fully unwraps each alternative to its resolved type — every
+# nested promise<...> layer is peeled — leaving generation and field bullets a
+# plain T with no promise node. Applied at the slot AND every field-bullet level.
+.ra_unwrap_promise <- function(node) {
+  if (identical(node$kind, "promise")) {
+    return(.ra_unwrap_promise(node$inner))
+  }
+  return(node)
+}
+
+.ra_normalize_promise <- function(ast) {
+  has_promise <- any(vapply(ast$alternatives, function(a) identical(a$kind, "promise"), logical(1)))
+  if (!has_promise) {
+    return(ast)
+  }
+  resolved <- lapply(ast$alternatives, .ra_unwrap_promise)
+  # Compare the alternatives by their CANONICAL form (refinement text parsed, so
+  # cosmetic spacing in a set / bound does not read as a different type), but keep
+  # the first alternative's ORIGINAL verbatim text for emission.
+  keys <- lapply(resolved, .ra_canonicalize)
+  if (!all(vapply(keys, function(k) identical(k, keys[[1]]), logical(1)))) {
+    stop(
+      "roxyassert: every alternative of a promise union must be the same type ",
+      "(same base, shape AND refinement values), e.g. (numeric in [0, 1] | promise<numeric in [0, 1]>); ",
+      "here they differ.",
+      call. = FALSE
+    )
+  }
+  ast$alternatives <- list(resolved[[1]])
+  return(ast)
+}
+
+# Canonicalise a type node for promise-union equality: replace each verbatim
+# refinement string (a set, an interval bound) with its parsed-then-deparsed form
+# so `c(1,2)` and `c(1, 2)` compare equal, recursing into a list<T> element.
+# Structural fields (base, shape, openness, sentinels, |NA, length, class) already
+# compare directly. Used ONLY for the comparison — emission keeps the verbatim text.
+.ra_canonicalize <- function(node) {
+  if (!is.null(node$set)) {
+    node$set$text <- .ra_normexpr(node$set$text)
+  }
+  if (!is.null(node$interval)) {
+    node$interval$lo$text <- .ra_normexpr(node$interval$lo$text)
+    node$interval$hi$text <- .ra_normexpr(node$interval$hi$text)
+  }
+  if (!is.null(node$element)) {
+    node$element <- .ra_canonicalize(node$element)
+  }
+  return(node)
+}
+
+# A refinement expression normalised to a canonical string (whitespace-insensitive
+# via parse/deparse). Falls back to the raw text if it is not a single expression.
+.ra_normexpr <- function(txt) {
+  expr <- tryCatch(parse(text = txt, keep.source = FALSE), error = function(e) NULL)
+  if (is.null(expr) || length(expr) != 1L) {
+    return(txt)
+  }
+  return(paste(deparse(expr[[1]]), collapse = ""))
+}
+
 # ---- type --------------------------------------------------------------------
 
 .ra_parse_type <- function(p) {
@@ -446,12 +515,33 @@ parse_annotation <- function(text) {
     .ra_expect(p, ">")
     return(list(kind = "r6", class = cls))
   }
+  if (w == "promise") {
+    .ra_ws(p)
+    if (.ra_ch(p) != "<") {
+      .ra_err(p, "promise must name its resolved type: promise<T>")
+    }
+    p$pos <- p$pos + 1L
+    inner <- .ra_parse_type(p)
+    .ra_expect(p, ">")
+    return(list(kind = "promise", inner = inner))
+  }
   if (w %in% .ra_composite) {
     element <- NULL
     .ra_ws(p)
     if (w == "list" && .ra_ch(p) == "<") {
       p$pos <- p$pos + 1L
       element <- .ra_parse_type(p)
+      # promise<T> stands for a whole (sync-or-async) slot value, not an element:
+      # a list of promises can't be validated synchronously per element.
+      if (identical(element$kind, "promise")) {
+        .ra_err(
+          p,
+          paste0(
+            "promise<T> cannot be a list element; await the promises ",
+            "(e.g. promises::promise_all) and use promise<list<T>>"
+          )
+        )
+      }
       .ra_expect(p, ">")
     }
     return(list(kind = "composite", base = w, element = element, fields = NULL))
