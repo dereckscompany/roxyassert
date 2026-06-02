@@ -61,3 +61,4 @@ vignettes/*.pdf
 
 # machine
 .DS_Store
+tests/testthat/testthat-problems.rds
