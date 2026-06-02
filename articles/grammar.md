@@ -56,6 +56,7 @@ per-type exceptions) decides which modifiers are legal:
 | **Enumerable atomic** | `character` `factor` | ❌ | ✅² | ✅ | ✅ | bare / `scalar<>` / `vector<>` |
 | **Plain atomic** | `complex` `logical` | ❌ | ❌ | ✅ | ✅ | bare / `scalar<>` / `vector<>` |
 | **Byte atomic** | `raw` | ❌ | ❌ | ❌ | ✅ | bare / `scalar<>` / `vector<>` |
+| **Count** | `count` | ✅ | ❌ | ❌ | ✅ | bare / `scalar<>` / `vector<>` |
 | **Wildcard** | `any` | ❌ | ❌ | ❌ | ✅ | bare / `scalar<>` / `vector<>` |
 | **Reference** | `function` `class<Class>` | ❌ | ❌ | ❌ | ❌ | **bare only** (length-1 by nature) |
 | **Composite** | `list` `data.table` `data.frame` | ❌ | ❌ | ❌ | ❌ | bare, **nested bullets**, or `list<T>` (`list` only) |
@@ -130,6 +131,9 @@ rules are static (§4).
                      | enumerable    ( "in" set )?                      ( "|" "NA" )?
                      | plain                                            ( "|" "NA" )?
                      | "raw"
+                     | "count"       ( "in" int_interval )?
+                       (* count: a non-negative whole number (double OR integer);
+                          whole-number interval bounds like integer; no set, no NA *)
 
     temporal       ::= "Date" | "POSIXct"
     enumerable     ::= "character" | "factor"
@@ -412,6 +416,7 @@ nearest type to its left, at most one per atom. Thus:
 | `complex` | plain atomic | complex vector |
 | `logical` | plain atomic | `TRUE`/`FALSE` vector |
 | `raw` | byte atomic | raw vector (no `NA`) |
+| `count` | count | non-negative whole number(s), `20` or `20L` (`assert_scalar_count` / `assert_count`); no `NA`, no set |
 | `any` | wildcard | any R object; no type check (length/nullability only) |
 | `function` | reference | a function/closure (length 1) |
 | `class<Class>` | reference | an object whose class is `Class` — any object system (S3/S4/RC/R6/S7), subclasses match (length 1) |
@@ -453,6 +458,13 @@ list-column) whose every element is `T` (e.g. `list<character>`,
 (scalar<complex>)
 (scalar<raw>)                     # a single byte
 (scalar<logical | NA>)            # tri-state flag: TRUE / FALSE / NA
+
+# --- count: a non-negative whole number (accepts 20 or 20L) ---
+(count)                           # a vector of counts
+(scalar<count>)                   # one count, 0, 1, 2, ...
+(scalar<count in [1, Inf[>)       # a positive count (>= 1)
+(scalar<count in [1, Inf[>?)      # a positive count, or NULL
+(vector<count, 3>)                # three counts
 
 # --- reference types: bare, length-1 by nature ---
 (function)                        # a single function/closure
@@ -783,7 +795,37 @@ are now `list<T>`, e.g. `list<scalar<numeric>>`, `list<function>`,
   another `@type`, or write the refined type inline. **Cross-package**
   named types are also out of scope — `@type` is package-local.
 
-## 13. Self-consistency checklist
+## 13. `@noassert` — document a type without enforcing it
+
+roxyassert couples documentation and enforcement: a `(type)` on a
+`@param` both renders in the help page **and** generates a check.
+`@noassert` decouples them — the type is still shown, but no check is
+generated — for a parameter that a hand-written guard already validates
+(so the generated check would be redundant, or would pre-empt the
+guard’s better error message).
+
+- `@noassert <names>` exempts the named parameters (comma- or
+  space-separated); their `(type)` still renders, but no `assert_*` is
+  emitted for them.
+- A bare `@noassert` makes the **whole** function (or R6 method)
+  documented-only.
+- Naming a parameter that is not documented is an error.
+- Exempted parameters are still parsed and validated (a malformed type
+  is still caught) — only their code generation is skipped.
+- Works for plain functions and R6 methods.
+
+``` r
+
+#' @param symbol (scalar<character>) a normalised BASE/QUOTE pair.
+#' @noassert symbol
+#' ...
+ticker = function(symbol) {
+  assert_normalised_symbol(symbol)   # the guard enforces; symbol's type is doc-only
+  ...
+}
+```
+
+## 14. Self-consistency checklist
 
 Every base type sits in exactly one category (§2); every modifier it
 carries is a ✅ in that category’s row — no per-type exceptions.
@@ -858,6 +900,14 @@ use-site `?`/`|`/`| NULL` in the def), usable bare / nullable / unioned
 / inside `list<>`/`promise<>` but not inside `scalar<>`/`vector<>`, with
 no use-site refinement; unknown names, duplicates, built-in shadowing,
 and cycles are errors; package-local.
+
+`count` is a non-negative whole number accepting `20` or `20L`
+(`assert_scalar_count`/`assert_count`); interval-capable with
+whole-number bounds; no set, no `| NA`.
+
+`@noassert <names>` (or bare, for the whole block) documents a type but
+emits no check; exempted params are still validated; an undocumented
+name is an error.
 
 generated names are `assert_args_<fn>` / `assert_return_<fn>`, and
 `assert_args_<Class>__<method>` / `assert_return_<Class>__<method>` for

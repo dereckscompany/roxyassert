@@ -23,7 +23,7 @@
 
     <a class="navbar-brand me-2" href="index.html">roxyassert</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.4.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.5.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -226,6 +226,10 @@
 <td>date-time vector</td>
 </tr>
 <tr>
+<td><code>count</code></td>
+<td>non-negative whole number(s), <code>20</code> or <code>20L</code> — <code>assert_scalar_count</code> / <code>assert_count</code> (no <code>NA</code>, no set; interval-capable)</td>
+</tr>
+<tr>
 <td><code>any</code></td>
 <td>any R object — no type check (the wildcard)</td>
 </tr>
@@ -287,6 +291,8 @@
 <li>nullable slot — <code>(scalar&lt;numeric&gt;?)</code> ≡ <code>(scalar&lt;numeric&gt; | NULL)</code> (use one, not both)</li>
 <li>union of types — <code>(numeric | character)</code>
 </li>
+<li>a count, <code>20</code> or <code>20L</code> — <code>(scalar&lt;count&gt;)</code>; a positive count — <code>(scalar&lt;count in [1, Inf[&gt;)</code>
+</li>
 <li>object of a class — <code>(class&lt;Engine&gt;)</code>
 </li>
 <li>any (no type check) — <code>(any)</code>
@@ -297,10 +303,20 @@
 <p>Everything composes. For example <code>(vector&lt;numeric in ]0, 1] | NA, 10&gt;)</code> means: a numeric vector of length 10, every element in <code>(0, 1]</code>, <code>NA</code> allowed.</p>
 </div>
 <div class="section level3">
+<h3 id="documenting-a-type-without-enforcing-it--noassert">Documenting a type without enforcing it — <code>@noassert</code>
+<a class="anchor" aria-label="anchor" href="#documenting-a-type-without-enforcing-it--noassert"></a>
+</h3>
+<p>A <code>(type)</code> both renders in the help page and generates a check. When a parameter is already validated by a hand-written guard, add <strong><code>@noassert</code></strong> so the type is still documented but no (redundant) check is generated:</p>
+<div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="co">#' @param symbol (scalar&lt;character&gt;) a normalised BASE/QUOTE pair.</span></span>
+<span><span class="co">#' @noassert symbol</span></span></code></pre></div>
+<p><code>@noassert &lt;names&gt;</code> exempts the named parameters; a bare <code>@noassert</code> makes the whole function (or R6 method) documented-only. Exempted parameters are still parsed and validated — only their code generation is skipped — and naming an undocumented parameter is an error.</p>
+</div>
+<div class="section level3">
 <h3 id="composite-types--nested-bullets">Composite types — nested bullets<a class="anchor" aria-label="anchor" href="#composite-types--nested-bullets"></a>
 </h3>
 <p><code>list</code>, <code>data.table</code>, and <code>data.frame</code> describe their contents as a <strong>markdown bullet list</strong> beneath the tag. Bullets nest arbitrarily, so you can compose tables inside lists inside lists. Each bullet is <code>- name (type) description</code>; a <code>:</code> after the <code>)</code> is tolerated but optional, and <strong>bold around the name is optional</strong> (<code>- **name** (type) ...</code> also works).</p>
-<div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co">#' @return (list) the query result:</span></span>
 <span><span class="co">#' - ok (scalar&lt;logical&gt;) whether the query succeeded.</span></span>
 <span><span class="co">#' - rows (data.table) matched rows:</span></span>
@@ -310,7 +326,7 @@
 <span><span class="co">#'   - page (scalar&lt;integer in [1, Inf[&gt;) current page.</span></span>
 <span><span class="co">#'   - cursor (scalar&lt;character&gt;?) next-page cursor, or NULL at the end.</span></span></code></pre></div>
 <p>A column declared with an <strong>atomic</strong> type is checked for that type, so a column declared <code>(numeric)</code> that actually holds a list <strong>fails</strong> — the intended way to catch an accidental list-column. To declare one <em>on purpose</em>, type it <code>list&lt;T&gt;</code> (each cell a <code>T</code>) or <code>list&lt;any&gt;</code> (arbitrary cells). <code>list&lt;T&gt;</code> is also how you write any homogeneous list — <code>list&lt;function&gt;</code> (callbacks), <code>list&lt;class&lt;Model&gt;&gt;</code> (model objects):</p>
-<div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co">#' @return (data.table) rows:</span></span>
 <span><span class="co">#' - id (character) identifier.</span></span>
 <span><span class="co">#' - tags (list&lt;character&gt;) a list-column; each cell a character vector.</span></span>
@@ -320,7 +336,7 @@
 <div class="section level2">
 <h2 id="quick-example">Quick example<a class="anchor" aria-label="anchor" href="#quick-example"></a>
 </h2>
-<div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb9"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co">#' Submit an order.</span></span>
 <span><span class="co">#'</span></span>
 <span><span class="co">#' @param symbol (scalar&lt;character&gt;) normalised `BASE/QUOTE` pair.</span></span>
@@ -345,7 +361,7 @@
 <div class="section level3">
 <h3 id="deeply-nested-composition">Deeply nested composition<a class="anchor" aria-label="anchor" href="#deeply-nested-composition"></a>
 </h3>
-<div class="sourceCode" id="cb9"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb10"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co">#' Run a report.</span></span>
 <span><span class="co">#'</span></span>
 <span><span class="co">#' @param symbols (character) one or more `BASE/QUOTE` pairs.</span></span>
@@ -374,7 +390,7 @@
 <div class="section level3">
 <h3 id="a-datatable-with-mixed-column-types">A data.table with mixed column types<a class="anchor" aria-label="anchor" href="#a-datatable-with-mixed-column-types"></a>
 </h3>
-<div class="sourceCode" id="cb10"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb11"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co">#' Open orders for a symbol.</span></span>
 <span><span class="co">#'</span></span>
 <span><span class="co">#' @param symbol (scalar&lt;character&gt;) the pair.</span></span>
@@ -412,7 +428,7 @@
 <div class="section level3">
 <h3 id="always-async-promiset">Always-async (<code>promise&lt;T&gt;</code>)<a class="anchor" aria-label="anchor" href="#always-async-promiset"></a>
 </h3>
-<div class="sourceCode" id="cb11"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb12"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co">#' Fetch OHLCV bars.</span></span>
 <span><span class="co">#'</span></span>
 <span><span class="co">#' @param symbol (scalar&lt;character&gt;) the pair.</span></span>
@@ -431,7 +447,7 @@
 <h3 id="sync-or-async-t--promiset">Sync-or-async (<code>T | promise&lt;T&gt;</code>)<a class="anchor" aria-label="anchor" href="#sync-or-async-t--promiset"></a>
 </h3>
 <p>When the same method can return either shape, document the union and branch on the mode you already know (a constructor flag, here <code>private$.is_async</code>):</p>
-<div class="sourceCode" id="cb12"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb13"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co">#' @return (data.table | promise&lt;data.table&gt;) bars:</span></span>
 <span><span class="co">#' - timestamp (POSIXct) candle open time.</span></span>
 <span><span class="co">#' - close (numeric in ]0, Inf[) close price.</span></span>
@@ -444,7 +460,7 @@
 <span>  <span class="kw"><a href="https://rdrr.io/r/base/function.html" class="external-link">return</a></span><span class="op">(</span><span class="fu">assert_return_ohlcv</span><span class="op">(</span><span class="va">result</span><span class="op">)</span><span class="op">)</span>                    <span class="co"># sync: validate now</span></span>
 <span><span class="op">}</span></span></code></pre></div>
 <p>A tidy way to capture that branch once is a tiny helper (drop it in your package):</p>
-<div class="sourceCode" id="cb13"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb14"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">then_or_now</span> <span class="op">&lt;-</span> <span class="kw">function</span><span class="op">(</span><span class="va">x</span>, <span class="va">fn</span>, <span class="va">is_async</span><span class="op">)</span> <span class="op">{</span></span>
 <span>  <span class="kw">if</span> <span class="op">(</span><span class="va">is_async</span><span class="op">)</span> <span class="kw"><a href="https://rdrr.io/r/base/function.html" class="external-link">return</a></span><span class="op">(</span><span class="fu">promises</span><span class="fu">::</span><span class="fu">then</span><span class="op">(</span><span class="va">x</span>, <span class="va">fn</span><span class="op">)</span><span class="op">)</span></span>
 <span>  <span class="kw"><a href="https://rdrr.io/r/base/function.html" class="external-link">return</a></span><span class="op">(</span><span class="fu">fn</span><span class="op">(</span><span class="va">x</span><span class="op">)</span><span class="op">)</span></span>
@@ -464,7 +480,7 @@
 </h2>
 <p>Repeating the same shape across many functions is tedious and drifts. Declare it once with <code>@type</code> and reference it by name anywhere a type appears.</p>
 <p>Define (anywhere — e.g. <code>R/types.R</code>):</p>
-<div class="sourceCode" id="cb14"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb15"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co">#' @type OrderAck (data.table) an order acknowledgement:</span></span>
 <span><span class="co">#' - order_id (character) the exchange id.</span></span>
 <span><span class="co">#' - status (scalar&lt;character in c("FILLED", "REJECTED")&gt;) outcome.</span></span>
@@ -473,7 +489,7 @@
 <span><span class="co">#' @type Bps (scalar&lt;numeric in [0, Inf[&gt;)</span></span>
 <span><span class="cn">NULL</span></span></code></pre></div>
 <p>Use anywhere a type goes:</p>
-<div class="sourceCode" id="cb15"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb16"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co">#' @param ack (OrderAck) the ack.</span></span>
 <span><span class="co">#' @param slippage (Bps) allowed slippage.</span></span>
 <span><span class="co">#' @return (promise&lt;OrderAck&gt;) the ack, async.</span></span>
@@ -534,7 +550,7 @@
 <div class="section level2">
 <h2 id="citation">Citation<a class="anchor" aria-label="anchor" href="#citation"></a>
 </h2>
-<div class="sourceCode" id="cb16"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb17"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/utils/citation.html" class="external-link">citation</a></span><span class="op">(</span><span class="st">"roxyassert"</span><span class="op">)</span></span></code></pre></div>
 </div>
 </div>

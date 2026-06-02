@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">roxyassert</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.4.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.5.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -32,9 +32,14 @@
 <div class="row">
   <main id="main" class="col-md-9"><div class="page-header">
       <img src="../logo.png" class="logo" alt=""><h1>Changelog</h1>
-      <small>Source: <a href="https://github.com/dereckscompany/roxyassert/blob/v0.4.0/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
+      <small>Source: <a href="https://github.com/dereckscompany/roxyassert/blob/v0.5.0/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
     </div>
 
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.5.0" id="roxyassert-050">roxyassert 0.5.0<a class="anchor" aria-label="anchor" href="#roxyassert-050"></a></h2>
+<ul><li>New <code>count</code> type: a non-negative whole number that accepts both <code>20</code> and <code>20L</code> (lowering to <code>assert_scalar_count</code> / <code>assert_count</code>), unlike <code>integer</code> (strict <code>20L</code>) or <code>numeric</code> (strict double). It is interval-capable (<code>scalar&lt;count in [1, Inf[&gt;</code> is a positive count) but takes no set and no <code>| NA</code> — a count is non-negative and never NA. The vector form needs assert (&gt;= 0.0.8) for <code>assert_count()</code>.</li>
+<li>New <code>@noassert</code> tag: document a parameter’s type without generating its check, for parameters already enforced by a hand-written guard. <code>@noassert &lt;names&gt;</code> exempts the named parameters; a bare <code>@noassert</code> makes the whole function/method documented-only. Naming a parameter that is not documented is an error. Works for plain functions and R6 methods.</li>
+</ul></div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.4.0" id="roxyassert-040">roxyassert 0.4.0<a class="anchor" aria-label="anchor" href="#roxyassert-040"></a></h2>
 <ul><li>New <code>class&lt;Name&gt;</code> type for asserting an object’s class, generating <code>assert_class(x, "Name")</code>. It works for any of R’s object systems (S3, S4, Reference Classes, R6, S7) and for any class you define yourself, and it matches subclasses, so <code>class&lt;AbstractClock&gt;</code> accepts a <code>RealClock</code>. <code>Name</code> is a single class (no <code>pkg::</code> qualifier — name the package in prose if useful).</li>

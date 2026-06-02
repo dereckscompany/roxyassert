@@ -20,7 +20,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">roxyassert</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.4.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.5.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -58,7 +58,7 @@
       <img src="../logo.png" class="logo" alt=""><h1>The roxyassert annotation grammar — complete reference</h1>
             
       
-      <small class="dont-index">Source: <a href="https://github.com/dereckscompany/roxyassert/blob/v0.4.0/vignettes/grammar.Rmd" class="external-link"><code>vignettes/grammar.Rmd</code></a></small>
+      <small class="dont-index">Source: <a href="https://github.com/dereckscompany/roxyassert/blob/v0.5.0/vignettes/grammar.Rmd" class="external-link"><code>vignettes/grammar.Rmd</code></a></small>
       <div class="d-none name"><code>grammar.Rmd</code></div>
     </div>
 
@@ -203,6 +203,17 @@ trust.</li>
 </td>
 </tr>
 <tr class="odd">
+<td><strong>Count</strong></td>
+<td><code>count</code></td>
+<td align="center">✅</td>
+<td align="center">❌</td>
+<td align="center">❌</td>
+<td align="center">✅</td>
+<td>bare / <code>scalar&lt;&gt;</code> /
+<code>vector&lt;&gt;</code>
+</td>
+</tr>
+<tr class="even">
 <td><strong>Wildcard</strong></td>
 <td><code>any</code></td>
 <td align="center">❌</td>
@@ -213,7 +224,7 @@ trust.</li>
 <code>vector&lt;&gt;</code>
 </td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td><strong>Reference</strong></td>
 <td>
 <code>function</code> <code>class&lt;Class&gt;</code>
@@ -225,7 +236,7 @@ trust.</li>
 <td>
 <strong>bare only</strong> (length-1 by nature)</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td><strong>Composite</strong></td>
 <td>
 <code>list</code> <code>data.table</code>
@@ -238,7 +249,7 @@ trust.</li>
 <td>bare, <strong>nested bullets</strong>, or <code>list&lt;T&gt;</code>
 (<code>list</code> only)</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td><strong>Promise</strong></td>
 <td><code>promise&lt;T&gt;</code></td>
 <td align="center">❌</td>
@@ -329,6 +340,9 @@ atom           ::= "integer"     ( "in" ( int_interval  | set ) )?  ( "|" "NA" )
                  | enumerable    ( "in" set )?                      ( "|" "NA" )?
                  | plain                                            ( "|" "NA" )?
                  | "raw"
+                 | "count"       ( "in" int_interval )?
+                   (* count: a non-negative whole number (double OR integer);
+                      whole-number interval bounds like integer; no set, no NA *)
 
 temporal       ::= "Date" | "POSIXct"
 enumerable     ::= "character" | "factor"
@@ -769,39 +783,46 @@ binds to <code>character</code> only — a numeric vector,
 <td>raw vector (no <code>NA</code>)</td>
 </tr>
 <tr class="even">
+<td><code>count</code></td>
+<td>count</td>
+<td>non-negative whole number(s), <code>20</code> or <code>20L</code>
+(<code>assert_scalar_count</code> / <code>assert_count</code>); no
+<code>NA</code>, no set</td>
+</tr>
+<tr class="odd">
 <td><code>any</code></td>
 <td>wildcard</td>
 <td>any R object; no type check (length/nullability only)</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td><code>function</code></td>
 <td>reference</td>
 <td>a function/closure (length 1)</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td><code>class&lt;Class&gt;</code></td>
 <td>reference</td>
 <td>an object whose class is <code>Class</code> — any object system
 (S3/S4/RC/R6/S7), subclasses match (length 1)</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td><code>list</code></td>
 <td>composite</td>
 <td>a list — bare = unconstrained; <code>+ bullets</code> = named record
 (S3); <code>list&lt;T&gt;</code> = homogeneous (every element
 <code>T</code>)</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td><code>data.table</code></td>
 <td>composite</td>
 <td>a <code>data.table</code> (typed/list-columns when refined, S3)</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td><code>data.frame</code></td>
 <td>composite</td>
 <td>a <code>data.frame</code> (typed/list-columns when refined, S3)</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td><code>promise&lt;T&gt;</code></td>
 <td>promise</td>
 <td>a result resolving to <code>T</code>, sync or async (S5)</td>
@@ -845,86 +866,93 @@ list-column) whose every element is <code>T</code>
 <span id="cb2-23"><a href="#cb2-23" tabindex="-1"></a>(scalar<span class="sc">&lt;</span>raw<span class="sc">&gt;</span>)                     <span class="co"># a single byte</span></span>
 <span id="cb2-24"><a href="#cb2-24" tabindex="-1"></a>(scalar<span class="sc">&lt;</span>logical <span class="sc">|</span> <span class="cn">NA</span><span class="sc">&gt;</span>)            <span class="co"># tri-state flag: TRUE / FALSE / NA</span></span>
 <span id="cb2-25"><a href="#cb2-25" tabindex="-1"></a></span>
-<span id="cb2-26"><a href="#cb2-26" tabindex="-1"></a><span class="co"># --- reference types: bare, length-1 by nature ---</span></span>
-<span id="cb2-27"><a href="#cb2-27" tabindex="-1"></a>(<span class="cf">function</span>)                        <span class="co"># a single function/closure</span></span>
-<span id="cb2-28"><a href="#cb2-28" tabindex="-1"></a>(<span class="cf">function</span>?)                       <span class="co"># a function, or NULL</span></span>
-<span id="cb2-29"><a href="#cb2-29" tabindex="-1"></a>(class<span class="sc">&lt;</span>Engine<span class="sc">&gt;</span>)                      <span class="co"># a single object of class Engine (any system)</span></span>
-<span id="cb2-30"><a href="#cb2-30" tabindex="-1"></a>(class<span class="sc">&lt;</span>Engine<span class="sc">&gt;</span> <span class="er">|</span> <span class="cn">NULL</span>)               <span class="co"># an Engine, or NULL</span></span>
-<span id="cb2-31"><a href="#cb2-31" tabindex="-1"></a></span>
-<span id="cb2-32"><a href="#cb2-32" tabindex="-1"></a><span class="co"># --- homogeneous lists: list&lt;T&gt; = every element is T ---</span></span>
-<span id="cb2-33"><a href="#cb2-33" tabindex="-1"></a>(list<span class="sc">&lt;</span>character<span class="sc">&gt;</span>)                 <span class="co"># a list, every element a character vector</span></span>
-<span id="cb2-34"><a href="#cb2-34" tabindex="-1"></a>(list<span class="sc">&lt;</span>scalar<span class="sc">&lt;</span>numeric<span class="sc">&gt;</span><span class="er">&gt;</span>)           <span class="co"># a list of single numbers</span></span>
-<span id="cb2-35"><a href="#cb2-35" tabindex="-1"></a>(list<span class="sc">&lt;</span>class<span class="sc">&lt;</span>Engine<span class="sc">&gt;</span><span class="er">&gt;</span>)                <span class="co"># a list of Engine instances</span></span>
-<span id="cb2-36"><a href="#cb2-36" tabindex="-1"></a>(list<span class="sc">&lt;</span><span class="cf">function</span><span class="sc">&gt;</span>)                  <span class="co"># a list of callbacks</span></span>
-<span id="cb2-37"><a href="#cb2-37" tabindex="-1"></a>(list<span class="sc">&lt;</span>any<span class="sc">&gt;</span>)                       <span class="co"># a list of anything (= bare list at runtime)</span></span>
-<span id="cb2-38"><a href="#cb2-38" tabindex="-1"></a>(list<span class="sc">&lt;</span>data.table<span class="sc">&gt;</span>)                <span class="co"># a list of data.tables</span></span>
-<span id="cb2-39"><a href="#cb2-39" tabindex="-1"></a></span>
-<span id="cb2-40"><a href="#cb2-40" tabindex="-1"></a><span class="co"># --- promise returns: resolved type, sync or async ---</span></span>
-<span id="cb2-41"><a href="#cb2-41" tabindex="-1"></a>(promise<span class="sc">&lt;</span>data.table<span class="sc">&gt;</span>)             <span class="co"># a promise resolving to a data.table</span></span>
-<span id="cb2-42"><a href="#cb2-42" tabindex="-1"></a>(promise<span class="sc">&lt;</span>scalar<span class="sc">&lt;</span>numeric<span class="sc">&gt;</span><span class="er">&gt;</span>)        <span class="co"># a promise resolving to one number</span></span>
-<span id="cb2-43"><a href="#cb2-43" tabindex="-1"></a>(data.table <span class="sc">|</span> promise<span class="sc">&lt;</span>data.table<span class="sc">&gt;</span>)  <span class="co"># a data.table OR a promise of one (sync-or-async)</span></span>
-<span id="cb2-44"><a href="#cb2-44" tabindex="-1"></a></span>
-<span id="cb2-45"><a href="#cb2-45" tabindex="-1"></a><span class="co"># --- vector with explicit length (every atom type) ---</span></span>
-<span id="cb2-46"><a href="#cb2-46" tabindex="-1"></a>(vector<span class="sc">&lt;</span>numeric, <span class="dv">10</span><span class="sc">&gt;</span>)             <span class="co"># exactly 10</span></span>
-<span id="cb2-47"><a href="#cb2-47" tabindex="-1"></a>(vector<span class="sc">&lt;</span>numeric, <span class="dv">1</span>..<span class="dv">10</span><span class="sc">&gt;</span>)          <span class="co"># 1 to 10 inclusive</span></span>
-<span id="cb2-48"><a href="#cb2-48" tabindex="-1"></a>(vector<span class="sc">&lt;</span>integer, <span class="dv">2</span>..<span class="sc">&gt;</span>)            <span class="co"># at least 2</span></span>
-<span id="cb2-49"><a href="#cb2-49" tabindex="-1"></a>(vector<span class="sc">&lt;</span>character, <span class="dv">0</span>..<span class="sc">&gt;</span>)          <span class="co"># any length, including 0</span></span>
-<span id="cb2-50"><a href="#cb2-50" tabindex="-1"></a>(vector<span class="sc">&lt;</span>logical, <span class="dv">3</span><span class="sc">&gt;</span>)              <span class="co"># three flags</span></span>
-<span id="cb2-51"><a href="#cb2-51" tabindex="-1"></a>(vector<span class="sc">&lt;</span>raw, <span class="dv">32</span><span class="sc">&gt;</span>)                 <span class="co"># a 32-byte hash</span></span>
-<span id="cb2-52"><a href="#cb2-52" tabindex="-1"></a>(vector<span class="sc">&lt;</span>factor <span class="cf">in</span> <span class="fu">c</span>(<span class="st">"a"</span>, <span class="st">"b"</span>), <span class="dv">2</span>..<span class="sc">&gt;</span>)               <span class="co"># set + open length</span></span>
-<span id="cb2-53"><a href="#cb2-53" tabindex="-1"></a>(vector<span class="sc">&lt;</span>numeric <span class="cf">in</span> [<span class="dv">0</span>, <span class="dv">1</span>], <span class="dv">1</span>..<span class="sc">&gt;</span>)                   <span class="co"># interval + open-ended length</span></span>
-<span id="cb2-54"><a href="#cb2-54" tabindex="-1"></a>(vector<span class="sc">&lt;</span>Date <span class="cf">in</span> [<span class="fu">as.Date</span>(<span class="st">"2024-01-01"</span>), <span class="fu">as.Date</span>(<span class="st">"2024-12-31"</span>)], <span class="dv">1</span>..<span class="dv">7</span><span class="sc">&gt;</span>)  <span class="co"># rexpr-comma vs length-comma</span></span>
-<span id="cb2-55"><a href="#cb2-55" tabindex="-1"></a></span>
-<span id="cb2-56"><a href="#cb2-56" tabindex="-1"></a><span class="co"># --- intervals (ordered atomics only; -Inf is the low sentinel, Inf the high) ---</span></span>
-<span id="cb2-57"><a href="#cb2-57" tabindex="-1"></a>(scalar<span class="sc">&lt;</span>numeric <span class="cf">in</span> [<span class="dv">0</span>, <span class="dv">1</span>]<span class="sc">&gt;</span>)       <span class="co"># 0 &lt;= x &lt;= 1</span></span>
-<span id="cb2-58"><a href="#cb2-58" tabindex="-1"></a>(scalar<span class="sc">&lt;</span>numeric <span class="cf">in</span> ]<span class="dv">0</span>, <span class="dv">1</span>[<span class="sc">&gt;</span>)       <span class="co"># 0 &lt;  x &lt;  1</span></span>
-<span id="cb2-59"><a href="#cb2-59" tabindex="-1"></a>(scalar<span class="sc">&lt;</span>numeric <span class="cf">in</span> ]<span class="dv">0</span>, <span class="dv">1</span>]<span class="sc">&gt;</span>)       <span class="co"># 0 &lt;  x &lt;= 1</span></span>
-<span id="cb2-60"><a href="#cb2-60" tabindex="-1"></a>(scalar<span class="sc">&lt;</span>numeric <span class="cf">in</span> [<span class="sc">-</span><span class="fl">1.5</span>, <span class="fl">2.5</span>]<span class="sc">&gt;</span>)  <span class="co"># fractional, signed bounds</span></span>
-<span id="cb2-61"><a href="#cb2-61" tabindex="-1"></a>(scalar<span class="sc">&lt;</span>numeric <span class="cf">in</span> ]<span class="dv">0</span>, <span class="cn">Inf</span>[<span class="sc">&gt;</span>)     <span class="co"># x &gt; 0</span></span>
-<span id="cb2-62"><a href="#cb2-62" tabindex="-1"></a>(scalar<span class="sc">&lt;</span>numeric <span class="cf">in</span> ]<span class="sc">-</span><span class="cn">Inf</span>, <span class="dv">0</span>]<span class="sc">&gt;</span>)    <span class="co"># x &lt;= 0</span></span>
-<span id="cb2-63"><a href="#cb2-63" tabindex="-1"></a>(scalar<span class="sc">&lt;</span>integer <span class="cf">in</span> [<span class="dv">1</span>, <span class="cn">Inf</span>[<span class="sc">&gt;</span>)     <span class="co"># x &gt;= 1  (integer bounds are whole numbers)</span></span>
-<span id="cb2-64"><a href="#cb2-64" tabindex="-1"></a>(scalar<span class="sc">&lt;</span>integer <span class="cf">in</span> ]<span class="sc">-</span><span class="cn">Inf</span>, <span class="dv">0</span>]<span class="sc">&gt;</span>)    <span class="co"># x &lt;= 0  (-Inf is the low sentinel)</span></span>
-<span id="cb2-65"><a href="#cb2-65" tabindex="-1"></a>(numeric <span class="cf">in</span> [<span class="dv">0</span>, <span class="dv">1</span>])               <span class="co"># every element in [0, 1]</span></span>
-<span id="cb2-66"><a href="#cb2-66" tabindex="-1"></a>(scalar<span class="sc">&lt;</span>Date <span class="cf">in</span> [<span class="fu">as.Date</span>(<span class="st">"2024-01-01"</span>), <span class="fu">as.Date</span>(<span class="st">"2026-12-31"</span>)]<span class="sc">&gt;</span>)        <span class="co"># bounds are R exprs, verbatim</span></span>
-<span id="cb2-67"><a href="#cb2-67" tabindex="-1"></a>(scalar<span class="sc">&lt;</span>Date <span class="cf">in</span> [<span class="fu">as.Date</span>(<span class="st">"2024-01-01"</span>), <span class="cn">Inf</span>[<span class="sc">&gt;</span>)                          <span class="co"># on or after a date (Inf high sentinel)</span></span>
-<span id="cb2-68"><a href="#cb2-68" tabindex="-1"></a>(scalar<span class="sc">&lt;</span>Date <span class="cf">in</span> ]<span class="sc">-</span><span class="cn">Inf</span>, <span class="fu">as.Date</span>(<span class="st">"2024-12-31"</span>)]<span class="sc">&gt;</span>)                         <span class="co"># on or before a date (-Inf low sentinel)</span></span>
-<span id="cb2-69"><a href="#cb2-69" tabindex="-1"></a>(scalar<span class="sc">&lt;</span>POSIXct <span class="cf">in</span> [<span class="fu">as.POSIXct</span>(<span class="st">"2024-01-01 00:00"</span>, <span class="at">tz =</span> <span class="st">"America/New_York"</span>), <span class="cn">Inf</span>[<span class="sc">&gt;</span>)  <span class="co"># user owns the tz</span></span>
-<span id="cb2-70"><a href="#cb2-70" tabindex="-1"></a>(scalar<span class="sc">&lt;</span>POSIXct <span class="cf">in</span> [lubridate<span class="sc">::</span><span class="fu">ymd_hms</span>(<span class="st">"2024-01-01 00:00:00"</span>), lubridate<span class="sc">::</span><span class="fu">ymd_hms</span>(<span class="st">"2025-01-01 00:00:00"</span>)[<span class="sc">&gt;</span>)  <span class="co"># any constructor</span></span>
-<span id="cb2-71"><a href="#cb2-71" tabindex="-1"></a></span>
-<span id="cb2-72"><a href="#cb2-72" tabindex="-1"></a><span class="co"># --- sets / enums (ordered + enumerable atomics) ---</span></span>
-<span id="cb2-73"><a href="#cb2-73" tabindex="-1"></a>(scalar<span class="sc">&lt;</span>character <span class="cf">in</span> <span class="fu">c</span>(<span class="st">"BUY"</span>, <span class="st">"SELL"</span>)<span class="sc">&gt;</span>)   <span class="co"># inline set, scalar</span></span>
-<span id="cb2-74"><a href="#cb2-74" tabindex="-1"></a>(character <span class="cf">in</span> <span class="fu">c</span>(<span class="st">"BUY"</span>, <span class="st">"SELL"</span>))           <span class="co"># vector, every element in the set</span></span>
-<span id="cb2-75"><a href="#cb2-75" tabindex="-1"></a>(scalar<span class="sc">&lt;</span>character <span class="cf">in</span> ORDER_SIDE<span class="sc">&gt;</span>)         <span class="co"># set from a bare constant name</span></span>
-<span id="cb2-76"><a href="#cb2-76" tabindex="-1"></a>(integer <span class="cf">in</span> <span class="fu">c</span>(<span class="dv">1</span><span class="dt">L</span>, <span class="dv">2</span><span class="dt">L</span>, <span class="dv">3</span><span class="dt">L</span>))                <span class="co"># exact integer enum (bare vector)</span></span>
-<span id="cb2-77"><a href="#cb2-77" tabindex="-1"></a>(scalar<span class="sc">&lt;</span>integer <span class="cf">in</span> <span class="fu">c</span>(<span class="dv">1</span><span class="dt">L</span>, <span class="dv">2</span><span class="dt">L</span>, <span class="dv">3</span><span class="dt">L</span>)<span class="sc">&gt;</span>)        <span class="co"># exact integer enum (scalar)</span></span>
-<span id="cb2-78"><a href="#cb2-78" tabindex="-1"></a>(factor <span class="cf">in</span> <span class="fu">c</span>(<span class="st">"low"</span>, <span class="st">"med"</span>, <span class="st">"high"</span>))       <span class="co"># constrains realised values (footnote 2)</span></span>
-<span id="cb2-79"><a href="#cb2-79" tabindex="-1"></a>(Date <span class="cf">in</span> <span class="fu">c</span>(<span class="fu">as.Date</span>(<span class="st">"2024-01-01"</span>), <span class="fu">as.Date</span>(<span class="st">"2024-06-30"</span>)))   <span class="co"># set elements are R exprs, verbatim</span></span>
-<span id="cb2-80"><a href="#cb2-80" tabindex="-1"></a>(numeric <span class="cf">in</span> <span class="fu">c</span>(<span class="fl">0.25</span>, <span class="fl">0.5</span>, <span class="fl">1.0</span>))            <span class="co"># discouraged: floating-point ==</span></span>
-<span id="cb2-81"><a href="#cb2-81" tabindex="-1"></a></span>
-<span id="cb2-82"><a href="#cb2-82" tabindex="-1"></a><span class="co"># --- NA permission (atomics except raw; default: NA not allowed) ---</span></span>
-<span id="cb2-83"><a href="#cb2-83" tabindex="-1"></a>(numeric <span class="sc">|</span> <span class="cn">NA</span>)                    <span class="co"># numeric vector, NAs allowed</span></span>
-<span id="cb2-84"><a href="#cb2-84" tabindex="-1"></a>(scalar<span class="sc">&lt;</span>numeric <span class="sc">|</span> <span class="cn">NA</span><span class="sc">&gt;</span>)            <span class="co"># one numeric or NA</span></span>
-<span id="cb2-85"><a href="#cb2-85" tabindex="-1"></a>(scalar<span class="sc">&lt;</span>integer <span class="sc">|</span> <span class="cn">NA</span><span class="sc">&gt;</span>)            <span class="co"># one integer or NA</span></span>
-<span id="cb2-86"><a href="#cb2-86" tabindex="-1"></a>(scalar<span class="sc">&lt;</span>POSIXct <span class="sc">|</span> <span class="cn">NA</span><span class="sc">&gt;</span>)            <span class="co"># one timestamp or NA</span></span>
-<span id="cb2-87"><a href="#cb2-87" tabindex="-1"></a>(complex <span class="sc">|</span> <span class="cn">NA</span>)                    <span class="co"># complex vector, NAs allowed</span></span>
-<span id="cb2-88"><a href="#cb2-88" tabindex="-1"></a>(vector<span class="sc">&lt;</span>numeric <span class="sc">|</span> <span class="cn">NA</span>, <span class="dv">10</span><span class="sc">&gt;</span>)        <span class="co"># 10 numerics, NAs allowed</span></span>
-<span id="cb2-89"><a href="#cb2-89" tabindex="-1"></a>(numeric <span class="cf">in</span> [<span class="dv">0</span>, <span class="dv">1</span>] <span class="sc">|</span> <span class="cn">NA</span>)          <span class="co"># constrained + NA-allowed</span></span>
-<span id="cb2-90"><a href="#cb2-90" tabindex="-1"></a>(factor <span class="cf">in</span> <span class="fu">c</span>(<span class="st">"low"</span>, <span class="st">"med"</span>, <span class="st">"high"</span>) <span class="sc">|</span> <span class="cn">NA</span>)   <span class="co"># missing-category factor</span></span>
-<span id="cb2-91"><a href="#cb2-91" tabindex="-1"></a></span>
-<span id="cb2-92"><a href="#cb2-92" tabindex="-1"></a><span class="co"># --- nullable slot (whole argument) ---</span></span>
-<span id="cb2-93"><a href="#cb2-93" tabindex="-1"></a>(scalar<span class="sc">&lt;</span>numeric<span class="sc">&gt;</span>?)                <span class="co"># one numeric, or NULL</span></span>
-<span id="cb2-94"><a href="#cb2-94" tabindex="-1"></a>(scalar<span class="sc">&lt;</span>numeric<span class="sc">&gt;</span> <span class="er">|</span> <span class="cn">NULL</span>)          <span class="co"># identical to the above (use one, not both)</span></span>
-<span id="cb2-95"><a href="#cb2-95" tabindex="-1"></a>(character?)                      <span class="co"># character vector, or NULL</span></span>
-<span id="cb2-96"><a href="#cb2-96" tabindex="-1"></a></span>
-<span id="cb2-97"><a href="#cb2-97" tabindex="-1"></a><span class="co"># --- type unions (slot level) ---</span></span>
-<span id="cb2-98"><a href="#cb2-98" tabindex="-1"></a>(numeric <span class="sc">|</span> character)             <span class="co"># a numeric vector OR a character vector</span></span>
-<span id="cb2-99"><a href="#cb2-99" tabindex="-1"></a>(numeric <span class="sc">|</span> character <span class="sc">|</span> <span class="cn">NA</span>)        <span class="co"># numeric, OR character with NAs allowed</span></span>
-<span id="cb2-100"><a href="#cb2-100" tabindex="-1"></a>(class<span class="sc">&lt;</span>Reader<span class="sc">&gt;</span> <span class="er">|</span> class<span class="sc">&lt;</span>Writer<span class="sc">&gt;</span>)         <span class="co"># either class</span></span>
-<span id="cb2-101"><a href="#cb2-101" tabindex="-1"></a>(data.table <span class="sc">|</span> <span class="cn">NULL</span>)               <span class="co"># a data.table or NULL</span></span>
-<span id="cb2-102"><a href="#cb2-102" tabindex="-1"></a></span>
-<span id="cb2-103"><a href="#cb2-103" tabindex="-1"></a><span class="co"># --- everything at once ---</span></span>
-<span id="cb2-104"><a href="#cb2-104" tabindex="-1"></a>(vector<span class="sc">&lt;</span>numeric <span class="cf">in</span> ]<span class="dv">0</span>, <span class="dv">1</span>] <span class="sc">|</span> <span class="cn">NA</span>, <span class="dv">1</span>..<span class="dv">100</span><span class="sc">&gt;</span>?)</span>
-<span id="cb2-105"><a href="#cb2-105" tabindex="-1"></a><span class="co"># NULL, OR a numeric vector of length 1..100 whose elements lie in (0,1] and may be NA</span></span></code></pre></div>
+<span id="cb2-26"><a href="#cb2-26" tabindex="-1"></a><span class="co"># --- count: a non-negative whole number (accepts 20 or 20L) ---</span></span>
+<span id="cb2-27"><a href="#cb2-27" tabindex="-1"></a>(count)                           <span class="co"># a vector of counts</span></span>
+<span id="cb2-28"><a href="#cb2-28" tabindex="-1"></a>(scalar<span class="sc">&lt;</span>count<span class="sc">&gt;</span>)                   <span class="co"># one count, 0, 1, 2, ...</span></span>
+<span id="cb2-29"><a href="#cb2-29" tabindex="-1"></a>(scalar<span class="sc">&lt;</span>count <span class="cf">in</span> [<span class="dv">1</span>, <span class="cn">Inf</span>[<span class="sc">&gt;</span>)       <span class="co"># a positive count (&gt;= 1)</span></span>
+<span id="cb2-30"><a href="#cb2-30" tabindex="-1"></a>(scalar<span class="sc">&lt;</span>count <span class="cf">in</span> [<span class="dv">1</span>, <span class="cn">Inf</span>[<span class="sc">&gt;</span>?)      <span class="co"># a positive count, or NULL</span></span>
+<span id="cb2-31"><a href="#cb2-31" tabindex="-1"></a>(vector<span class="sc">&lt;</span>count, <span class="dv">3</span><span class="sc">&gt;</span>)                <span class="co"># three counts</span></span>
+<span id="cb2-32"><a href="#cb2-32" tabindex="-1"></a></span>
+<span id="cb2-33"><a href="#cb2-33" tabindex="-1"></a><span class="co"># --- reference types: bare, length-1 by nature ---</span></span>
+<span id="cb2-34"><a href="#cb2-34" tabindex="-1"></a>(<span class="cf">function</span>)                        <span class="co"># a single function/closure</span></span>
+<span id="cb2-35"><a href="#cb2-35" tabindex="-1"></a>(<span class="cf">function</span>?)                       <span class="co"># a function, or NULL</span></span>
+<span id="cb2-36"><a href="#cb2-36" tabindex="-1"></a>(class<span class="sc">&lt;</span>Engine<span class="sc">&gt;</span>)                      <span class="co"># a single object of class Engine (any system)</span></span>
+<span id="cb2-37"><a href="#cb2-37" tabindex="-1"></a>(class<span class="sc">&lt;</span>Engine<span class="sc">&gt;</span> <span class="er">|</span> <span class="cn">NULL</span>)               <span class="co"># an Engine, or NULL</span></span>
+<span id="cb2-38"><a href="#cb2-38" tabindex="-1"></a></span>
+<span id="cb2-39"><a href="#cb2-39" tabindex="-1"></a><span class="co"># --- homogeneous lists: list&lt;T&gt; = every element is T ---</span></span>
+<span id="cb2-40"><a href="#cb2-40" tabindex="-1"></a>(list<span class="sc">&lt;</span>character<span class="sc">&gt;</span>)                 <span class="co"># a list, every element a character vector</span></span>
+<span id="cb2-41"><a href="#cb2-41" tabindex="-1"></a>(list<span class="sc">&lt;</span>scalar<span class="sc">&lt;</span>numeric<span class="sc">&gt;</span><span class="er">&gt;</span>)           <span class="co"># a list of single numbers</span></span>
+<span id="cb2-42"><a href="#cb2-42" tabindex="-1"></a>(list<span class="sc">&lt;</span>class<span class="sc">&lt;</span>Engine<span class="sc">&gt;</span><span class="er">&gt;</span>)                <span class="co"># a list of Engine instances</span></span>
+<span id="cb2-43"><a href="#cb2-43" tabindex="-1"></a>(list<span class="sc">&lt;</span><span class="cf">function</span><span class="sc">&gt;</span>)                  <span class="co"># a list of callbacks</span></span>
+<span id="cb2-44"><a href="#cb2-44" tabindex="-1"></a>(list<span class="sc">&lt;</span>any<span class="sc">&gt;</span>)                       <span class="co"># a list of anything (= bare list at runtime)</span></span>
+<span id="cb2-45"><a href="#cb2-45" tabindex="-1"></a>(list<span class="sc">&lt;</span>data.table<span class="sc">&gt;</span>)                <span class="co"># a list of data.tables</span></span>
+<span id="cb2-46"><a href="#cb2-46" tabindex="-1"></a></span>
+<span id="cb2-47"><a href="#cb2-47" tabindex="-1"></a><span class="co"># --- promise returns: resolved type, sync or async ---</span></span>
+<span id="cb2-48"><a href="#cb2-48" tabindex="-1"></a>(promise<span class="sc">&lt;</span>data.table<span class="sc">&gt;</span>)             <span class="co"># a promise resolving to a data.table</span></span>
+<span id="cb2-49"><a href="#cb2-49" tabindex="-1"></a>(promise<span class="sc">&lt;</span>scalar<span class="sc">&lt;</span>numeric<span class="sc">&gt;</span><span class="er">&gt;</span>)        <span class="co"># a promise resolving to one number</span></span>
+<span id="cb2-50"><a href="#cb2-50" tabindex="-1"></a>(data.table <span class="sc">|</span> promise<span class="sc">&lt;</span>data.table<span class="sc">&gt;</span>)  <span class="co"># a data.table OR a promise of one (sync-or-async)</span></span>
+<span id="cb2-51"><a href="#cb2-51" tabindex="-1"></a></span>
+<span id="cb2-52"><a href="#cb2-52" tabindex="-1"></a><span class="co"># --- vector with explicit length (every atom type) ---</span></span>
+<span id="cb2-53"><a href="#cb2-53" tabindex="-1"></a>(vector<span class="sc">&lt;</span>numeric, <span class="dv">10</span><span class="sc">&gt;</span>)             <span class="co"># exactly 10</span></span>
+<span id="cb2-54"><a href="#cb2-54" tabindex="-1"></a>(vector<span class="sc">&lt;</span>numeric, <span class="dv">1</span>..<span class="dv">10</span><span class="sc">&gt;</span>)          <span class="co"># 1 to 10 inclusive</span></span>
+<span id="cb2-55"><a href="#cb2-55" tabindex="-1"></a>(vector<span class="sc">&lt;</span>integer, <span class="dv">2</span>..<span class="sc">&gt;</span>)            <span class="co"># at least 2</span></span>
+<span id="cb2-56"><a href="#cb2-56" tabindex="-1"></a>(vector<span class="sc">&lt;</span>character, <span class="dv">0</span>..<span class="sc">&gt;</span>)          <span class="co"># any length, including 0</span></span>
+<span id="cb2-57"><a href="#cb2-57" tabindex="-1"></a>(vector<span class="sc">&lt;</span>logical, <span class="dv">3</span><span class="sc">&gt;</span>)              <span class="co"># three flags</span></span>
+<span id="cb2-58"><a href="#cb2-58" tabindex="-1"></a>(vector<span class="sc">&lt;</span>raw, <span class="dv">32</span><span class="sc">&gt;</span>)                 <span class="co"># a 32-byte hash</span></span>
+<span id="cb2-59"><a href="#cb2-59" tabindex="-1"></a>(vector<span class="sc">&lt;</span>factor <span class="cf">in</span> <span class="fu">c</span>(<span class="st">"a"</span>, <span class="st">"b"</span>), <span class="dv">2</span>..<span class="sc">&gt;</span>)               <span class="co"># set + open length</span></span>
+<span id="cb2-60"><a href="#cb2-60" tabindex="-1"></a>(vector<span class="sc">&lt;</span>numeric <span class="cf">in</span> [<span class="dv">0</span>, <span class="dv">1</span>], <span class="dv">1</span>..<span class="sc">&gt;</span>)                   <span class="co"># interval + open-ended length</span></span>
+<span id="cb2-61"><a href="#cb2-61" tabindex="-1"></a>(vector<span class="sc">&lt;</span>Date <span class="cf">in</span> [<span class="fu">as.Date</span>(<span class="st">"2024-01-01"</span>), <span class="fu">as.Date</span>(<span class="st">"2024-12-31"</span>)], <span class="dv">1</span>..<span class="dv">7</span><span class="sc">&gt;</span>)  <span class="co"># rexpr-comma vs length-comma</span></span>
+<span id="cb2-62"><a href="#cb2-62" tabindex="-1"></a></span>
+<span id="cb2-63"><a href="#cb2-63" tabindex="-1"></a><span class="co"># --- intervals (ordered atomics only; -Inf is the low sentinel, Inf the high) ---</span></span>
+<span id="cb2-64"><a href="#cb2-64" tabindex="-1"></a>(scalar<span class="sc">&lt;</span>numeric <span class="cf">in</span> [<span class="dv">0</span>, <span class="dv">1</span>]<span class="sc">&gt;</span>)       <span class="co"># 0 &lt;= x &lt;= 1</span></span>
+<span id="cb2-65"><a href="#cb2-65" tabindex="-1"></a>(scalar<span class="sc">&lt;</span>numeric <span class="cf">in</span> ]<span class="dv">0</span>, <span class="dv">1</span>[<span class="sc">&gt;</span>)       <span class="co"># 0 &lt;  x &lt;  1</span></span>
+<span id="cb2-66"><a href="#cb2-66" tabindex="-1"></a>(scalar<span class="sc">&lt;</span>numeric <span class="cf">in</span> ]<span class="dv">0</span>, <span class="dv">1</span>]<span class="sc">&gt;</span>)       <span class="co"># 0 &lt;  x &lt;= 1</span></span>
+<span id="cb2-67"><a href="#cb2-67" tabindex="-1"></a>(scalar<span class="sc">&lt;</span>numeric <span class="cf">in</span> [<span class="sc">-</span><span class="fl">1.5</span>, <span class="fl">2.5</span>]<span class="sc">&gt;</span>)  <span class="co"># fractional, signed bounds</span></span>
+<span id="cb2-68"><a href="#cb2-68" tabindex="-1"></a>(scalar<span class="sc">&lt;</span>numeric <span class="cf">in</span> ]<span class="dv">0</span>, <span class="cn">Inf</span>[<span class="sc">&gt;</span>)     <span class="co"># x &gt; 0</span></span>
+<span id="cb2-69"><a href="#cb2-69" tabindex="-1"></a>(scalar<span class="sc">&lt;</span>numeric <span class="cf">in</span> ]<span class="sc">-</span><span class="cn">Inf</span>, <span class="dv">0</span>]<span class="sc">&gt;</span>)    <span class="co"># x &lt;= 0</span></span>
+<span id="cb2-70"><a href="#cb2-70" tabindex="-1"></a>(scalar<span class="sc">&lt;</span>integer <span class="cf">in</span> [<span class="dv">1</span>, <span class="cn">Inf</span>[<span class="sc">&gt;</span>)     <span class="co"># x &gt;= 1  (integer bounds are whole numbers)</span></span>
+<span id="cb2-71"><a href="#cb2-71" tabindex="-1"></a>(scalar<span class="sc">&lt;</span>integer <span class="cf">in</span> ]<span class="sc">-</span><span class="cn">Inf</span>, <span class="dv">0</span>]<span class="sc">&gt;</span>)    <span class="co"># x &lt;= 0  (-Inf is the low sentinel)</span></span>
+<span id="cb2-72"><a href="#cb2-72" tabindex="-1"></a>(numeric <span class="cf">in</span> [<span class="dv">0</span>, <span class="dv">1</span>])               <span class="co"># every element in [0, 1]</span></span>
+<span id="cb2-73"><a href="#cb2-73" tabindex="-1"></a>(scalar<span class="sc">&lt;</span>Date <span class="cf">in</span> [<span class="fu">as.Date</span>(<span class="st">"2024-01-01"</span>), <span class="fu">as.Date</span>(<span class="st">"2026-12-31"</span>)]<span class="sc">&gt;</span>)        <span class="co"># bounds are R exprs, verbatim</span></span>
+<span id="cb2-74"><a href="#cb2-74" tabindex="-1"></a>(scalar<span class="sc">&lt;</span>Date <span class="cf">in</span> [<span class="fu">as.Date</span>(<span class="st">"2024-01-01"</span>), <span class="cn">Inf</span>[<span class="sc">&gt;</span>)                          <span class="co"># on or after a date (Inf high sentinel)</span></span>
+<span id="cb2-75"><a href="#cb2-75" tabindex="-1"></a>(scalar<span class="sc">&lt;</span>Date <span class="cf">in</span> ]<span class="sc">-</span><span class="cn">Inf</span>, <span class="fu">as.Date</span>(<span class="st">"2024-12-31"</span>)]<span class="sc">&gt;</span>)                         <span class="co"># on or before a date (-Inf low sentinel)</span></span>
+<span id="cb2-76"><a href="#cb2-76" tabindex="-1"></a>(scalar<span class="sc">&lt;</span>POSIXct <span class="cf">in</span> [<span class="fu">as.POSIXct</span>(<span class="st">"2024-01-01 00:00"</span>, <span class="at">tz =</span> <span class="st">"America/New_York"</span>), <span class="cn">Inf</span>[<span class="sc">&gt;</span>)  <span class="co"># user owns the tz</span></span>
+<span id="cb2-77"><a href="#cb2-77" tabindex="-1"></a>(scalar<span class="sc">&lt;</span>POSIXct <span class="cf">in</span> [lubridate<span class="sc">::</span><span class="fu">ymd_hms</span>(<span class="st">"2024-01-01 00:00:00"</span>), lubridate<span class="sc">::</span><span class="fu">ymd_hms</span>(<span class="st">"2025-01-01 00:00:00"</span>)[<span class="sc">&gt;</span>)  <span class="co"># any constructor</span></span>
+<span id="cb2-78"><a href="#cb2-78" tabindex="-1"></a></span>
+<span id="cb2-79"><a href="#cb2-79" tabindex="-1"></a><span class="co"># --- sets / enums (ordered + enumerable atomics) ---</span></span>
+<span id="cb2-80"><a href="#cb2-80" tabindex="-1"></a>(scalar<span class="sc">&lt;</span>character <span class="cf">in</span> <span class="fu">c</span>(<span class="st">"BUY"</span>, <span class="st">"SELL"</span>)<span class="sc">&gt;</span>)   <span class="co"># inline set, scalar</span></span>
+<span id="cb2-81"><a href="#cb2-81" tabindex="-1"></a>(character <span class="cf">in</span> <span class="fu">c</span>(<span class="st">"BUY"</span>, <span class="st">"SELL"</span>))           <span class="co"># vector, every element in the set</span></span>
+<span id="cb2-82"><a href="#cb2-82" tabindex="-1"></a>(scalar<span class="sc">&lt;</span>character <span class="cf">in</span> ORDER_SIDE<span class="sc">&gt;</span>)         <span class="co"># set from a bare constant name</span></span>
+<span id="cb2-83"><a href="#cb2-83" tabindex="-1"></a>(integer <span class="cf">in</span> <span class="fu">c</span>(<span class="dv">1</span><span class="dt">L</span>, <span class="dv">2</span><span class="dt">L</span>, <span class="dv">3</span><span class="dt">L</span>))                <span class="co"># exact integer enum (bare vector)</span></span>
+<span id="cb2-84"><a href="#cb2-84" tabindex="-1"></a>(scalar<span class="sc">&lt;</span>integer <span class="cf">in</span> <span class="fu">c</span>(<span class="dv">1</span><span class="dt">L</span>, <span class="dv">2</span><span class="dt">L</span>, <span class="dv">3</span><span class="dt">L</span>)<span class="sc">&gt;</span>)        <span class="co"># exact integer enum (scalar)</span></span>
+<span id="cb2-85"><a href="#cb2-85" tabindex="-1"></a>(factor <span class="cf">in</span> <span class="fu">c</span>(<span class="st">"low"</span>, <span class="st">"med"</span>, <span class="st">"high"</span>))       <span class="co"># constrains realised values (footnote 2)</span></span>
+<span id="cb2-86"><a href="#cb2-86" tabindex="-1"></a>(Date <span class="cf">in</span> <span class="fu">c</span>(<span class="fu">as.Date</span>(<span class="st">"2024-01-01"</span>), <span class="fu">as.Date</span>(<span class="st">"2024-06-30"</span>)))   <span class="co"># set elements are R exprs, verbatim</span></span>
+<span id="cb2-87"><a href="#cb2-87" tabindex="-1"></a>(numeric <span class="cf">in</span> <span class="fu">c</span>(<span class="fl">0.25</span>, <span class="fl">0.5</span>, <span class="fl">1.0</span>))            <span class="co"># discouraged: floating-point ==</span></span>
+<span id="cb2-88"><a href="#cb2-88" tabindex="-1"></a></span>
+<span id="cb2-89"><a href="#cb2-89" tabindex="-1"></a><span class="co"># --- NA permission (atomics except raw; default: NA not allowed) ---</span></span>
+<span id="cb2-90"><a href="#cb2-90" tabindex="-1"></a>(numeric <span class="sc">|</span> <span class="cn">NA</span>)                    <span class="co"># numeric vector, NAs allowed</span></span>
+<span id="cb2-91"><a href="#cb2-91" tabindex="-1"></a>(scalar<span class="sc">&lt;</span>numeric <span class="sc">|</span> <span class="cn">NA</span><span class="sc">&gt;</span>)            <span class="co"># one numeric or NA</span></span>
+<span id="cb2-92"><a href="#cb2-92" tabindex="-1"></a>(scalar<span class="sc">&lt;</span>integer <span class="sc">|</span> <span class="cn">NA</span><span class="sc">&gt;</span>)            <span class="co"># one integer or NA</span></span>
+<span id="cb2-93"><a href="#cb2-93" tabindex="-1"></a>(scalar<span class="sc">&lt;</span>POSIXct <span class="sc">|</span> <span class="cn">NA</span><span class="sc">&gt;</span>)            <span class="co"># one timestamp or NA</span></span>
+<span id="cb2-94"><a href="#cb2-94" tabindex="-1"></a>(complex <span class="sc">|</span> <span class="cn">NA</span>)                    <span class="co"># complex vector, NAs allowed</span></span>
+<span id="cb2-95"><a href="#cb2-95" tabindex="-1"></a>(vector<span class="sc">&lt;</span>numeric <span class="sc">|</span> <span class="cn">NA</span>, <span class="dv">10</span><span class="sc">&gt;</span>)        <span class="co"># 10 numerics, NAs allowed</span></span>
+<span id="cb2-96"><a href="#cb2-96" tabindex="-1"></a>(numeric <span class="cf">in</span> [<span class="dv">0</span>, <span class="dv">1</span>] <span class="sc">|</span> <span class="cn">NA</span>)          <span class="co"># constrained + NA-allowed</span></span>
+<span id="cb2-97"><a href="#cb2-97" tabindex="-1"></a>(factor <span class="cf">in</span> <span class="fu">c</span>(<span class="st">"low"</span>, <span class="st">"med"</span>, <span class="st">"high"</span>) <span class="sc">|</span> <span class="cn">NA</span>)   <span class="co"># missing-category factor</span></span>
+<span id="cb2-98"><a href="#cb2-98" tabindex="-1"></a></span>
+<span id="cb2-99"><a href="#cb2-99" tabindex="-1"></a><span class="co"># --- nullable slot (whole argument) ---</span></span>
+<span id="cb2-100"><a href="#cb2-100" tabindex="-1"></a>(scalar<span class="sc">&lt;</span>numeric<span class="sc">&gt;</span>?)                <span class="co"># one numeric, or NULL</span></span>
+<span id="cb2-101"><a href="#cb2-101" tabindex="-1"></a>(scalar<span class="sc">&lt;</span>numeric<span class="sc">&gt;</span> <span class="er">|</span> <span class="cn">NULL</span>)          <span class="co"># identical to the above (use one, not both)</span></span>
+<span id="cb2-102"><a href="#cb2-102" tabindex="-1"></a>(character?)                      <span class="co"># character vector, or NULL</span></span>
+<span id="cb2-103"><a href="#cb2-103" tabindex="-1"></a></span>
+<span id="cb2-104"><a href="#cb2-104" tabindex="-1"></a><span class="co"># --- type unions (slot level) ---</span></span>
+<span id="cb2-105"><a href="#cb2-105" tabindex="-1"></a>(numeric <span class="sc">|</span> character)             <span class="co"># a numeric vector OR a character vector</span></span>
+<span id="cb2-106"><a href="#cb2-106" tabindex="-1"></a>(numeric <span class="sc">|</span> character <span class="sc">|</span> <span class="cn">NA</span>)        <span class="co"># numeric, OR character with NAs allowed</span></span>
+<span id="cb2-107"><a href="#cb2-107" tabindex="-1"></a>(class<span class="sc">&lt;</span>Reader<span class="sc">&gt;</span> <span class="er">|</span> class<span class="sc">&lt;</span>Writer<span class="sc">&gt;</span>)         <span class="co"># either class</span></span>
+<span id="cb2-108"><a href="#cb2-108" tabindex="-1"></a>(data.table <span class="sc">|</span> <span class="cn">NULL</span>)               <span class="co"># a data.table or NULL</span></span>
+<span id="cb2-109"><a href="#cb2-109" tabindex="-1"></a></span>
+<span id="cb2-110"><a href="#cb2-110" tabindex="-1"></a><span class="co"># --- everything at once ---</span></span>
+<span id="cb2-111"><a href="#cb2-111" tabindex="-1"></a>(vector<span class="sc">&lt;</span>numeric <span class="cf">in</span> ]<span class="dv">0</span>, <span class="dv">1</span>] <span class="sc">|</span> <span class="cn">NA</span>, <span class="dv">1</span>..<span class="dv">100</span><span class="sc">&gt;</span>?)</span>
+<span id="cb2-112"><a href="#cb2-112" tabindex="-1"></a><span class="co"># NULL, OR a numeric vector of length 1..100 whose elements lie in (0,1] and may be NA</span></span></code></pre></div>
 </div>
 <div class="section level2">
 <h2 id="demo-1-every-inline-form-on-one-function">8. Demo 1 — every inline form on one function<a class="anchor" aria-label="anchor" href="#demo-1-every-inline-form-on-one-function"></a>
@@ -1189,7 +1217,39 @@ allowed. Put the refinement in the <code>@type</code>, define another
 </ul>
 </div>
 <div class="section level2">
-<h2 id="self-consistency-checklist">13. Self-consistency checklist<a class="anchor" aria-label="anchor" href="#self-consistency-checklist"></a>
+<h2 id="noassert-document-a-type-without-enforcing-it">13. <code>@noassert</code> — document a type without enforcing
+it<a class="anchor" aria-label="anchor" href="#noassert-document-a-type-without-enforcing-it"></a>
+</h2>
+<p>roxyassert couples documentation and enforcement: a
+<code>(type)</code> on a <code>@param</code> both renders in the help
+page <strong>and</strong> generates a check. <code>@noassert</code>
+decouples them — the type is still shown, but no check is generated —
+for a parameter that a hand-written guard already validates (so the
+generated check would be redundant, or would pre-empt the guard’s better
+error message).</p>
+<ul>
+<li>
+<code>@noassert &lt;names&gt;</code> exempts the named parameters
+(comma- or space-separated); their <code>(type)</code> still renders,
+but no <code>assert_*</code> is emitted for them.</li>
+<li>A bare <code>@noassert</code> makes the <strong>whole</strong>
+function (or R6 method) documented-only.</li>
+<li>Naming a parameter that is not documented is an error.</li>
+<li>Exempted parameters are still parsed and validated (a malformed type
+is still caught) — only their code generation is skipped.</li>
+<li>Works for plain functions and R6 methods.</li>
+</ul>
+<div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="co">#' @param symbol (scalar&lt;character&gt;) a normalised BASE/QUOTE pair.</span></span>
+<span><span class="co">#' @noassert symbol</span></span>
+<span><span class="co">#' ...</span></span>
+<span><span class="va">ticker</span> <span class="op">=</span> <span class="kw">function</span><span class="op">(</span><span class="va">symbol</span><span class="op">)</span> <span class="op">{</span></span>
+<span>  <span class="fu">assert_normalised_symbol</span><span class="op">(</span><span class="va">symbol</span><span class="op">)</span>   <span class="co"># the guard enforces; symbol's type is doc-only</span></span>
+<span>  <span class="va">...</span></span>
+<span><span class="op">}</span></span></code></pre></div>
+</div>
+<div class="section level2">
+<h2 id="self-consistency-checklist">14. Self-consistency checklist<a class="anchor" aria-label="anchor" href="#self-consistency-checklist"></a>
 </h2>
 <ul class="task-list">
 <li><label><input type="checkbox">Every base type sits in exactly one
@@ -1284,6 +1344,15 @@ bare / nullable / unioned / inside
 <code>scalar&lt;&gt;</code>/<code>vector&lt;&gt;</code>, with no
 use-site refinement; unknown names, duplicates, built-in shadowing, and
 cycles are errors; package-local.</label></li>
+<li><label><input type="checkbox"><code>count</code> is a non-negative
+whole number accepting <code>20</code> or <code>20L</code>
+(<code>assert_scalar_count</code>/<code>assert_count</code>);
+interval-capable with whole-number bounds; no set, no
+<code>| NA</code>.</label></li>
+<li><label><input type="checkbox"><code>@noassert &lt;names&gt;</code>
+(or bare, for the whole block) documents a type but emits no check;
+exempted params are still validated; an undocumented name is an
+error.</label></li>
 <li><label><input type="checkbox">generated names are
 <code>assert_args_&lt;fn&gt;</code> /
 <code>assert_return_&lt;fn&gt;</code>, and
