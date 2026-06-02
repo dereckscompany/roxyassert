@@ -118,15 +118,16 @@ authoritative specification.
 
 **Default arity follows R: a bare *atomic* type is a *vector* of any
 length.** A scalar (length 1) is declared explicitly with `scalar<...>`.
-(Reference types — `function`/`R6` — are length-1, and a bare composite
-is an unconstrained list/table.)
+(Reference types — `function`/`class<...>` — are length-1, and a bare
+composite is an unconstrained list/table.)
 
 The `<>` generic wraps the **element type** (and, for `vector`, its
 length); the whole-argument modifiers sit outside it:
 
-- **Shape (`<>`):** `scalar<...>`, `vector<..., length>`, `R6<...>`. A
-  **bare *atomic* type is already a vector**, so you only reach for `<>`
-  when you need length 1 (`scalar`), an explicit length, or an R6 class.
+- **Shape (`<>`):** `scalar<...>`, `vector<..., length>`, `class<...>`.
+  A **bare *atomic* type is already a vector**, so you only reach for
+  `<>` when you need length 1 (`scalar`), an explicit length, or a
+  class.
 - **Element constraints:** `in <interval-or-set>` and `| NA` attach to
   the *element type* — **bare or wrapped**. `(numeric in [0, Inf[)` is a
   non-negative numeric vector; `(scalar<numeric in [0, Inf[>)` is a
@@ -137,7 +138,7 @@ length); the whole-argument modifiers sit outside it:
 The bracket / token reference:
 
 - `< >` — generics: `scalar` / `vector` wrap the element type (+
-  length), `R6` names a class.
+  length), `class` names a class.
 - `[ ] / ] [` — a numeric **interval** (`[`/`]` closed, `]`/`[` open,
   ISO/Bourbaki).
 - `in` — a value-constraint on the element type: an interval, or an R
@@ -157,7 +158,7 @@ a **type union**.
 
 The type token in an annotation or a column/field bullet (subject to the
 per-category rules — `scalar<>`/`vector<>` wrap only atomics and `any`;
-`function`/`R6` are reference types written bare;
+`function`/`class<...>` are reference types written bare;
 `list`/`data.table`/`data.frame` are composites written bare or refined
 by nested bullets, and `list` additionally as `list<T>`):
 
@@ -177,13 +178,21 @@ by nested bullets, and `list` additionally as `list<T>`):
 | `function` | a function/closure (a bare, length-1 reference) |
 | `data.table` | a `data.table` (see composite form) |
 | `data.frame` | a `data.frame` (see composite form) |
-| `R6<Class>` | an R6 instance inheriting `Class` (a bare, length-1 reference) |
+| `class<Class>` | an object of class `Class` — any object system (S3/S4/RC/R6/S7), subclasses match (a bare, length-1 reference) |
 | `promise<T>` | a result resolving to `T`, delivered sync or async (see **Asynchronous returns** below) |
 
-`function` and `R6<Class>` are **reference types**: written bare
-(`(function)`, `(R6<Engine>)`), nullable as a slot (`(R6<Engine>?)`),
-never wrapped in `scalar<>`/`vector<>` and never carrying
-`in`/`| NA`/length. Intervals (`in [ , ]`) apply to the ordered types
+`function` and `class<Class>` are **reference types**: written bare
+(`(function)`, `(class<Engine>)`), nullable as a slot
+(`(class<Engine>?)`), never wrapped in `scalar<>`/`vector<>` and never
+carrying `in`/`| NA`/length. `class<Class>` checks the value’s class
+with `inherits()`, so it works for any object system (S3, S4, Reference
+Classes, R6, S7) and matches subclasses (`class<AbstractClock>` accepts
+a `RealClock`). A class name may be package-qualified for readability
+(`class<lubridate::Duration>`); roxyassert keeps only the segment after
+the last `::` — `assert_class(x, "Duration")` — since R’s class system
+is flat. This is the **one** place roxyassert transforms what you wrote:
+everywhere else (interval bounds, set elements) your input is emitted
+verbatim. Intervals (`in [ , ]`) apply to the ordered types
 (`integer`/`numeric`/`Date`/`POSIXct`); sets (`in c(...)`) apply to the
 ordered and enumerable atomics
 (`integer`/`numeric`/`Date`/`POSIXct`/`character`/`factor`) — `complex`,
@@ -209,7 +218,7 @@ for the full per-category rules.
 - nullable slot — `(scalar<numeric>?)` ≡ `(scalar<numeric> | NULL)` (use
   one, not both)
 - union of types — `(numeric | character)`
-- R6 instance — `(R6<Engine>)`
+- object of a class — `(class<Engine>)`
 - any (no type check) — `(any)`
 - homogeneous list / list-column — `(list<character>)` / `(list<any>)`
 
@@ -242,7 +251,7 @@ column declared `(numeric)` that actually holds a list **fails** — the
 intended way to catch an accidental list-column. To declare one *on
 purpose*, type it `list<T>` (each cell a `T`) or `list<any>` (arbitrary
 cells). `list<T>` is also how you write any homogeneous list —
-`list<function>` (callbacks), `list<R6<Model>>` (model objects):
+`list<function>` (callbacks), `list<class<Model>>` (model objects):
 
 ``` r
 #' @return (data.table) rows:
@@ -514,6 +523,10 @@ reference’s *Non-goals* section is the full formal list.)
   `@type` block like any object (add a title/description and `@name`);
   reference it as a markdown link (`[OrderAck]`) for a clickable
   cross-reference. (Auto-generated type pages and links may come later.)
+- **A `class<Name>` name is not verified at `document()` time** —
+  roxyassert emits `assert_class(x, "Name")` blindly, so a typo such as
+  `class<Duraton>` generates without complaint and fails only at
+  runtime.
 
 ## Status
 
