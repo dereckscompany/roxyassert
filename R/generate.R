@@ -15,7 +15,8 @@
   logical = "assert_scalar_logical",
   raw = "assert_scalar_raw",
   Date = "assert_scalar_date",
-  POSIXct = "assert_scalar_datetime"
+  POSIXct = "assert_scalar_datetime",
+  count = "assert_scalar_count"
 )
 .rg_vector_fn <- c(
   integer = "assert_integer",
@@ -26,7 +27,8 @@
   logical = "assert_logical",
   raw = "assert_raw",
   Date = "assert_date",
-  POSIXct = "assert_datetime"
+  POSIXct = "assert_datetime",
+  count = "assert_count"
 )
 .rg_composite_fn <- c(
   list = "assert_list",
@@ -117,7 +119,9 @@ generate_checks <- function(ast, expr) {
     }
   } else {
     checks <- sprintf("%s(%s)", .rg_vector_fn[[base]], expr)
-    if (!na_ok && base != "raw") {
+    # `raw` has no NA; `count` already rejects NA in assert_count — neither needs
+    # a separate no-missing check.
+    if (!na_ok && !(base %in% c("raw", "count"))) {
       checks <- c(checks, sprintf("assert_no_missing_values(%s)", expr))
     }
     if (shape == "vector" && !is.null(node$length)) {

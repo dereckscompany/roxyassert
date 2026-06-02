@@ -105,6 +105,24 @@ test_that("vector with an element set / interval, plus length", {
   )
 })
 
+test_that("count = non-negative whole number (double or integer); no NA, no set", {
+  expect_equal(genf("(scalar<count>)"), "assert_scalar_count(x)")
+  expect_equal(genf("(count)"), "assert_count(x)")
+  expect_equal(
+    genf("(scalar<count in [1, Inf[>)"),
+    c("assert_scalar_count(x)", "assert_between(x, lower = 1)")
+  )
+  expect_equal(
+    genf("(scalar<count in [0, 10]>?)"),
+    c("if (!is.null(x)) {", "  assert_scalar_count(x)", "  assert_between(x, lower = 0, upper = 10)", "}")
+  )
+  expect_equal(genf("(vector<count, 3>)"), c("assert_count(x)", "assert_length(x, 3L)"))
+  # count rejects NA, sets, and fractional bounds (it is a whole, finite, >=0 value)
+  expect_error(parse_annotation("(count | NA)"), "never NA")
+  expect_error(parse_annotation("(count in c(1, 2))"), "set not allowed")
+  expect_error(parse_annotation("(scalar<count in [1.5, 3]>)"), "whole number")
+})
+
 test_that("interval openness, sentinels, and bound types (verbatim)", {
   expect_equal(
     genf("(scalar<numeric in [0, 1]>)"),

@@ -63,6 +63,57 @@ roxy_tag_parse.roxy_tag_type <- function(x) {
   return(x)
 }
 
+# ---- @noassert: document a type without generating its check ----------------
+
+#' @exportS3Method roxygen2::roxy_tag_parse
+roxy_tag_parse.roxy_tag_noassert <- function(x) {
+  x$val <- x$raw
+  return(x)
+}
+
+# Split a @noassert tag's text into the param names it exempts. A bare
+# `@noassert` (no names) means the WHOLE function/method: the type still renders
+# in the docs, but no check is generated. Returns list(all=, names=).
+.ra_noassert_split <- function(text) {
+  text <- trimws(text)
+  if (nchar(text) == 0L) {
+    return(list(all = TRUE, names = character()))
+  }
+  names <- strsplit(text, "[,[:space:]]+")[[1]]
+  return(list(all = FALSE, names = names[nzchar(names)]))
+}
+
+# The @noassert directive for a plain-function block: list(all=, names=).
+.ra_block_noassert <- function(block) {
+  out <- list(all = FALSE, names = character())
+  for (tag in roxygen2::block_get_tags(block, "noassert")) {
+    no <- .ra_noassert_split(.ra_tag_text(tag))
+    out$all <- out$all || no$all
+    out$names <- c(out$names, no$names)
+  }
+  return(out)
+}
+
+# Drop the @noassert-exempted params from a param list (name/ast records), after
+# verifying every exempted name actually IS a documented param of `where`.
+.ra_apply_noassert <- function(params, names, where) {
+  if (length(names) == 0L) {
+    return(params)
+  }
+  have <- vapply(params, function(p) p$name, character(1))
+  unknown <- setdiff(names, have)
+  if (length(unknown) > 0L) {
+    stop(
+      "roxyassert: @noassert ",
+      where,
+      " names a parameter that is not documented: ",
+      paste(unknown, collapse = ", "),
+      call. = FALSE
+    )
+  }
+  return(Filter(function(p) !(p$name %in% names), params))
+}
+
 # Collect every @type definition into a name -> type-node registry, so a bare
 # name in an annotation can be resolved (inline) to its definition. Each
 # definition is then resolved eagerly — references between @types are expanded
@@ -126,10 +177,20 @@ roxy_tag_parse.roxy_tag_type <- function(x) {
     return(character())
   }
 
+  no <- .ra_block_noassert(block)
+  if (isTRUE(no$all)) {
+    # Whole function is documented-only: emit no contract.
+    return(character())
+  }
+
+  # Resolve (validate) every documented @param, then drop the @noassert ones from
+  # code generation — their types are still validated and rendered, just not
+  # enforced (a guard does that).
   params <- lapply(.ra_block_params(block), function(p) {
     p$ast <- .ra_resolve_or_stop(p$ast, registry, sprintf("@param '%s'", p$name))
     return(p)
   })
+  params <- .ra_apply_noassert(params, no$names, sprintf("on %s()", fn))
   ret <- .ra_block_return(block)
   if (!is.null(ret)) {
     ret <- .ra_resolve_or_stop(ret, registry, "@return")
@@ -305,8 +366,9 @@ roxy_tag_parse.roxy_tag_type <- function(x) {
 .ra_r6_collect <- function(block, methods) {
   find_method <- .ra_ns_fn("find_method_for_tag")
   by_method <- list()
+  skips <- list() # method -> list(all=, names=), from @noassert
   for (tag in block$tags) {
-    if (!(tag$tag %in% c("param", "return")) || !.ra_r6_is_method_tag(tag, block)) {
+    if (!(tag$tag %in% c("param", "return", "noassert")) || !.ra_r6_is_method_tag(tag, block)) {
       next
     }
     method <- if (!is.null(tag$r6method)) tag$r6method else find_method(methods, tag)
@@ -323,8 +385,28 @@ roxy_tag_parse.roxy_tag_type <- function(x) {
       split <- .ra_param_split(tag)
       where <- sprintf("@param '%s' of method %s()", split$names, method)
       by_method[[method]]$params <- .ra_add_param(by_method[[method]]$params, split$names, split$text, where)
-    } else {
+    } else if (tag$tag == "return") {
       by_method[[method]]$ret <- .ra_parse_or_stop(.ra_tag_text(tag), sprintf("@return of method %s()", method))
+    } else {
+      no <- .ra_noassert_split(.ra_tag_text(tag))
+      if (is.null(skips[[method]])) {
+        skips[[method]] <- list(all = FALSE, names = character())
+      }
+      skips[[method]]$all <- skips[[method]]$all || no$all
+      skips[[method]]$names <- c(skips[[method]]$names, no$names)
+    }
+  }
+  # Apply @noassert per method: a bare directive makes the whole method
+  # documented-only; named params are dropped from its generated check.
+  for (m in names(skips)) {
+    if (isTRUE(skips[[m]]$all)) {
+      by_method[[m]] <- list(params = list(), ret = NULL)
+    } else {
+      by_method[[m]]$params <- .ra_apply_noassert(
+        by_method[[m]]$params,
+        skips[[m]]$names,
+        sprintf("of method %s()", m)
+      )
     }
   }
   return(by_method)

@@ -174,6 +174,7 @@ by nested bullets, and `list` additionally as `list<T>`):
 | `factor` | factor |
 | `Date` | `Date` vector |
 | `POSIXct` | date-time vector |
+| `count` | non-negative whole number(s), `20` or `20L` — `assert_scalar_count` / `assert_count` (no `NA`, no set; interval-capable) |
 | `any` | any R object — no type check (the wildcard) |
 | `list` | list — bare = unconstrained; `list<T>` = homogeneous; + bullets = named record |
 | `function` | a function/closure (a bare, length-1 reference) |
@@ -216,6 +217,8 @@ for the full per-category rules.
 - nullable slot — `(scalar<numeric>?)` ≡ `(scalar<numeric> | NULL)` (use
   one, not both)
 - union of types — `(numeric | character)`
+- a count, `20` or `20L` — `(scalar<count>)`; a positive count —
+  `(scalar<count in [1, Inf[>)`
 - object of a class — `(class<Engine>)`
 - any (no type check) — `(any)`
 - homogeneous list / list-column — `(list<character>)` / `(list<any>)`
@@ -223,6 +226,23 @@ for the full per-category rules.
 Everything composes. For example `(vector<numeric in ]0, 1] | NA, 10>)`
 means: a numeric vector of length 10, every element in `(0, 1]`, `NA`
 allowed.
+
+### Documenting a type without enforcing it — `@noassert`
+
+A `(type)` both renders in the help page and generates a check. When a
+parameter is already validated by a hand-written guard, add
+**`@noassert`** so the type is still documented but no (redundant) check
+is generated:
+
+``` r
+#' @param symbol (scalar<character>) a normalised BASE/QUOTE pair.
+#' @noassert symbol
+```
+
+`@noassert <names>` exempts the named parameters; a bare `@noassert`
+makes the whole function (or R6 method) documented-only. Exempted
+parameters are still parsed and validated — only their code generation
+is skipped — and naming an undocumented parameter is an error.
 
 ### Composite types — nested bullets
 

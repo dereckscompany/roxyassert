@@ -236,3 +236,60 @@ test_that("a promise<T> @param is allowed — it lowers to the resolved-type che
   # promise-agnostic in @param position too: no then()/is.promise emitted
   expect_false(any(grepl("promises::then|is\\.promise", code)))
 })
+
+test_that("@noassert documents a param's type but generates no check (plain fn)", {
+  text <- "
+    #' F.
+    #' @param a (scalar<character>) one.
+    #' @param b (scalar<numeric>) two.
+    #' @noassert a
+    #' @export
+    f <- function(a, b) NULL
+  "
+  code <- unlist(roxygen2::roc_proc_text(contract_roclet(), text), use.names = FALSE)
+  expect_true(any(grepl("^assert_args_f <- function\\(b\\)", code)))
+  expect_true(any(grepl("assert_scalar_double\\(b\\)", code)))
+  expect_false(any(grepl("assert_scalar_character", code))) # a's check is skipped
+})
+
+test_that("a bare @noassert makes the whole function documented-only", {
+  text <- "
+    #' F.
+    #' @param a (scalar<character>) one.
+    #' @noassert
+    #' @export
+    f <- function(a) NULL
+  "
+  expect_length(unlist(roxygen2::roc_proc_text(contract_roclet(), text), use.names = FALSE), 0L)
+})
+
+test_that("@noassert naming an undocumented param is an error", {
+  text <- "
+    #' F.
+    #' @param a (scalar<character>) one.
+    #' @noassert zzz
+    #' @export
+    f <- function(a) NULL
+  "
+  expect_error(roxygen2::roc_proc_text(contract_roclet(), text), "not documented")
+})
+
+test_that("@noassert works on an R6 method param", {
+  text <- "
+    #' @title Store
+    #' @description A store.
+    Store <- R6::R6Class('Store',
+      public = list(
+        #' @description Get.
+        #' @param keys (character) keys.
+        #' @param limit (scalar<count in [1, Inf[>?) max rows.
+        #' @noassert keys
+        get = function(keys, limit = NULL) NULL
+      )
+    )
+  "
+  code <- unlist(roxygen2::roc_proc_text(contract_roclet(), text), use.names = FALSE)
+  expect_true(any(grepl("^assert_args_Store__get <- function\\(limit\\)", code)))
+  expect_true(any(grepl("assert_scalar_count\\(limit\\)", code)))
+  expect_false(any(grepl("assert_character\\(keys\\)", code))) # keys skipped
+})

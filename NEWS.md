@@ -1,3 +1,17 @@
+# roxyassert 0.5.0
+
+* New `count` type: a non-negative whole number that accepts both `20` and `20L`
+  (lowering to `assert_scalar_count` / `assert_count`), unlike `integer` (strict
+  `20L`) or `numeric` (strict double). It is interval-capable
+  (`scalar<count in [1, Inf[>` is a positive count) but takes no set and no
+  `| NA` — a count is non-negative and never NA. The vector form needs
+  assert (>= 0.0.8) for `assert_count()`.
+* New `@noassert` tag: document a parameter's type without generating its check,
+  for parameters already enforced by a hand-written guard. `@noassert <names>`
+  exempts the named parameters; a bare `@noassert` makes the whole
+  function/method documented-only. Naming a parameter that is not documented is
+  an error. Works for plain functions and R6 methods.
+
 # roxyassert 0.4.0
 
 * New `class<Name>` type for asserting an object's class, generating
