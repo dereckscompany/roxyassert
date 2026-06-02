@@ -36,8 +36,6 @@ test_that("reference types are bare, length-1", {
   expect_equal(genf("(function?)"), c("if (!is.null(x)) {", "  assert_function(x)", "}"))
   expect_equal(genf("(class<Engine>)"), 'assert_class(x, "Engine")')
   expect_equal(genf("(class<Engine> | NULL)"), c("if (!is.null(x)) {", '  assert_class(x, "Engine")', "}"))
-  # a namespace-qualified class name checks only the final segment
-  expect_equal(genf("(class<lubridate::Duration>)"), 'assert_class(x, "Duration")')
 })
 
 test_that("homogeneous list<T>: flat -> assert_list_of, rich -> element loop", {

@@ -75,9 +75,10 @@ test_that("references, wildcard, list<T> and composites", {
   expect_equal(parse_annotation("(function?)")$null_ok, TRUE)
   expect_equal(parse_annotation("(class<Engine>)")$alternatives[[1]]$kind, "class")
   expect_equal(parse_annotation("(class<Engine>)")$alternatives[[1]]$class, "Engine")
-  # a namespace-qualified class name keeps the qualifier in the AST (the
-  # generator drops it; R's class system is flat)
-  expect_equal(parse_annotation("(class<lubridate::Duration>)")$alternatives[[1]]$class, "lubridate::Duration")
+  # a dotted S3 class name is fine; `class<>` names ONE class, so a
+  # namespace-qualified `pkg::Class` is rejected (put the package, if useful, in
+  # the prose description, not the type)
+  expect_equal(parse_annotation("(class<my.Class>)")$alternatives[[1]]$class, "my.Class")
   expect_equal(parse_annotation("(any)")$alternatives[[1]]$kind, "wildcard")
   expect_equal(parse_annotation("(scalar<any>)")$alternatives[[1]]$shape, "scalar")
 
@@ -91,7 +92,7 @@ test_that("references, wildcard, list<T> and composites", {
   # R6<...> was removed in favour of the general class<...>; it no longer parses
   expect_error(parse_annotation("(R6<Engine>)"))
   expect_error(parse_annotation("(class<>)"), "must name a class")
-  expect_error(parse_annotation("(class<pkg::>)"), "must name a class")
+  expect_error(parse_annotation("(class<lubridate::Duration>)"))
 })
 
 test_that("scalar<raw> / vector<raw> / bare factor", {

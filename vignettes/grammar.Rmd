@@ -39,11 +39,7 @@ everywhere.
    `c("BUY", "SELL")`, `ORDER_SIDE`). roxyassert performs no coercion and invents
    no time zone or format. Intervals are ISO/Bourbaki bracket notation around two
    such expressions. Element/atom type agreement is checked for inline literals
-   and taken on trust for opaque expressions (S2). **The one exception** is a
-   `class<pkg::Name>` reference: its `pkg::` qualifier is documentary and is
-   stripped to the final segment for the generated `assert_class()` (R's class
-   system is flat), so it is the sole place roxyassert rewrites your input rather
-   than emitting it verbatim (§6, reference types).
+   and taken on trust for opaque expressions (S2).
 7. **A type may only carry what its category supports** (§2). The grammar makes
    *category-level* nonsense unrepresentable — an interval on `complex`, a set on
    `logical`/`raw`, a fractional or expression bound on `integer` (integer bounds
@@ -95,9 +91,9 @@ arbitrary cells (S3). `complex`/`logical`/`raw` take no set (degenerate or
 floating-point-fragile), and `raw` has no `NA` representation. `function`/`class`
 are bare length-1 references; a `class<Name>` asserts the value's class via
 `inherits()`, so it works for any object system (S3, S4, Reference Classes, R6,
-S7), matches subclasses (`class<AbstractClock>` accepts a `RealClock`), and
-accepts a documentary `pkg::` qualifier (`class<lubridate::Duration>`, dropped
-from the generated check). A composite is refined by nested bullets (a named
+S7) and matches subclasses (`class<AbstractClock>` accepts a `RealClock`).
+`Name` is a single class, not a `pkg::Class` reference (name the source package
+in prose if it helps). A composite is refined by nested bullets (a named
 record / typed columns) or — for `list` — parameterised as `list<T>`, a
 homogeneous list whose every element is the type `T`. All of these are enforced
 by the grammar (§3); the residual element-type rules are static (§4).
@@ -145,7 +141,7 @@ wildcard       ::= "any"
                  | "vector" "<" "any" "," length ">"
                    (* no in / set / | NA: any asserts nothing about type *)
 
-reference      ::= "function" | "class" "<" qualified_ident ">"
+reference      ::= "function" | "class" "<" ident ">"
 composite      ::= "list" ( "<" type ">" )? | "data.table" | "data.frame"
                    (* bare `list`/table = unconstrained, or a named record /
                       typed columns when refined by nested bullets (S1/S3).
@@ -206,10 +202,6 @@ name           ::= ident | "**" ident "**"   (* bold optional, no semantic effec
 int            ::= digit+
 signed_number  ::= "-"? digit+ ( "." digit+ )?
 ident          ::= letter ( letter | digit | "." | "_" )*
-qualified_ident ::= ident ( "::" ident )*
-                   (* a class name, optionally package-qualified; the `pkg::`
-                      qualifier is documentary and is dropped from the generated
-                      assert_class() check, which uses the final segment *)
 rexpr          ::= (* any valid R expression; opaque, emitted verbatim *)
 description    ::= (* free text; the remainder of the same physical line *)
 ```
@@ -255,8 +247,8 @@ Tokenizing rules (so the grammar is deterministic in practice):
   its interval or set is fine) — that single rule is why `scalar<T, n>` is
   rejected.
 - **`>`** closes the innermost open generic (depth-aware); `vector<...>` and
-  `class<...>` each close one level. `class` must be followed by `<Name>` (a
-  `qualified_ident`); a bare `class` is a parse error.
+  `class<...>` each close one level. `class` must be followed by `<Name>` (an
+  `ident`); a bare `class` is a parse error.
 - **`..` is exactly two dots** (maximal munch), valid only in a `length`; a run
   of three or more dots (`...`) is a lexical error. A lone `.` is a decimal point,
   valid only inside a numeric bound; `..` in a bound position and a lone `.` in a
@@ -399,7 +391,7 @@ atom** — the nearest type to its left, at most one per atom. Thus:
 | `raw` | byte atomic | raw vector (no `NA`) |
 | `any` | wildcard | any R object; no type check (length/nullability only) |
 | `function` | reference | a function/closure (length 1) |
-| `class<Class>` | reference | an object whose class is `Class` — any object system (S3/S4/RC/R6/S7), subclasses match; `class<pkg::Class>` allowed (length 1) |
+| `class<Class>` | reference | an object whose class is `Class` — any object system (S3/S4/RC/R6/S7), subclasses match (length 1) |
 | `list` | composite | a list — bare = unconstrained; `+ bullets` = named record (S3); `list<T>` = homogeneous (every element `T`) |
 | `data.table` | composite | a `data.table` (typed/list-columns when refined, S3) |
 | `data.frame` | composite | a `data.frame` (typed/list-columns when refined, S3) |
@@ -442,7 +434,6 @@ element is `T` (e.g. `list<character>`, `list<class<Engine>>`, `list<any>`).
 (function)                        # a single function/closure
 (function?)                       # a function, or NULL
 (class<Engine>)                      # a single object of class Engine (any system)
-(class<lubridate::Duration>)         # qualifier is documentary; checks "Duration"
 (class<Engine> | NULL)               # an Engine, or NULL
 
 # --- homogeneous lists: list<T> = every element is T ---
@@ -716,6 +707,7 @@ AbstractStore <- R6::R6Class(
 # (scalar<function>)              # function is bare: write (function)
 # (vector<function, 3>)           # function is a length-1 reference (scope choice, §12)
 # (class | NULL)                  # class must name a class: class<Name>
+# (class<lubridate::Duration>)    # class<> names ONE class, not pkg::Class
 # (R6<Engine>)                    # R6<> was removed; write class<Engine>
 # (data.table | NA)               # | NA is element-level; not valid on a composite
 # (data.table | data.frame): ...  # S1: bullets need a single bare composite
@@ -773,7 +765,7 @@ model objects are **no longer** here — they are now `list<T>`, e.g.
 - [ ] intervals use square brackets only (`[`/`]` low, `]`/`[` high — closed/open, any combination); never `( )`/`{ }`; one top-level comma; brackets/commas inside an `rexpr` bound are invisible to the tokenizer.
 - [ ] sets are a bare `name_set` (single token) or a `call_set` (call/index/operator expression); never `{ }`; `enum` is not a construct (the word appears only as prose).
 - [ ] `vector<>` requires a length (`,` n / a..b / a..); a length-less `vector<T>` is rejected (use bare `T`); a length appears only inside `vector<>`; `scalar<T, n>` is rejected; `..` is one token, valid only in length position.
-- [ ] `function`/`class<Class>` appear only as bare reference types; `class` always names a class (any object system; `class<pkg::Name>` accepted, qualifier dropped from the check).
+- [ ] `function`/`class<Class>` appear only as bare reference types; `class` always names a single class (any object system; no `pkg::` qualifier — name the package in prose).
 - [ ] `list`/`data.table`/`data.frame` carry no `in`/`| NA`/length/`vector<>`; refined by nested bullets (named record / typed columns, S1/S3) **or**, for `list`, parameterised as `list<T>` where `T` is a single `type` (homogeneous, no slot-union/`| NULL`/`?`, a leaf with no bullets); `list<any>` ≡ bare `list` at runtime; a list-column is typed `list<T>`, and an atomic-typed column rejects list-cells.
 - [ ] everything after `)` is free-text description (roxyassert ignores it); a `:` adjacent to it is cosmetic; canonical style omits it.
 - [ ] `promise<T>` lowers to `T`'s checks with no `then()`/`is.promise()` emitted (the caller wires the async); `T | promise<T>` (same T) collapses to the resolved `T`, nested `promise<promise<T>>` collapses too, and a promise unioned with a *different* type is rejected; `promise<T>` is a whole-slot value, so it is rejected as a list element or inside `scalar<>`/`vector<>` (S5).

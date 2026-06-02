@@ -124,10 +124,11 @@ composite is an unconstrained list/table.)
 The `<>` generic wraps the **element type** (and, for `vector`, its
 length); the whole-argument modifiers sit outside it:
 
-- **Shape (`<>`):** `scalar<...>`, `vector<..., length>`, `class<...>`.
-  A **bare *atomic* type is already a vector**, so you only reach for
-  `<>` when you need length 1 (`scalar`), an explicit length, or a
-  class.
+- **Shape (`<>`):** `scalar<...>` (length 1) and `vector<..., length>`
+  wrap an atomic element. (`class<...>` also uses `<>` but is a
+  *reference type*, not a shape — see Base types.) A **bare *atomic*
+  type is already a vector**, so you only reach for `scalar`/`vector`
+  when you need length 1 or an explicit length.
 - **Element constraints:** `in <interval-or-set>` and `| NA` attach to
   the *element type* — **bare or wrapped**. `(numeric in [0, Inf[)` is a
   non-negative numeric vector; `(scalar<numeric in [0, Inf[>)` is a
@@ -187,12 +188,9 @@ by nested bullets, and `list` additionally as `list<T>`):
 carrying `in`/`| NA`/length. `class<Class>` checks the value’s class
 with `inherits()`, so it works for any object system (S3, S4, Reference
 Classes, R6, S7) and matches subclasses (`class<AbstractClock>` accepts
-a `RealClock`). A class name may be package-qualified for readability
-(`class<lubridate::Duration>`); roxyassert keeps only the segment after
-the last `::` — `assert_class(x, "Duration")` — since R’s class system
-is flat. This is the **one** place roxyassert transforms what you wrote:
-everywhere else (interval bounds, set elements) your input is emitted
-verbatim. Intervals (`in [ , ]`) apply to the ordered types
+a `RealClock`). `Class` names a single class, not a `pkg::Class`
+reference — name the source package in prose if it helps. Intervals
+(`in [ , ]`) apply to the ordered types
 (`integer`/`numeric`/`Date`/`POSIXct`); sets (`in c(...)`) apply to the
 ordered and enumerable atomics
 (`integer`/`numeric`/`Date`/`POSIXct`/`character`/`factor`) — `complex`,

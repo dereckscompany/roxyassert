@@ -53,8 +53,8 @@ test_that("sets: character verbatim, factor via as.character, NA-aware", {
 test_that("references, wildcard, composites", {
   expect_equal(gen("function"), "assert_function(x)")
   expect_equal(gen("class<Engine>"), 'assert_class(x, "Engine")')
-  # a namespace-qualified class name checks only the final segment
-  expect_equal(gen("class<lubridate::Duration>"), 'assert_class(x, "Duration")')
+  # a dotted S3 class name is emitted verbatim
+  expect_equal(gen("class<my.Class>"), 'assert_class(x, "my.Class")')
   expect_equal(gen("any"), character())
   expect_equal(gen("scalar<any>"), "assert_length(x, 1L)")
   expect_equal(gen("vector<any, 3>"), "assert_length(x, 3L)")

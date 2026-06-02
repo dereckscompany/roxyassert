@@ -84,18 +84,6 @@
   return(substr(p$s, start, p$pos - 1L))
 }
 
-# A (possibly namespace-qualified) class name inside `class<...>`, e.g. `Duration`
-# or `lubridate::Duration`. Reads identifier characters plus `:` (for `::`); the
-# qualifier is documentary, the generated assert_class() uses the final segment.
-.ra_read_class_name <- function(p) {
-  .ra_ws(p)
-  start <- p$pos
-  while (!.ra_eof(p) && grepl("[A-Za-z0-9._:]", p$chars[p$pos])) {
-    p$pos <- p$pos + 1L
-  }
-  return(substr(p$s, start, p$pos - 1L))
-}
-
 .ra_peek_word <- function(p) {
   save <- p$pos
   w <- .ra_read_word(p)
@@ -560,9 +548,9 @@ parse_annotation <- function(text) {
       .ra_err(p, "class must name a class: class<Name> (e.g. class<Duration>)")
     }
     p$pos <- p$pos + 1L
-    cls <- .ra_read_class_name(p)
-    if (!grepl("^[A-Za-z.][A-Za-z0-9._]*(::[A-Za-z.][A-Za-z0-9._]*)*$", cls)) {
-      .ra_err(p, "class must name a class: class<Name> or class<pkg::Name>")
+    cls <- .ra_read_word(p)
+    if (cls == "") {
+      .ra_err(p, "class must name a class: class<Name> (e.g. class<Duration>)")
     }
     .ra_expect(p, ">")
     return(list(kind = "class", class = cls))
