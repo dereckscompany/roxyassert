@@ -234,8 +234,12 @@ test_that("S2: inline set element types are checked (no coercion); opaque sets t
   expect_silent(parse_annotation("(integer in pkg::CODES)"))
 })
 
-test_that("S: a both-sentinel interval is rejected (it bounds nothing)", {
-  expect_error(parse_annotation("(scalar<numeric in ]-Inf, Inf[>)"), "degenerate|bounds nothing")
+test_that("S: a both-sentinel interval is rejected unless it states finiteness", {
+  # both closed = bounds nothing (any type); open on a non-numeric = bounds nothing
+  expect_error(parse_annotation("(scalar<numeric in [-Inf, Inf]>)"), "degenerate|bounds nothing")
+  expect_error(parse_annotation("(scalar<integer in ]-Inf, Inf[>)"), "degenerate|bounds nothing")
+  # numeric + open brackets = "any finite double": valid (the one meaningful form)
+  expect_silent(parse_annotation("(scalar<numeric in ]-Inf, Inf[>)"))
 })
 
 # ---- re-review regressions (round 2) -----------------------------------------

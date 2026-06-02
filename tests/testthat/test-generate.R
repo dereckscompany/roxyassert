@@ -26,7 +26,10 @@ test_that("intervals lower to assert_between with the right flags / sentinels", 
   )
   expect_equal(
     gen("scalar<numeric in ]0, Inf[>"),
-    c("assert_scalar_double(x)", "assert_between(x, lower = 0, lower_inclusive = FALSE)")
+    c(
+      "assert_scalar_double(x)",
+      "assert_between(x, lower = 0, lower_inclusive = FALSE, upper = Inf, upper_inclusive = FALSE)"
+    )
   )
   expect_equal(
     gen('scalar<Date in [as.Date("2024-01-01"), Inf[>'),
@@ -35,6 +38,38 @@ test_that("intervals lower to assert_between with the right flags / sentinels", 
   # interval + | NA on a vector: na-aware between, no missing-value rejection
   g <- gen("numeric in [0, 1] | NA")
   expect_equal(g, c("assert_double(x)", "assert_between(x, lower = 0, upper = 1, na_ok = TRUE)"))
+})
+
+test_that("finiteness: an open bracket at a ±Inf sentinel excludes that infinity (numeric only)", {
+  # open high at Inf -> x < Inf (finite above)
+  expect_equal(
+    gen("scalar<numeric in ]0, Inf[>"),
+    c(
+      "assert_scalar_double(x)",
+      "assert_between(x, lower = 0, lower_inclusive = FALSE, upper = Inf, upper_inclusive = FALSE)"
+    )
+  )
+  # open low at -Inf -> x > -Inf (finite below)
+  expect_equal(
+    gen("scalar<numeric in ]-Inf, 5]>"),
+    c("assert_scalar_double(x)", "assert_between(x, lower = -Inf, lower_inclusive = FALSE, upper = 5)")
+  )
+  # both open sentinels -> any finite double
+  expect_equal(
+    gen("scalar<numeric in ]-Inf, Inf[>"),
+    c(
+      "assert_scalar_double(x)",
+      "assert_between(x, lower = -Inf, lower_inclusive = FALSE, upper = Inf, upper_inclusive = FALSE)"
+    )
+  )
+  # CLOSED sentinel still means "no bound that side": omit it
+  expect_equal(
+    gen("scalar<numeric in ]0, Inf]>"),
+    c("assert_scalar_double(x)", "assert_between(x, lower = 0, lower_inclusive = FALSE)")
+  )
+  # integer/count can't be Inf: a sentinel is omitted regardless of bracket
+  expect_equal(gen("scalar<integer in [1, Inf[>"), c("assert_scalar_integer(x)", "assert_between(x, lower = 1)"))
+  expect_equal(gen("scalar<count in [0, Inf[>"), c("assert_scalar_count(x)", "assert_between(x, lower = 0)"))
 })
 
 test_that("vector lengths", {

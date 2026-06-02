@@ -1,3 +1,18 @@
+# roxyassert 0.6.0
+
+* Finiteness via interval brackets: on a `numeric`, an **open** bracket at a
+  `±Inf` sentinel now *excludes* that infinity. `scalar<numeric in ]0, Inf[>` is
+  "finite and > 0" (lowering to `assert_between(x, lower = 0, lower_inclusive =
+  FALSE, upper = Inf, upper_inclusive = FALSE)`), and `]-Inf, Inf[` is "any finite
+  double". A **closed** sentinel still means "no bound that side" and is omitted,
+  so `]0, Inf]` is unchanged. This is `numeric`-only — `integer`/`count` cannot be
+  `Inf` and a `Date`/`POSIXct` `Inf` bound would be a type mismatch, so for those
+  a sentinel is omitted regardless of bracket (no behaviour change).
+* As a consequence, the only degenerate both-`±Inf`-sentinel intervals rejected at
+  parse time are now those that bound nothing: both brackets closed (`[-Inf, Inf]`,
+  any type) or a non-`numeric` with open brackets (`integer in ]-Inf, Inf[`).
+  `numeric in ]-Inf, Inf[` is now valid ("any finite double").
+
 # roxyassert 0.5.0
 
 * New `count` type: a non-negative whole number that accepts both `20` and `20L`
