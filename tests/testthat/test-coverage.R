@@ -34,8 +34,8 @@ test_that("scalar shapes (length 1)", {
 test_that("reference types are bare, length-1", {
   expect_equal(genf("(function)"), "assert_function(x)")
   expect_equal(genf("(function?)"), c("if (!is.null(x)) {", "  assert_function(x)", "}"))
-  expect_equal(genf("(R6<Engine>)"), 'assert_class(x, "Engine")')
-  expect_equal(genf("(R6<Engine> | NULL)"), c("if (!is.null(x)) {", '  assert_class(x, "Engine")', "}"))
+  expect_equal(genf("(class<Engine>)"), 'assert_class(x, "Engine")')
+  expect_equal(genf("(class<Engine> | NULL)"), c("if (!is.null(x)) {", '  assert_class(x, "Engine")', "}"))
 })
 
 test_that("homogeneous list<T>: flat -> assert_list_of, rich -> element loop", {
@@ -46,7 +46,10 @@ test_that("homogeneous list<T>: flat -> assert_list_of, rich -> element loop", {
     genf("(list<scalar<numeric>>)"),
     c("assert_list(x)", "for (.x in x) {", "  assert_scalar_double(.x)", "}")
   )
-  expect_equal(genf("(list<R6<Engine>>)"), c("assert_list(x)", "for (.x in x) {", '  assert_class(.x, "Engine")', "}"))
+  expect_equal(
+    genf("(list<class<Engine>>)"),
+    c("assert_list(x)", "for (.x in x) {", '  assert_class(.x, "Engine")', "}")
+  )
   expect_equal(genf("(list<function>)"), c("assert_list(x)", "for (.x in x) {", "  assert_function(.x)", "}"))
   expect_equal(genf("(list<data.table>)"), c("assert_list(x)", "for (.x in x) {", "  assert_data_table(.x)", "}"))
 })
@@ -263,7 +266,7 @@ test_that("type unions lower to assert_any_of, one thunk per alternative", {
     )
   )
   expect_equal(
-    genf("(R6<Reader> | R6<Writer>)"),
+    genf("(class<Reader> | class<Writer>)"),
     c(
       "assert_any_of(",
       "  x,",
@@ -370,7 +373,9 @@ test_that("every intentionally-invalid form is rejected", {
     "(any | NA)", # any takes no | NA
     "(scalar<function>)", # function is a bare reference
     "(vector<function, 3>)", # function is length-1
-    "(R6 | NULL)", # R6 must name a class
+    "(class)", # class must name a class: class<Name>
+    "(class<> | NULL)", # class must name a class
+    "(scalar<class<Engine>>)", # class is a bare reference
     "(data.table | NA)", # | NA is element-level, not composite
     "(vector<numeric>)" # vector<> requires a length
     # NB: an unknown bare word (e.g. "frobnicate") is NOT a parse error — it is a
@@ -408,7 +413,7 @@ test_that("promise<T> / T | promise<T> lower to the resolved type's checks (no p
 })
 
 test_that("promise<T> over a reference / nullable / nested resolved value", {
-  expect_equal(genf("(promise<R6<Engine>>)"), 'assert_class(x, "Engine")')
+  expect_equal(genf("(promise<class<Engine>>)"), 'assert_class(x, "Engine")')
   expect_equal(genf("(promise<data.table>?)"), c("if (!is.null(x)) {", "  assert_data_table(x)", "}"))
   expect_equal(genf("(promise<promise<scalar<numeric>>>)"), "assert_scalar_double(x)")
 })
@@ -418,7 +423,7 @@ test_that("a refined / reference / composite T | promise<T> union lowers to the 
     genf("(numeric in [0, 1] | promise<numeric in [0, 1]>)"),
     c("assert_double(x)", "assert_no_missing_values(x)", "assert_between(x, lower = 0, upper = 1)")
   )
-  expect_equal(genf("(R6<Engine> | promise<R6<Engine>>)"), 'assert_class(x, "Engine")')
+  expect_equal(genf("(class<Engine> | promise<class<Engine>>)"), 'assert_class(x, "Engine")')
   expect_equal(
     genf("(list<character> | promise<list<character>>)"),
     c("assert_list(x)", 'assert_list_of(x, "character")')

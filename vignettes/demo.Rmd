@@ -81,7 +81,7 @@ AbstractStore <- R6::R6Class(
     #' @description Write one record.
     #' @param key (scalar<character>) the record key.
     #' @param value (scalar<numeric>) the value to store.
-    #' @return (R6<AbstractStore>) self, invisibly (for chaining).
+    #' @return (class<AbstractStore>) self, invisibly (for chaining).
     put = function(key, value) {
       assert_args_AbstractStore__put(key, value)        # generated
       private$.impl_put(key, value)

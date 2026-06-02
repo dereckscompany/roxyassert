@@ -73,7 +73,12 @@ test_that("NA, nullability, and unions", {
 test_that("references, wildcard, list<T> and composites", {
   expect_equal(parse_annotation("(function)")$alternatives[[1]]$kind, "function")
   expect_equal(parse_annotation("(function?)")$null_ok, TRUE)
-  expect_equal(parse_annotation("(R6<Engine>)")$alternatives[[1]]$class, "Engine")
+  expect_equal(parse_annotation("(class<Engine>)")$alternatives[[1]]$kind, "class")
+  expect_equal(parse_annotation("(class<Engine>)")$alternatives[[1]]$class, "Engine")
+  # a dotted S3 class name is fine; `class<>` names ONE class, so a
+  # namespace-qualified `pkg::Class` is rejected (put the package, if useful, in
+  # the prose description, not the type)
+  expect_equal(parse_annotation("(class<my.Class>)")$alternatives[[1]]$class, "my.Class")
   expect_equal(parse_annotation("(any)")$alternatives[[1]]$kind, "wildcard")
   expect_equal(parse_annotation("(scalar<any>)")$alternatives[[1]]$shape, "scalar")
 
@@ -81,8 +86,13 @@ test_that("references, wildcard, list<T> and composites", {
   expect_equal(lt$kind, "composite")
   expect_equal(lt$element$base, "character")
   expect_null(parse_annotation("(data.table)")$alternatives[[1]]$element)
-  expect_equal(parse_annotation("(list<R6<Engine>>)")$alternatives[[1]]$element$kind, "r6")
-  expect_equal(parse_annotation("(R6<Reader> | R6<Writer>)")$alternatives[[2]]$class, "Writer")
+  expect_equal(parse_annotation("(list<class<Engine>>)")$alternatives[[1]]$element$kind, "class")
+  expect_equal(parse_annotation("(class<Reader> | class<Writer>)")$alternatives[[2]]$class, "Writer")
+
+  # R6<...> was removed in favour of the general class<...>; it no longer parses
+  expect_error(parse_annotation("(R6<Engine>)"))
+  expect_error(parse_annotation("(class<>)"), "must name a class")
+  expect_error(parse_annotation("(class<lubridate::Duration>)"))
 })
 
 test_that("scalar<raw> / vector<raw> / bare factor", {
@@ -121,7 +131,7 @@ test_that("invalid annotations are rejected with clear errors", {
   expect_error(parse_annotation("(numeric in ]1, 1[)"), "empty")
   expect_error(parse_annotation("(scalar<numeric> | NA)"), "must sit inside")
   expect_error(parse_annotation("(numeric | NULL?)"), "nothing may follow")
-  expect_error(parse_annotation("(R6)"), "must name a class")
+  expect_error(parse_annotation("(class)"), "must name a class")
   expect_error(parse_annotation("(scalar<numeric, 1>)"), "expected '>'")
 })
 
@@ -326,12 +336,12 @@ test_that("promise normalisation reaches field bullets", {
 test_that("a refined / shape / reference / element promise union collapses iff alternatives are identical", {
   # identical refinements collapse to the refined T
   expect_silent(parse_annotation("(numeric in [0, 1] | promise<numeric in [0, 1]>)"))
-  expect_silent(parse_annotation("(R6<Engine> | promise<R6<Engine>>)"))
+  expect_silent(parse_annotation("(class<Engine> | promise<class<Engine>>)"))
   expect_silent(parse_annotation("(list<character> | promise<list<character>>)"))
-  # any divergence — refinement value, shape, R6 class, list element — is rejected
+  # any divergence — refinement value, shape, class, list element — is rejected
   expect_error(parse_annotation("(numeric in [0, 1] | promise<numeric in ]0, 1[>)"), "same type")
   expect_error(parse_annotation("(numeric | promise<scalar<numeric>>)"), "same type")
-  expect_error(parse_annotation("(R6<A> | promise<R6<B>>)"), "same type")
+  expect_error(parse_annotation("(class<A> | promise<class<B>>)"), "same type")
   expect_error(parse_annotation("(list<numeric> | promise<list<integer>>)"), "same type")
 })
 
