@@ -1,3 +1,19 @@
+# roxyassert 0.7.0
+
+* Type annotations now render correctly in the generated documentation when the
+  package enables markdown. roxygen2's markdown pass lowers a bare-word type
+  fragment such as `<POSIXct>` (in `scalar<POSIXct>`, `class<Duration>`,
+  `promise<T>`, `list<T>`, a nested generic, a nullable `?`, or a union) into raw
+  inline HTML (`\if{html}{\out{<POSIXct>}}`), which a browser then parses as an
+  unknown tag and silently drops — so the type previously showed as just
+  `(scalar)`. `roclet_output` now repairs the generated `man/*.Rd`, rewriting
+  those fragments back to a plain `<Name>` that renders across html/latex/text. No
+  annotation change is needed — types keep their existing `<...>` syntax. The
+  repair is scoped to bare type identifiers glued to their outer category, so
+  roxygen2's own R6 layout tags (`\out{<hr>}`, `<div ...>`, `</div>`) are left
+  untouched, as are fragments that were never mangled (`<numeric in ]0, Inf[>`,
+  comma-bearing vectors).
+
 # roxyassert 0.6.0
 
 * Finiteness via interval brackets: on a `numeric`, an **open** bracket at a
