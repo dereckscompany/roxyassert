@@ -79,7 +79,9 @@ generate_checks <- function(ast, expr) {
     atomic = .rg_atomic(node, expr),
     wildcard = .rg_wildcard(node, expr),
     "function" = sprintf("assert_function(%s)", expr),
-    r6 = sprintf('assert_class(%s, "%s")', expr, node$class),
+    # R's class system is flat: assert_class() checks the final segment. Any
+    # `pkg::` qualifier in `class<pkg::Name>` is documentary and is dropped here.
+    class = sprintf('assert_class(%s, "%s")', expr, sub("^.*::", "", node$class)),
     composite = .rg_composite(node, expr),
     # Defensive only: parse_annotation never yields a promise node here. promise<T>
     # is unwrapped (recursively) at slot and field level, rejected as a list

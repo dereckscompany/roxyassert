@@ -52,7 +52,9 @@ test_that("sets: character verbatim, factor via as.character, NA-aware", {
 
 test_that("references, wildcard, composites", {
   expect_equal(gen("function"), "assert_function(x)")
-  expect_equal(gen("R6<Engine>"), 'assert_class(x, "Engine")')
+  expect_equal(gen("class<Engine>"), 'assert_class(x, "Engine")')
+  # a namespace-qualified class name checks only the final segment
+  expect_equal(gen("class<lubridate::Duration>"), 'assert_class(x, "Duration")')
   expect_equal(gen("any"), character())
   expect_equal(gen("scalar<any>"), "assert_length(x, 1L)")
   expect_equal(gen("vector<any, 3>"), "assert_length(x, 3L)")
@@ -60,7 +62,7 @@ test_that("references, wildcard, composites", {
   expect_equal(gen("list<character>"), c("assert_list(x)", 'assert_list_of(x, "character")'))
   expect_equal(gen("list<any>"), "assert_list(x)")
   # richer list element -> element-wise loop
-  g <- gen("list<R6<Engine>>")
+  g <- gen("list<class<Engine>>")
   expect_equal(g[1], "assert_list(x)")
   expect_true(any(grepl("for \\(.x in x\\)", g)))
   expect_true(any(grepl('assert_class\\(.x, "Engine"\\)', g)))

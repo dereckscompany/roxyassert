@@ -24,7 +24,7 @@
 .ra_na_ok <- c(.ra_ordered_num, .ra_temporal, .ra_enumerable, .ra_plain) # accept `| NA`
 
 # Built-in type words a @type name may not shadow.
-.ra_type_reserved <- c(.ra_atomic, .ra_composite, "any", "function", "R6", "scalar", "vector", "promise")
+.ra_type_reserved <- c(.ra_atomic, .ra_composite, "any", "function", "class", "scalar", "vector", "promise")
 
 # ---- cursor over the annotation text ----------------------------------------
 
@@ -79,6 +79,18 @@
     return("")
   }
   while (!.ra_eof(p) && grepl("[A-Za-z0-9._]", p$chars[p$pos])) {
+    p$pos <- p$pos + 1L
+  }
+  return(substr(p$s, start, p$pos - 1L))
+}
+
+# A (possibly namespace-qualified) class name inside `class<...>`, e.g. `Duration`
+# or `lubridate::Duration`. Reads identifier characters plus `:` (for `::`); the
+# qualifier is documentary, the generated assert_class() uses the final segment.
+.ra_read_class_name <- function(p) {
+  .ra_ws(p)
+  start <- p$pos
+  while (!.ra_eof(p) && grepl("[A-Za-z0-9._:]", p$chars[p$pos])) {
     p$pos <- p$pos + 1L
   }
   return(substr(p$s, start, p$pos - 1L))
@@ -542,18 +554,18 @@ parse_annotation <- function(text) {
   if (w == "function") {
     return(list(kind = "function"))
   }
-  if (w == "R6") {
+  if (w == "class") {
     .ra_ws(p)
     if (.ra_ch(p) != "<") {
-      .ra_err(p, "R6 must name a class: R6<Class>")
+      .ra_err(p, "class must name a class: class<Name> (e.g. class<Duration>)")
     }
     p$pos <- p$pos + 1L
-    cls <- .ra_read_word(p)
-    if (cls == "") {
-      .ra_err(p, "R6 must name a class: R6<Class>")
+    cls <- .ra_read_class_name(p)
+    if (!grepl("^[A-Za-z.][A-Za-z0-9._]*(::[A-Za-z.][A-Za-z0-9._]*)*$", cls)) {
+      .ra_err(p, "class must name a class: class<Name> or class<pkg::Name>")
     }
     .ra_expect(p, ">")
-    return(list(kind = "r6", class = cls))
+    return(list(kind = "class", class = cls))
   }
   if (w == "promise") {
     .ra_ws(p)
