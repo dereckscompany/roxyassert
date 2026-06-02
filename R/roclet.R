@@ -17,6 +17,11 @@
 #' Roxygen: list(markdown = TRUE, roclets = c("namespace", "rd", "roxyassert::contract_roclet"))
 #' ```
 #'
+#' List this roclet **after** `"rd"`. Besides generating the contract helpers it
+#' repairs the `man/*.Rd` that `rd` writes (so typed `@param`/`@return`
+#' annotations render under markdown); that repair is a no-op unless `rd` has
+#' already run.
+#'
 #' @return A roxygen2 roclet object.
 #' @export
 contract_roclet <- function() {
@@ -61,41 +66,45 @@ roclet_output.roclet_contract <- function(x, results, base_path, ...) {
 }
 
 # When a package enables markdown, roxygen2 runs each @param / @return description
-# through commonmark, which reads a bare-word type fragment like `<POSIXct>` as raw
+# through commonmark, which reads a bare-word fragment like `<POSIXct>` as raw
 # inline HTML and lowers it to `\if{html}{\out{<POSIXct>}}`. That raw passthrough
 # then renders as a phantom (unknown) HTML tag, so a browser silently drops it and
-# the declared type shows as just `(scalar)`. Type fragments that carry a space,
-# comma, or bracket (`<numeric in ]0, Inf[>`, `<character, 1..>`) don't look like a
-# tag, so they survive as escaped text and render correctly — hence the visible
-# inconsistency.
+# the declared type shows as just `(scalar)`. A fragment that carries a space,
+# comma, or bracket (`<numeric in ]0, Inf[>`, `<character, 1..>`) isn't tag-shaped,
+# so commonmark leaves it as escaped text and it renders correctly — hence the
+# visible inconsistency.
 #
-# We can't run before markdown (roxygen2 applies it inside its own
-# `roxy_tag_parse.roxy_tag_param`, and R 3.6's S3 lookup finds the owner's own
-# method before any external override), so instead we repair the *output*: rewrite
-# the mangled `\if{html}{\out{<Name>}}` back to a plain `<Name>`, which Rd escapes
-# correctly across html/latex/text — identical to the fragments that were never
-# mangled.
+# We repair the *output*, not the input. roxygen2 applies markdown inside its own
+# `roxy_tag_parse.roxy_tag_param`; that method CAN be overridden (it does dispatch),
+# but doing so globally replaces @param parsing for every package documented while
+# roxyassert is loaded — too invasive — so the contained choice is to rewrite the
+# generated Rd: turn the mangled `\if{html}{\out{<Name>}}` back into a plain
+# `<Name>`, which Rd escapes correctly across html/latex/text, identical to the
+# fragments that were never mangled. (This roclet must run after `rd`, which writes
+# the Rd — see the roclet's @description.)
 #
-# The rewrite is scoped so it only ever touches a type fragment, never prose or
-# roxygen2's own structural HTML:
-#   - it must be glued to one of the grammar's outer category keywords (`scalar`,
-#     `vector`, `class`, `promise`, `list`) — a `<Name>` fragment is only ever
-#     emitted immediately after one of those (including a nested `list<class<T>>`,
-#     where the inner `<T>` follows `class`). Anchoring to that closed set, rather
-#     than to "any preceding non-space", is what keeps the rewrite from touching an
-#     incidental `<tag>` a user wrote in prose (`see foo<bar> below`) or roxygen2's
-#     own R6 layout tags (`\out{<hr>}`, `<div class=..>`, `</div>`, `<a id=..>`);
-#   - the bracketed content must be a bare identifier `<[A-Za-z][A-Za-z0-9]*>`.
-#     That is exactly the shape commonmark treats as an HTML tag (its tag-name rule
-#     is `[A-Za-z][A-Za-z0-9-]*`), and roxyassert type/class names are letters and
-#     digits. A name containing `.`/`_`/space (`<data.table>`, `<numeric in ..>`)
-#     is NOT seen as a tag by commonmark, so it is never mangled and needs no
-#     repair.
-.ra_rd_type_categories <- "scalar|vector|class|promise|list"
+# Scope. The rewrite fires only on a bare identifier `<[A-Za-z][A-Za-z0-9]*>` —
+# exactly commonmark's tag-name shape (`[A-Za-z][A-Za-z0-9-]*`); a name with a
+# `.`/`_`/space (`<data.table>`, `<numeric in ..>`) is never tag-shaped, so it is
+# never mangled — glued, as a WHOLE word (the `\b`), to one of the grammar's outer
+# category keywords: `scalar`, `class`, `promise`, `list` (keep in sync with the
+# outer categories parsed in R/parse.R; `vector` is omitted because a vector is
+# always `vector<T, len>` and the comma stops commonmark mangling it). The `\b`
+# matters: without it the keyword would match as a *suffix* of a longer word
+# (`subclass`, `blacklist`). This covers every emitted type fragment, including a
+# nested `list<class<T>>` (the inner `<T>` follows `class`). The same shape in prose
+# (`a list<Foo> note`) is also rewritten — there it likewise restores visible text
+# instead of a browser-dropped tag, so it is never harmful — but a fragment NOT
+# glued to a keyword (`foo<bar>`) and roxygen2's own structural tags (`\out{<hr>}`,
+# `<div class=..>`, `</div>`) are left untouched. Known limitation: a real inline
+# HTML tag written with no space after a keyword (`scalar<b>bold</b>`) would get its
+# opening tag un-escaped while the closing tag survives; that input is not a type
+# and is vanishingly unlikely, so it is left as-is.
+.ra_rd_type_categories <- "scalar|class|promise|list"
 .ra_rd_type_pattern <- paste0(
-  "(",
+  "(\\b(?:",
   .ra_rd_type_categories,
-  ")",
+  "))",
   "\\\\if\\{html\\}\\{\\\\out\\{(<[A-Za-z][A-Za-z0-9]*>)\\}\\}"
 )
 

@@ -9,10 +9,12 @@
   `(scalar)`. `roclet_output` now repairs the generated `man/*.Rd`, rewriting
   those fragments back to a plain `<Name>` that renders across html/latex/text. No
   annotation change is needed — types keep their existing `<...>` syntax. The
-  repair is scoped to bare type identifiers glued to their outer category, so
-  roxygen2's own R6 layout tags (`\out{<hr>}`, `<div ...>`, `</div>`) are left
-  untouched, as are fragments that were never mangled (`<numeric in ]0, Inf[>`,
-  comma-bearing vectors).
+  repair targets exactly a bare identifier glued, as a whole word, to one of the
+  category keywords `scalar`/`class`/`promise`/`list`, so roxygen2's own R6 layout
+  tags (`\out{<hr>}`, `<div ...>`, `</div>`) and never-mangled fragments
+  (`<numeric in ]0, Inf[>`, comma-bearing vectors) are left untouched. The same
+  shape written in ordinary prose is likewise restored to visible text rather than
+  a dropped tag, which is never harmful.
 
 # roxyassert 0.6.0
 
