@@ -16,10 +16,14 @@
 .ra_temporal <- c("Date", "POSIXct")
 .ra_enumerable <- c("character", "factor")
 .ra_plain <- c("complex", "logical")
-.ra_atomic <- c(.ra_ordered_num, .ra_temporal, .ra_enumerable, .ra_plain, "raw")
+# `count` is a value type, not a storage type: a non-negative whole number that
+# accepts both `20` and `20L` (lowers to assert_scalar_count / assert_count). It
+# is interval-capable (whole-number bounds, like `integer`) but takes no set and
+# no `| NA` — a count is non-negative and never NA by definition.
+.ra_atomic <- c(.ra_ordered_num, .ra_temporal, .ra_enumerable, .ra_plain, "raw", "count")
 .ra_composite <- c("list", "data.table", "data.frame")
 
-.ra_interval_ok <- c(.ra_ordered_num, .ra_temporal) # accept `in [..]`
+.ra_interval_ok <- c(.ra_ordered_num, .ra_temporal, "count") # accept `in [..]`
 .ra_set_ok <- c(.ra_ordered_num, .ra_temporal, .ra_enumerable) # accept `in c(..)`
 .ra_na_ok <- c(.ra_ordered_num, .ra_temporal, .ra_enumerable, .ra_plain) # accept `| NA`
 
@@ -623,7 +627,7 @@ parse_annotation <- function(text) {
     ch <- .ra_ch(p)
     if (ch == "[" || ch == "]") {
       if (!(base %in% .ra_interval_ok)) {
-        .ra_err(p, paste0("interval not allowed on '", base, "' (only integer/numeric/Date/POSIXct)"))
+        .ra_err(p, paste0("interval not allowed on '", base, "' (only integer/numeric/count/Date/POSIXct)"))
       }
       interval <- .ra_parse_interval(p, base)
     } else {
@@ -641,7 +645,8 @@ parse_annotation <- function(text) {
     if (.ra_peek_word(p) == "NA") {
       .ra_read_word(p)
       if (!(base %in% .ra_na_ok)) {
-        .ra_err(p, paste0("'| NA' not allowed on '", base, "' (raw has no NA representation)"))
+        reason <- if (base == "count") "a count is never NA" else "raw has no NA representation"
+        .ra_err(p, paste0("'| NA' not allowed on '", base, "' (", reason, ")"))
       }
       na_ok <- TRUE
     } else {
@@ -712,9 +717,9 @@ parse_annotation <- function(text) {
     }
     return(list(text = "-Inf", sentinel = "-Inf"))
   }
-  if (base == "integer") {
+  if (base == "integer" || base == "count") {
     if (!grepl("^-?[0-9]+$", txt)) {
-      .ra_err(p, paste0("integer bound must be a whole number or -Inf/Inf, got '", txt, "'"))
+      .ra_err(p, paste0("'", base, "' bound must be a whole number or -Inf/Inf, got '", txt, "'"))
     }
   } else if (base %in% .ra_temporal) {
     if (grepl("^-?[0-9]+(\\.[0-9]+)?$", txt)) {
