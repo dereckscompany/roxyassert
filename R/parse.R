@@ -672,10 +672,23 @@ parse_annotation <- function(text) {
   lo <- .ra_classify_bound(lo_txt, base, "low", p)
   hi <- .ra_classify_bound(hi_txt, base, "high", p)
 
-  # A both-sentinel interval imposes no bound and would lower to a bound-less
-  # assert_between() that aborts at runtime; reject it here instead.
-  if (!is.na(lo$sentinel) && !is.na(hi$sentinel)) {
-    .ra_err(p, "degenerate interval ]-Inf, Inf[: both ends are sentinels, so it bounds nothing; drop the 'in [..]'")
+  # Both ends are ±Inf sentinels, so the interval bounds nothing UNLESS it states
+  # finiteness: only `numeric` can actually BE Inf, so a `numeric` with an OPEN
+  # bracket *excludes* that infinity — `]-Inf, Inf[` (any finite double) is
+  # meaningful. Every other both-sentinel form (both closed `[-Inf, Inf]`, or a
+  # non-numeric like `integer in ]-Inf, Inf[`) would lower to a bound-less
+  # assert_between, so reject it.
+  both_sentinel <- !is.na(lo$sentinel) && !is.na(hi$sentinel)
+  finite_meaningful <- identical(base, "numeric") && (lo_open || hi_open)
+  if (both_sentinel && !finite_meaningful) {
+    .ra_err(
+      p,
+      paste0(
+        "degenerate interval: both ends are -Inf/Inf sentinels, so it bounds nothing; ",
+        "drop the 'in [..]'. For a finiteness constraint use open brackets on a ",
+        "numeric: ']-Inf, Inf[' means 'any finite number'"
+      )
+    )
   }
 
   # S4: reject an empty / reversed interval for literal numeric bounds.

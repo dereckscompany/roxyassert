@@ -143,11 +143,31 @@ test_that("interval openness, sentinels, and bound types (verbatim)", {
     genf("(scalar<numeric in [-1.5, 2.5]>)"),
     c("assert_scalar_double(x)", "assert_between(x, lower = -1.5, upper = 2.5)")
   )
+  # numeric + OPEN bracket at a ±Inf sentinel = finiteness: emit the exclusive
+  # Inf bound (x < Inf / x > -Inf). A CLOSED sentinel still means "no bound" (omit).
   expect_equal(
     genf("(scalar<numeric in ]0, Inf[>)"),
+    c(
+      "assert_scalar_double(x)",
+      "assert_between(x, lower = 0, lower_inclusive = FALSE, upper = Inf, upper_inclusive = FALSE)"
+    )
+  )
+  expect_equal(
+    genf("(scalar<numeric in ]0, Inf]>)"),
     c("assert_scalar_double(x)", "assert_between(x, lower = 0, lower_inclusive = FALSE)")
   )
-  expect_equal(genf("(scalar<numeric in ]-Inf, 0]>)"), c("assert_scalar_double(x)", "assert_between(x, upper = 0)"))
+  expect_equal(
+    genf("(scalar<numeric in ]-Inf, 0]>)"),
+    c("assert_scalar_double(x)", "assert_between(x, lower = -Inf, lower_inclusive = FALSE, upper = 0)")
+  )
+  expect_equal(
+    genf("(scalar<numeric in ]-Inf, Inf[>)"),
+    c(
+      "assert_scalar_double(x)",
+      "assert_between(x, lower = -Inf, lower_inclusive = FALSE, upper = Inf, upper_inclusive = FALSE)"
+    )
+  )
+  # integer/count can't be Inf, so a sentinel is omitted regardless of bracket.
   expect_equal(genf("(scalar<integer in [1, Inf[>)"), c("assert_scalar_integer(x)", "assert_between(x, lower = 1)"))
   expect_equal(genf("(scalar<integer in ]-Inf, 0]>)"), c("assert_scalar_integer(x)", "assert_between(x, upper = 0)"))
   expect_equal(
@@ -362,7 +382,10 @@ test_that("composite records, typed columns, list-columns, nullable nesting", {
       '  assert_character(x[["id"]])',
       '  assert_no_missing_values(x[["id"]])',
       '  assert_double(x[["amount"]])',
-      '  assert_between(x[["amount"]], lower = 0, lower_inclusive = FALSE, na_ok = TRUE)',
+      paste0(
+        '  assert_between(x[["amount"]], lower = 0, lower_inclusive = FALSE, ',
+        "upper = Inf, upper_inclusive = FALSE, na_ok = TRUE)"
+      ),
       "}"
     )
   )
@@ -381,7 +404,8 @@ test_that("every intentionally-invalid form is rejected", {
     "(character in c(1, 2))", # character set needs string literals
     "(Date in [0, 1])", # bare-number Date bound (type error)
     "(numeric in [Inf, 0])", # Inf is the high sentinel only
-    "(numeric in ]-Inf, Inf[)", # both-sentinel: bounds nothing
+    "(numeric in [-Inf, Inf])", # both-sentinel, both closed: bounds nothing
+    "(integer in ]-Inf, Inf[)", # both-sentinel on a non-numeric: bounds nothing
     "(numeric in ]1, 1[)", # empty / reversed interval
     "(logical in c(TRUE, FALSE))", # logical takes no set
     "(complex in c(0+0i, 1+0i))", # complex takes no set

@@ -130,7 +130,7 @@ generate_checks <- function(ast, expr) {
   }
 
   if (!is.null(node$interval)) {
-    checks <- c(checks, .rg_interval(node$interval, expr, na_ok))
+    checks <- c(checks, .rg_interval(node$interval, expr, na_ok, base))
   }
   if (!is.null(node$set)) {
     checks <- c(checks, .rg_set(node, expr, na_ok))
@@ -205,15 +205,27 @@ generate_checks <- function(ast, expr) {
   return(sprintf("assert_length_between(%s, %dL, %dL)", expr, length$min, length$max))
 }
 
-.rg_interval <- function(interval, expr, na_ok) {
+.rg_interval <- function(interval, expr, na_ok, base) {
+  # Finiteness via an OPEN bracket at a ±Inf sentinel only makes sense for
+  # `numeric`: a double is the one type that can actually BE Inf. `integer`/
+  # `count` can't, and a `Date`/`POSIXct` bound of `Inf` would be a type mismatch
+  # — so for those, a sentinel (open or closed) is omitted as before.
+  finite_ok <- identical(base, "numeric")
+  emit_lo <- is.na(interval$lo$sentinel) || (finite_ok && isTRUE(interval$lo_open))
+  emit_hi <- is.na(interval$hi$sentinel) || (finite_ok && isTRUE(interval$hi_open))
+
   args <- expr
-  if (is.na(interval$lo$sentinel)) {
+  # A real bound is always emitted. A ±Inf sentinel is emitted ONLY when `numeric`
+  # and its bracket is OPEN: `]0, Inf[` then lowers to `upper = Inf,
+  # upper_inclusive = FALSE`, i.e. x < Inf (finite). A CLOSED sentinel
+  # (`]0, Inf]`) means "no bound that side" and is omitted.
+  if (emit_lo) {
     args <- c(args, sprintf("lower = %s", interval$lo$text))
     if (isTRUE(interval$lo_open)) {
       args <- c(args, "lower_inclusive = FALSE")
     }
   }
-  if (is.na(interval$hi$sentinel)) {
+  if (emit_hi) {
     args <- c(args, sprintf("upper = %s", interval$hi$text))
     if (isTRUE(interval$hi_open)) {
       args <- c(args, "upper_inclusive = FALSE")
