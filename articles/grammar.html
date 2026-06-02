@@ -20,7 +20,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">roxyassert</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.3.1</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.4.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -58,7 +58,7 @@
       <img src="../logo.png" class="logo" alt=""><h1>The roxyassert annotation grammar — complete reference</h1>
             
       
-      <small class="dont-index">Source: <a href="https://github.com/dereckscompany/roxyassert/blob/v0.3.1/vignettes/grammar.Rmd" class="external-link"><code>vignettes/grammar.Rmd</code></a></small>
+      <small class="dont-index">Source: <a href="https://github.com/dereckscompany/roxyassert/blob/v0.4.0/vignettes/grammar.Rmd" class="external-link"><code>vignettes/grammar.Rmd</code></a></small>
       <div class="d-none name"><code>grammar.Rmd</code></div>
     </div>
 
@@ -84,7 +84,7 @@ a bare atomic type); the whole-argument modifiers
 (<code>scalar&lt;...&gt;</code> is the only way to say length 1); a bare
 <em>wildcard</em> (<code>any</code>) is any object; a bare
 <em>reference</em> type
-(<code>function</code>/<code>R6&lt;Class&gt;</code>) is a single
+(<code>function</code>/<code>class&lt;Class&gt;</code>) is a single
 length-1 object; a bare <em>composite</em> is an unconstrained
 <code>list</code>/table (§2, §6).</li>
 <li>
@@ -216,7 +216,7 @@ trust.</li>
 <tr class="even">
 <td><strong>Reference</strong></td>
 <td>
-<code>function</code> <code>R6&lt;Class&gt;</code>
+<code>function</code> <code>class&lt;Class&gt;</code>
 </td>
 <td align="center">❌</td>
 <td align="center">❌</td>
@@ -283,12 +283,18 @@ unconstrained list/record field, or a <code>data.table</code>
 list-column of arbitrary cells (S3).
 <code>complex</code>/<code>logical</code>/<code>raw</code> take no set
 (degenerate or floating-point-fragile), and <code>raw</code> has no
-<code>NA</code> representation. <code>function</code>/<code>R6</code>
-are bare length-1 references. A composite is refined by nested bullets
-(a named record / typed columns) or — for <code>list</code> —
-parameterised as <code>list&lt;T&gt;</code>, a homogeneous list whose
-every element is the type <code>T</code>. All of these are enforced by
-the grammar (§3); the residual element-type rules are static (§4).</p>
+<code>NA</code> representation. <code>function</code>/<code>class</code>
+are bare length-1 references; a <code>class&lt;Name&gt;</code> asserts
+the value’s class via <code><a href="https://rdrr.io/r/base/class.html" class="external-link">inherits()</a></code>, so it works for any
+object system (S3, S4, Reference Classes, R6, S7) and matches subclasses
+(<code>class&lt;AbstractClock&gt;</code> accepts a
+<code>RealClock</code>). <code>Name</code> is a single class, not a
+<code>pkg::Class</code> reference (name the source package in prose if
+it helps). A composite is refined by nested bullets (a named record /
+typed columns) or — for <code>list</code> — parameterised as
+<code>list&lt;T&gt;</code>, a homogeneous list whose every element is
+the type <code>T</code>. All of these are enforced by the grammar (§3);
+the residual element-type rules are static (§4).</p>
 </div>
 <div class="section level2">
 <h2 id="formal-context-free-grammar-ebnf">3. Formal context-free grammar (EBNF)<a class="anchor" aria-label="anchor" href="#formal-context-free-grammar-ebnf"></a>
@@ -333,13 +339,13 @@ wildcard       ::= "any"
                  | "vector" "&lt;" "any" "," length "&gt;"
                    (* no in / set / | NA: any asserts nothing about type *)
 
-reference      ::= "function" | "R6" "&lt;" ident "&gt;"
+reference      ::= "function" | "class" "&lt;" ident "&gt;"
 composite      ::= "list" ( "&lt;" type "&gt;" )? | "data.table" | "data.frame"
                    (* bare `list`/table = unconstrained, or a named record /
                       typed columns when refined by nested bullets (S1/S3).
                       `list&lt;T&gt;` is a HOMOGENEOUS list: EVERY element satisfies the
                       type T — list&lt;character&gt;, list&lt;scalar&lt;numeric&gt;&gt;,
-                      list&lt;R6&lt;Engine&gt;&gt;, list&lt;any&gt;, list&lt;data.table&gt;. T is a `type`
+                      list&lt;class&lt;Engine&gt;&gt;, list&lt;any&gt;, list&lt;data.table&gt;. T is a `type`
                       (no slot-level union / `| NULL` / `?`); a `list&lt;T&gt;` is a leaf
                       and takes no bullets (S1, S3). *)
 promise        ::= "promise" "&lt;" type "&gt;"
@@ -464,9 +470,9 @@ interval or set is fine) — that single rule is why
 <li>
 <strong><code>&gt;</code></strong> closes the innermost open generic
 (depth-aware); <code>vector&lt;...&gt;</code> and
-<code>R6&lt;...&gt;</code> each close one level. <code>R6</code> must be
-followed by <code>&lt;ident&gt;</code>; a bare <code>R6</code> is a
-parse error.</li>
+<code>class&lt;...&gt;</code> each close one level. <code>class</code>
+must be followed by <code>&lt;Name&gt;</code> (an <code>ident</code>); a
+bare <code>class</code> is a parse error.</li>
 <li>
 <strong><code>..</code> is exactly two dots</strong> (maximal
 munch), valid only in a <code>length</code>; a run of three or more dots
@@ -490,7 +496,7 @@ are <code>-</code>; a <code>-</code> inside description text (same line)
 is literal.</li>
 <li>
 <strong>Reference and wildcard shapes</strong> —
-<code>function</code>/<code>R6&lt;Class&gt;</code> are bare length-1
+<code>function</code>/<code>class&lt;Class&gt;</code> are bare length-1
 references (never
 <code>scalar&lt;&gt;</code>/<code>vector&lt;&gt;</code>, never
 <code>in</code>/<code>| NA</code>/length); <code>any</code> takes no
@@ -773,9 +779,10 @@ binds to <code>character</code> only — a numeric vector,
 <td>a function/closure (length 1)</td>
 </tr>
 <tr class="even">
-<td><code>R6&lt;Class&gt;</code></td>
+<td><code>class&lt;Class&gt;</code></td>
 <td>reference</td>
-<td>an R6 instance inheriting <code>Class</code> (length 1)</td>
+<td>an object whose class is <code>Class</code> — any object system
+(S3/S4/RC/R6/S7), subclasses match (length 1)</td>
 </tr>
 <tr class="odd">
 <td><code>list</code></td>
@@ -807,7 +814,7 @@ binds to <code>character</code> only — a numeric vector,
 <code>list&lt;T&gt;</code> is the third form — a homogeneous list (or
 list-column) whose every element is <code>T</code>
 (e.g. <code>list&lt;character&gt;</code>,
-<code>list&lt;R6&lt;Engine&gt;&gt;</code>,
+<code>list&lt;class&lt;Engine&gt;&gt;</code>,
 <code>list&lt;any&gt;</code>).</p>
 </div>
 <div class="section level2">
@@ -841,13 +848,13 @@ list-column) whose every element is <code>T</code>
 <span id="cb2-26"><a href="#cb2-26" tabindex="-1"></a><span class="co"># --- reference types: bare, length-1 by nature ---</span></span>
 <span id="cb2-27"><a href="#cb2-27" tabindex="-1"></a>(<span class="cf">function</span>)                        <span class="co"># a single function/closure</span></span>
 <span id="cb2-28"><a href="#cb2-28" tabindex="-1"></a>(<span class="cf">function</span>?)                       <span class="co"># a function, or NULL</span></span>
-<span id="cb2-29"><a href="#cb2-29" tabindex="-1"></a>(R6<span class="sc">&lt;</span>Engine<span class="sc">&gt;</span>)                      <span class="co"># a single R6 instance inheriting Engine</span></span>
-<span id="cb2-30"><a href="#cb2-30" tabindex="-1"></a>(R6<span class="sc">&lt;</span>Engine<span class="sc">&gt;</span> <span class="er">|</span> <span class="cn">NULL</span>)               <span class="co"># an Engine, or NULL</span></span>
+<span id="cb2-29"><a href="#cb2-29" tabindex="-1"></a>(class<span class="sc">&lt;</span>Engine<span class="sc">&gt;</span>)                      <span class="co"># a single object of class Engine (any system)</span></span>
+<span id="cb2-30"><a href="#cb2-30" tabindex="-1"></a>(class<span class="sc">&lt;</span>Engine<span class="sc">&gt;</span> <span class="er">|</span> <span class="cn">NULL</span>)               <span class="co"># an Engine, or NULL</span></span>
 <span id="cb2-31"><a href="#cb2-31" tabindex="-1"></a></span>
 <span id="cb2-32"><a href="#cb2-32" tabindex="-1"></a><span class="co"># --- homogeneous lists: list&lt;T&gt; = every element is T ---</span></span>
 <span id="cb2-33"><a href="#cb2-33" tabindex="-1"></a>(list<span class="sc">&lt;</span>character<span class="sc">&gt;</span>)                 <span class="co"># a list, every element a character vector</span></span>
 <span id="cb2-34"><a href="#cb2-34" tabindex="-1"></a>(list<span class="sc">&lt;</span>scalar<span class="sc">&lt;</span>numeric<span class="sc">&gt;</span><span class="er">&gt;</span>)           <span class="co"># a list of single numbers</span></span>
-<span id="cb2-35"><a href="#cb2-35" tabindex="-1"></a>(list<span class="sc">&lt;</span>R6<span class="sc">&lt;</span>Engine<span class="sc">&gt;</span><span class="er">&gt;</span>)                <span class="co"># a list of Engine instances</span></span>
+<span id="cb2-35"><a href="#cb2-35" tabindex="-1"></a>(list<span class="sc">&lt;</span>class<span class="sc">&lt;</span>Engine<span class="sc">&gt;</span><span class="er">&gt;</span>)                <span class="co"># a list of Engine instances</span></span>
 <span id="cb2-36"><a href="#cb2-36" tabindex="-1"></a>(list<span class="sc">&lt;</span><span class="cf">function</span><span class="sc">&gt;</span>)                  <span class="co"># a list of callbacks</span></span>
 <span id="cb2-37"><a href="#cb2-37" tabindex="-1"></a>(list<span class="sc">&lt;</span>any<span class="sc">&gt;</span>)                       <span class="co"># a list of anything (= bare list at runtime)</span></span>
 <span id="cb2-38"><a href="#cb2-38" tabindex="-1"></a>(list<span class="sc">&lt;</span>data.table<span class="sc">&gt;</span>)                <span class="co"># a list of data.tables</span></span>
@@ -912,7 +919,7 @@ list-column) whose every element is <code>T</code>
 <span id="cb2-97"><a href="#cb2-97" tabindex="-1"></a><span class="co"># --- type unions (slot level) ---</span></span>
 <span id="cb2-98"><a href="#cb2-98" tabindex="-1"></a>(numeric <span class="sc">|</span> character)             <span class="co"># a numeric vector OR a character vector</span></span>
 <span id="cb2-99"><a href="#cb2-99" tabindex="-1"></a>(numeric <span class="sc">|</span> character <span class="sc">|</span> <span class="cn">NA</span>)        <span class="co"># numeric, OR character with NAs allowed</span></span>
-<span id="cb2-100"><a href="#cb2-100" tabindex="-1"></a>(R6<span class="sc">&lt;</span>Reader<span class="sc">&gt;</span> <span class="er">|</span> R6<span class="sc">&lt;</span>Writer<span class="sc">&gt;</span>)         <span class="co"># either R6 class</span></span>
+<span id="cb2-100"><a href="#cb2-100" tabindex="-1"></a>(class<span class="sc">&lt;</span>Reader<span class="sc">&gt;</span> <span class="er">|</span> class<span class="sc">&lt;</span>Writer<span class="sc">&gt;</span>)         <span class="co"># either class</span></span>
 <span id="cb2-101"><a href="#cb2-101" tabindex="-1"></a>(data.table <span class="sc">|</span> <span class="cn">NULL</span>)               <span class="co"># a data.table or NULL</span></span>
 <span id="cb2-102"><a href="#cb2-102" tabindex="-1"></a></span>
 <span id="cb2-103"><a href="#cb2-103" tabindex="-1"></a><span class="co"># --- everything at once ---</span></span>
@@ -1030,7 +1037,7 @@ list-column) whose every element is <code>T</code>
 <span>    <span class="co">#' @description Write one record; returns self for chaining.</span></span>
 <span>    <span class="co">#' @param key (scalar&lt;character&gt;) the key.</span></span>
 <span>    <span class="co">#' @param value (scalar&lt;numeric&gt; | NULL) the value, or NULL to clear it.</span></span>
-<span>    <span class="co">#' @return (R6&lt;AbstractStore&gt;) self.</span></span>
+<span>    <span class="co">#' @return (class&lt;AbstractStore&gt;) self.</span></span>
 <span>    put <span class="op">=</span> <span class="kw">function</span><span class="op">(</span><span class="va">key</span>, <span class="va">value</span><span class="op">)</span> <span class="op">{</span></span>
 <span>      <span class="fu">assert_args_AbstractStore__put</span><span class="op">(</span><span class="va">key</span>, <span class="va">value</span><span class="op">)</span></span>
 <span>      <span class="va">private</span><span class="op">$</span><span class="fu">.impl_put</span><span class="op">(</span><span class="va">key</span>, <span class="va">value</span><span class="op">)</span></span>
@@ -1074,8 +1081,8 @@ list-column) whose every element is <code>T</code>
 <span id="cb6-14"><a href="#cb6-14" tabindex="-1"></a></span>
 <span id="cb6-15"><a href="#cb6-15" tabindex="-1"></a><span class="co"># reference / wildcard, nullable / unioned</span></span>
 <span id="cb6-16"><a href="#cb6-16" tabindex="-1"></a>(<span class="cf">function</span>?)                       <span class="co"># a function, or NULL</span></span>
-<span id="cb6-17"><a href="#cb6-17" tabindex="-1"></a>(R6<span class="sc">&lt;</span>Engine<span class="sc">&gt;</span> <span class="er">|</span> <span class="cn">NULL</span>)               <span class="co"># an Engine, or NULL</span></span>
-<span id="cb6-18"><a href="#cb6-18" tabindex="-1"></a>(R6<span class="sc">&lt;</span>Reader<span class="sc">&gt;</span> <span class="er">|</span> R6<span class="sc">&lt;</span>Writer<span class="sc">&gt;</span>)         <span class="co"># either class</span></span>
+<span id="cb6-17"><a href="#cb6-17" tabindex="-1"></a>(class<span class="sc">&lt;</span>Engine<span class="sc">&gt;</span> <span class="er">|</span> <span class="cn">NULL</span>)               <span class="co"># an Engine, or NULL</span></span>
+<span id="cb6-18"><a href="#cb6-18" tabindex="-1"></a>(class<span class="sc">&lt;</span>Reader<span class="sc">&gt;</span> <span class="er">|</span> class<span class="sc">&lt;</span>Writer<span class="sc">&gt;</span>)         <span class="co"># either class</span></span>
 <span id="cb6-19"><a href="#cb6-19" tabindex="-1"></a>(any)                             <span class="co"># truly polymorphic argument, unchecked</span></span>
 <span id="cb6-20"><a href="#cb6-20" tabindex="-1"></a></span>
 <span id="cb6-21"><a href="#cb6-21" tabindex="-1"></a><span class="co"># a data.table with list-columns (type the column list&lt;T&gt;)</span></span>
@@ -1113,15 +1120,17 @@ list-column) whose every element is <code>T</code>
 <span id="cb6-53"><a href="#cb6-53" tabindex="-1"></a><span class="co"># (any | NA)                      # any takes no | NA</span></span>
 <span id="cb6-54"><a href="#cb6-54" tabindex="-1"></a><span class="co"># (scalar&lt;function&gt;)              # function is bare: write (function)</span></span>
 <span id="cb6-55"><a href="#cb6-55" tabindex="-1"></a><span class="co"># (vector&lt;function, 3&gt;)           # function is a length-1 reference (scope choice, §12)</span></span>
-<span id="cb6-56"><a href="#cb6-56" tabindex="-1"></a><span class="co"># (R6 | NULL)                     # R6 must name a class: R6&lt;Class&gt;</span></span>
-<span id="cb6-57"><a href="#cb6-57" tabindex="-1"></a><span class="co"># (data.table | NA)               # | NA is element-level; not valid on a composite</span></span>
-<span id="cb6-58"><a href="#cb6-58" tabindex="-1"></a><span class="co"># (data.table | data.frame): ...  # S1: bullets need a single bare composite</span></span>
-<span id="cb6-59"><a href="#cb6-59" tabindex="-1"></a><span class="co"># (vector&lt;numeric&gt;)               # vector&lt;&gt; requires a length — use bare (numeric)</span></span>
-<span id="cb6-60"><a href="#cb6-60" tabindex="-1"></a><span class="co"># (list&lt;numeric&gt;): ...            # S1: list&lt;T&gt; is a leaf and takes no bullets</span></span>
-<span id="cb6-61"><a href="#cb6-61" tabindex="-1"></a><span class="co"># (promise)                       # promise must name its resolved type: promise&lt;T&gt;</span></span>
-<span id="cb6-62"><a href="#cb6-62" tabindex="-1"></a><span class="co"># (numeric | promise&lt;character&gt;)  # S5: a promise union must resolve to one type</span></span>
-<span id="cb6-63"><a href="#cb6-63" tabindex="-1"></a><span class="co"># (list&lt;promise&lt;numeric&gt;&gt;)        # promise&lt;T&gt; is a whole-slot value, not a list element</span></span>
-<span id="cb6-64"><a href="#cb6-64" tabindex="-1"></a><span class="co"># (scalar&lt;promise&lt;numeric&gt;&gt;)      # scalar&lt;&gt;/vector&lt;&gt; wrap an atom or `any`, not a promise</span></span></code></pre></div>
+<span id="cb6-56"><a href="#cb6-56" tabindex="-1"></a><span class="co"># (class | NULL)                  # class must name a class: class&lt;Name&gt;</span></span>
+<span id="cb6-57"><a href="#cb6-57" tabindex="-1"></a><span class="co"># (class&lt;lubridate::Duration&gt;)    # class&lt;&gt; names ONE class, not pkg::Class</span></span>
+<span id="cb6-58"><a href="#cb6-58" tabindex="-1"></a><span class="co"># (R6&lt;Engine&gt;)                    # R6&lt;&gt; was removed; write class&lt;Engine&gt;</span></span>
+<span id="cb6-59"><a href="#cb6-59" tabindex="-1"></a><span class="co"># (data.table | NA)               # | NA is element-level; not valid on a composite</span></span>
+<span id="cb6-60"><a href="#cb6-60" tabindex="-1"></a><span class="co"># (data.table | data.frame): ...  # S1: bullets need a single bare composite</span></span>
+<span id="cb6-61"><a href="#cb6-61" tabindex="-1"></a><span class="co"># (vector&lt;numeric&gt;)               # vector&lt;&gt; requires a length — use bare (numeric)</span></span>
+<span id="cb6-62"><a href="#cb6-62" tabindex="-1"></a><span class="co"># (list&lt;numeric&gt;): ...            # S1: list&lt;T&gt; is a leaf and takes no bullets</span></span>
+<span id="cb6-63"><a href="#cb6-63" tabindex="-1"></a><span class="co"># (promise)                       # promise must name its resolved type: promise&lt;T&gt;</span></span>
+<span id="cb6-64"><a href="#cb6-64" tabindex="-1"></a><span class="co"># (numeric | promise&lt;character&gt;)  # S5: a promise union must resolve to one type</span></span>
+<span id="cb6-65"><a href="#cb6-65" tabindex="-1"></a><span class="co"># (list&lt;promise&lt;numeric&gt;&gt;)        # promise&lt;T&gt; is a whole-slot value, not a list element</span></span>
+<span id="cb6-66"><a href="#cb6-66" tabindex="-1"></a><span class="co"># (scalar&lt;promise&lt;numeric&gt;&gt;)      # scalar&lt;&gt;/vector&lt;&gt; wrap an atom or `any`, not a promise</span></span></code></pre></div>
 </div>
 <div class="section level2">
 <h2 id="non-goals-deliberately-inexpressible">12. Non-goals (deliberately inexpressible)<a class="anchor" aria-label="anchor" href="#non-goals-deliberately-inexpressible"></a>
@@ -1132,7 +1141,7 @@ callbacks, and columns of model objects are <strong>no longer</strong>
 here — they are now <code>list&lt;T&gt;</code>, e.g.
 <code>list&lt;scalar&lt;numeric&gt;&gt;</code>,
 <code>list&lt;function&gt;</code>,
-<code>list&lt;R6&lt;Model&gt;&gt;</code>.)</p>
+<code>list&lt;class&lt;Model&gt;&gt;</code>.)</p>
 <ul>
 <li>
 <strong>Composite cardinality</strong> — “a <code>data.table</code>
@@ -1143,10 +1152,10 @@ in length.</li>
 <li>
 <strong>A <em>vector</em> of reference types</strong> —
 <code>vector&lt;function&gt;</code> /
-<code>vector&lt;R6&lt;...&gt;&gt;</code> are rejected (references are
+<code>vector&lt;class&lt;...&gt;&gt;</code> are rejected (references are
 length-1). A <em>collection</em> of them is fine and expressible:
 <code>list&lt;function&gt;</code>,
-<code>list&lt;R6&lt;Engine&gt;&gt;</code>.</li>
+<code>list&lt;class&lt;Engine&gt;&gt;</code>.</li>
 <li>
 <strong>Positional / unnamed records</strong> — <code>list</code>
 bullets describe <strong>named</strong> fields; a positional (unnamed)
@@ -1163,6 +1172,12 @@ and roxyassert never emits the per-element <code>then()</code> wiring
 (S5). Await the promises (e.g. <code>promises::promise_all</code>) and
 annotate the result as <code>promise&lt;list&lt;T&gt;&gt;</code>. (If
 there’s real demand, a future version could relax this.)</li>
+<li>
+<strong>Verifying that <code>class&lt;Name&gt;</code> names a real
+class</strong> — roxyassert emits <code>assert_class(x, "Name")</code>
+blindly, so a typo (<code>class&lt;Duraton&gt;</code>) generates without
+complaint and fails only at runtime; there is no
+<code>document()</code>-time check that the class exists.</li>
 <li>
 <strong>Refining a named type at the use site</strong> — a
 <code>@type</code> reference (S6) expands to its definition as-is;
@@ -1231,9 +1246,10 @@ a length (<code>,</code> n / a..b / a..); a length-less
 length appears only inside <code>vector&lt;&gt;</code>;
 <code>scalar&lt;T, n&gt;</code> is rejected; <code>..</code> is one
 token, valid only in length position.</label></li>
-<li><label><input type="checkbox"><code>function</code>/<code>R6&lt;Class&gt;</code>
-appear only as bare reference types; <code>R6</code> always names a
-class.</label></li>
+<li><label><input type="checkbox"><code>function</code>/<code>class&lt;Class&gt;</code>
+appear only as bare reference types; <code>class</code> always names a
+single class (any object system; no <code>pkg::</code> qualifier — name
+the package in prose).</label></li>
 <li><label><input type="checkbox"><code>list</code>/<code>data.table</code>/<code>data.frame</code>
 carry no
 <code>in</code>/<code>| NA</code>/length/<code>vector&lt;&gt;</code>;

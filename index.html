@@ -23,7 +23,7 @@
 
     <a class="navbar-brand me-2" href="index.html">roxyassert</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.3.1</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.4.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -143,11 +143,11 @@
 </h2>
 <p>A type annotation is a parenthesised token at the <strong>start</strong> of a <code>@param</code> or <code>@return</code> description. Tags without a leading <code>(...)</code> token are ignored, so adoption is incremental and opt-in.</p>
 <p>This section is the working overview; the <a href="https://dereckscompany.github.io/roxyassert/articles/grammar.html">complete grammar reference</a> (formal EBNF, type categories, precedence, and exhaustive demos) is the authoritative specification.</p>
-<p><strong>Default arity follows R: a bare <em>atomic</em> type is a <em>vector</em> of any length.</strong> A scalar (length 1) is declared explicitly with <code>scalar&lt;...&gt;</code>. (Reference types — <code>function</code>/<code>R6</code> — are length-1, and a bare composite is an unconstrained list/table.)</p>
+<p><strong>Default arity follows R: a bare <em>atomic</em> type is a <em>vector</em> of any length.</strong> A scalar (length 1) is declared explicitly with <code>scalar&lt;...&gt;</code>. (Reference types — <code>function</code>/<code>class&lt;...&gt;</code> — are length-1, and a bare composite is an unconstrained list/table.)</p>
 <p>The <code>&lt;&gt;</code> generic wraps the <strong>element type</strong> (and, for <code>vector</code>, its length); the whole-argument modifiers sit outside it:</p>
 <ul>
 <li>
-<strong>Shape (<code>&lt;&gt;</code>):</strong> <code>scalar&lt;...&gt;</code>, <code>vector&lt;..., length&gt;</code>, <code>R6&lt;...&gt;</code>. A <strong>bare <em>atomic</em> type is already a vector</strong>, so you only reach for <code>&lt;&gt;</code> when you need length 1 (<code>scalar</code>), an explicit length, or an R6 class.</li>
+<strong>Shape (<code>&lt;&gt;</code>):</strong> <code>scalar&lt;...&gt;</code> (length 1) and <code>vector&lt;..., length&gt;</code> wrap an atomic element. (<code>class&lt;...&gt;</code> also uses <code>&lt;&gt;</code> but is a <em>reference type</em>, not a shape — see Base types.) A <strong>bare <em>atomic</em> type is already a vector</strong>, so you only reach for <code>scalar</code>/<code>vector</code> when you need length 1 or an explicit length.</li>
 <li>
 <strong>Element constraints:</strong> <code>in &lt;interval-or-set&gt;</code> and <code>| NA</code> attach to the <em>element type</em> — <strong>bare or wrapped</strong>. <code>(numeric in [0, Inf[)</code> is a non-negative numeric vector; <code>(scalar&lt;numeric in [0, Inf[&gt;)</code> is a single non-negative number.</li>
 <li>
@@ -156,7 +156,7 @@
 <p>The bracket / token reference:</p>
 <ul>
 <li>
-<code>&lt; &gt;</code> — generics: <code>scalar</code> / <code>vector</code> wrap the element type (+ length), <code>R6</code> names a class.</li>
+<code>&lt; &gt;</code> — generics: <code>scalar</code> / <code>vector</code> wrap the element type (+ length), <code>class</code> names a class.</li>
 <li>
 <code>[ ] / ] [</code> — a numeric <strong>interval</strong> (<code>[</code>/<code>]</code> closed, <code>]</code>/<code>[</code> open, ISO/Bourbaki).</li>
 <li>
@@ -176,7 +176,7 @@
 <div class="section level3">
 <h3 id="base-types">Base types<a class="anchor" aria-label="anchor" href="#base-types"></a>
 </h3>
-<p>The type token in an annotation or a column/field bullet (subject to the per-category rules — <code>scalar&lt;&gt;</code>/<code>vector&lt;&gt;</code> wrap only atomics and <code>any</code>; <code>function</code>/<code>R6</code> are reference types written bare; <code>list</code>/<code>data.table</code>/<code>data.frame</code> are composites written bare or refined by nested bullets, and <code>list</code> additionally as <code>list&lt;T&gt;</code>):</p>
+<p>The type token in an annotation or a column/field bullet (subject to the per-category rules — <code>scalar&lt;&gt;</code>/<code>vector&lt;&gt;</code> wrap only atomics and <code>any</code>; <code>function</code>/<code>class&lt;...&gt;</code> are reference types written bare; <code>list</code>/<code>data.table</code>/<code>data.frame</code> are composites written bare or refined by nested bullets, and <code>list</code> additionally as <code>list&lt;T&gt;</code>):</p>
 <table class="table">
 <colgroup>
 <col width="50%">
@@ -246,8 +246,8 @@
 <td>a <code>data.frame</code> (see composite form)</td>
 </tr>
 <tr>
-<td><code>R6&lt;Class&gt;</code></td>
-<td>an R6 instance inheriting <code>Class</code> (a bare, length-1 reference)</td>
+<td><code>class&lt;Class&gt;</code></td>
+<td>an object of class <code>Class</code> — any object system (S3/S4/RC/R6/S7), subclasses match (a bare, length-1 reference)</td>
 </tr>
 <tr>
 <td><code>promise&lt;T&gt;</code></td>
@@ -255,7 +255,7 @@
 </tr>
 </tbody>
 </table>
-<p><code>function</code> and <code>R6&lt;Class&gt;</code> are <strong>reference types</strong>: written bare (<code>(function)</code>, <code>(R6&lt;Engine&gt;)</code>), nullable as a slot (<code>(R6&lt;Engine&gt;?)</code>), never wrapped in <code>scalar&lt;&gt;</code>/<code>vector&lt;&gt;</code> and never carrying <code>in</code>/<code>| NA</code>/length. Intervals (<code>in [ , ]</code>) apply to the ordered types (<code>integer</code>/<code>numeric</code>/<code>Date</code>/<code>POSIXct</code>); sets (<code>in c(...)</code>) apply to the ordered and enumerable atomics (<code>integer</code>/<code>numeric</code>/<code>Date</code>/<code>POSIXct</code>/<code>character</code>/<code>factor</code>) — <code>complex</code>, <code>logical</code>, <code>raw</code>, and <code>any</code> take no set. <code>any</code> asserts nothing about type (length/nullability only). See the <a href="https://dereckscompany.github.io/roxyassert/articles/grammar.html">grammar reference</a> for the full per-category rules.</p>
+<p><code>function</code> and <code>class&lt;Class&gt;</code> are <strong>reference types</strong>: written bare (<code>(function)</code>, <code>(class&lt;Engine&gt;)</code>), nullable as a slot (<code>(class&lt;Engine&gt;?)</code>), never wrapped in <code>scalar&lt;&gt;</code>/<code>vector&lt;&gt;</code> and never carrying <code>in</code>/<code>| NA</code>/length. <code>class&lt;Class&gt;</code> checks the value’s class with <code><a href="https://rdrr.io/r/base/class.html" class="external-link">inherits()</a></code>, so it works for any object system (S3, S4, Reference Classes, R6, S7) and matches subclasses (<code>class&lt;AbstractClock&gt;</code> accepts a <code>RealClock</code>). <code>Class</code> names a single class, not a <code>pkg::Class</code> reference — name the source package in prose if it helps. Intervals (<code>in [ , ]</code>) apply to the ordered types (<code>integer</code>/<code>numeric</code>/<code>Date</code>/<code>POSIXct</code>); sets (<code>in c(...)</code>) apply to the ordered and enumerable atomics (<code>integer</code>/<code>numeric</code>/<code>Date</code>/<code>POSIXct</code>/<code>character</code>/<code>factor</code>) — <code>complex</code>, <code>logical</code>, <code>raw</code>, and <code>any</code> take no set. <code>any</code> asserts nothing about type (length/nullability only). See the <a href="https://dereckscompany.github.io/roxyassert/articles/grammar.html">grammar reference</a> for the full per-category rules.</p>
 </div>
 <div class="section level3">
 <h3 id="inline-forms">Inline forms<a class="anchor" aria-label="anchor" href="#inline-forms"></a>
@@ -287,7 +287,7 @@
 <li>nullable slot — <code>(scalar&lt;numeric&gt;?)</code> ≡ <code>(scalar&lt;numeric&gt; | NULL)</code> (use one, not both)</li>
 <li>union of types — <code>(numeric | character)</code>
 </li>
-<li>R6 instance — <code>(R6&lt;Engine&gt;)</code>
+<li>object of a class — <code>(class&lt;Engine&gt;)</code>
 </li>
 <li>any (no type check) — <code>(any)</code>
 </li>
@@ -309,7 +309,7 @@
 <span><span class="co">#' - meta (list) pagination metadata:</span></span>
 <span><span class="co">#'   - page (scalar&lt;integer in [1, Inf[&gt;) current page.</span></span>
 <span><span class="co">#'   - cursor (scalar&lt;character&gt;?) next-page cursor, or NULL at the end.</span></span></code></pre></div>
-<p>A column declared with an <strong>atomic</strong> type is checked for that type, so a column declared <code>(numeric)</code> that actually holds a list <strong>fails</strong> — the intended way to catch an accidental list-column. To declare one <em>on purpose</em>, type it <code>list&lt;T&gt;</code> (each cell a <code>T</code>) or <code>list&lt;any&gt;</code> (arbitrary cells). <code>list&lt;T&gt;</code> is also how you write any homogeneous list — <code>list&lt;function&gt;</code> (callbacks), <code>list&lt;R6&lt;Model&gt;&gt;</code> (model objects):</p>
+<p>A column declared with an <strong>atomic</strong> type is checked for that type, so a column declared <code>(numeric)</code> that actually holds a list <strong>fails</strong> — the intended way to catch an accidental list-column. To declare one <em>on purpose</em>, type it <code>list&lt;T&gt;</code> (each cell a <code>T</code>) or <code>list&lt;any&gt;</code> (arbitrary cells). <code>list&lt;T&gt;</code> is also how you write any homogeneous list — <code>list&lt;function&gt;</code> (callbacks), <code>list&lt;class&lt;Model&gt;&gt;</code> (model objects):</p>
 <div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co">#' @return (data.table) rows:</span></span>
 <span><span class="co">#' - id (character) identifier.</span></span>
@@ -517,6 +517,8 @@
 <strong>Refining a named type at the use site</strong> — once <code>@type Price (scalar&lt;numeric&gt;)</code> is defined you can’t write <code>(Price in [0, 1])</code>; the refinement must live in the definition (define a second <code>@type</code>, or write the refined type inline). Named types are also package-local (no cross-package reuse yet).</li>
 <li>
 <strong>A named type shows as its bare name in rendered docs</strong> — <code>@type</code> is resolved only for the generated checks, so a help page / pkgdown site shows <code>(OrderAck)</code> verbatim, not its expanded shape, with no auto-generated topic or link. To give a type a help page, document its <code>@type</code> block like any object (add a title/description and <code>@name</code>); reference it as a markdown link (<code>[OrderAck]</code>) for a clickable cross-reference. (Auto-generated type pages and links may come later.)</li>
+<li>
+<strong>A <code>class&lt;Name&gt;</code> name is not verified at <code>document()</code> time</strong> — roxyassert emits <code>assert_class(x, "Name")</code> blindly, so a typo such as <code>class&lt;Duraton&gt;</code> generates without complaint and fails only at runtime.</li>
 </ul>
 </div>
 <div class="section level2">

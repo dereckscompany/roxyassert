@@ -20,7 +20,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">roxyassert</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.3.1</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.4.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -58,7 +58,7 @@
       <img src="../logo.png" class="logo" alt=""><h1>Getting started with roxyassert</h1>
             
       
-      <small class="dont-index">Source: <a href="https://github.com/dereckscompany/roxyassert/blob/v0.3.1/vignettes/demo.Rmd" class="external-link"><code>vignettes/demo.Rmd</code></a></small>
+      <small class="dont-index">Source: <a href="https://github.com/dereckscompany/roxyassert/blob/v0.4.0/vignettes/demo.Rmd" class="external-link"><code>vignettes/demo.Rmd</code></a></small>
       <div class="d-none name"><code>demo.Rmd</code></div>
     </div>
 
@@ -144,7 +144,7 @@ the way in and the way out.</p>
 <span>    <span class="co">#' @description Write one record.</span></span>
 <span>    <span class="co">#' @param key (scalar&lt;character&gt;) the record key.</span></span>
 <span>    <span class="co">#' @param value (scalar&lt;numeric&gt;) the value to store.</span></span>
-<span>    <span class="co">#' @return (R6&lt;AbstractStore&gt;) self, invisibly (for chaining).</span></span>
+<span>    <span class="co">#' @return (class&lt;AbstractStore&gt;) self, invisibly (for chaining).</span></span>
 <span>    put <span class="op">=</span> <span class="kw">function</span><span class="op">(</span><span class="va">key</span>, <span class="va">value</span><span class="op">)</span> <span class="op">{</span></span>
 <span>      <span class="fu">assert_args_AbstractStore__put</span><span class="op">(</span><span class="va">key</span>, <span class="va">value</span><span class="op">)</span>        <span class="co"># generated</span></span>
 <span>      <span class="va">private</span><span class="op">$</span><span class="fu">.impl_put</span><span class="op">(</span><span class="va">key</span>, <span class="va">value</span><span class="op">)</span></span>

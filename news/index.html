@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">roxyassert</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.3.1</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.4.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -32,9 +32,15 @@
 <div class="row">
   <main id="main" class="col-md-9"><div class="page-header">
       <img src="../logo.png" class="logo" alt=""><h1>Changelog</h1>
-      <small>Source: <a href="https://github.com/dereckscompany/roxyassert/blob/v0.3.1/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
+      <small>Source: <a href="https://github.com/dereckscompany/roxyassert/blob/v0.4.0/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
     </div>
 
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.4.0" id="roxyassert-040">roxyassert 0.4.0<a class="anchor" aria-label="anchor" href="#roxyassert-040"></a></h2>
+<ul><li>New <code>class&lt;Name&gt;</code> type for asserting an object’s class, generating <code>assert_class(x, "Name")</code>. It works for any of R’s object systems (S3, S4, Reference Classes, R6, S7) and for any class you define yourself, and it matches subclasses, so <code>class&lt;AbstractClock&gt;</code> accepts a <code>RealClock</code>. <code>Name</code> is a single class (no <code>pkg::</code> qualifier — name the package in prose if useful).</li>
+<li>Breaking: the <code>R6&lt;Class&gt;</code> type is removed in favour of the more general <code>class&lt;Class&gt;</code> (identical generated check).</li>
+<li>Class names are not verified at <code>document()</code> time: a typo such as <code>class&lt;Duraton&gt;</code> generates without complaint and fails at runtime.</li>
+</ul></div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.3.1" id="roxyassert-031">roxyassert 0.3.1<a class="anchor" aria-label="anchor" href="#roxyassert-031"></a></h2>
 <ul><li>R6 contract generation now works on roxygen2 7.x as well as 8.x. The method detection no longer calls roxygen2’s internal <code>r6_tag_type()</code> (added in 8.0.0); it derives the same method-vs-class classification directly from the tag and class source lines, so packages pinned to roxygen2 7.3.x can generate R6 method contracts.</li>

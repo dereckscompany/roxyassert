@@ -14,7 +14,7 @@ itself — it must agree with itself everywhere.
 2.  **“Bare” means different things by category.** A bare *atomic* type
     is a vector of any length (`scalar<...>` is the only way to say
     length 1); a bare *wildcard* (`any`) is any object; a bare
-    *reference* type (`function`/`R6<Class>`) is a single length-1
+    *reference* type (`function`/`class<Class>`) is a single length-1
     object; a bare *composite* is an unconstrained `list`/table (§2,
     §6).
 3.  **`NA` and `NULL` are reserved words, never type names** — this
@@ -57,7 +57,7 @@ per-type exceptions) decides which modifiers are legal:
 | **Plain atomic** | `complex` `logical` | ❌ | ❌ | ✅ | ✅ | bare / `scalar<>` / `vector<>` |
 | **Byte atomic** | `raw` | ❌ | ❌ | ❌ | ✅ | bare / `scalar<>` / `vector<>` |
 | **Wildcard** | `any` | ❌ | ❌ | ❌ | ✅ | bare / `scalar<>` / `vector<>` |
-| **Reference** | `function` `R6<Class>` | ❌ | ❌ | ❌ | ❌ | **bare only** (length-1 by nature) |
+| **Reference** | `function` `class<Class>` | ❌ | ❌ | ❌ | ❌ | **bare only** (length-1 by nature) |
 | **Composite** | `list` `data.table` `data.frame` | ❌ | ❌ | ❌ | ❌ | bare, **nested bullets**, or `list<T>` (`list` only) |
 | **Promise** | `promise<T>` | ❌ | ❌ | ❌ | ❌ | wraps one resolved `type` `T`; collapses to `T` (S5) |
 
@@ -87,11 +87,16 @@ hatch for a polymorphic argument, an unconstrained list/record field, or
 a `data.table` list-column of arbitrary cells (S3).
 `complex`/`logical`/`raw` take no set (degenerate or
 floating-point-fragile), and `raw` has no `NA` representation.
-`function`/`R6` are bare length-1 references. A composite is refined by
-nested bullets (a named record / typed columns) or — for `list` —
-parameterised as `list<T>`, a homogeneous list whose every element is
-the type `T`. All of these are enforced by the grammar (§3); the
-residual element-type rules are static (§4).
+`function`/`class` are bare length-1 references; a `class<Name>` asserts
+the value’s class via [`inherits()`](https://rdrr.io/r/base/class.html),
+so it works for any object system (S3, S4, Reference Classes, R6, S7)
+and matches subclasses (`class<AbstractClock>` accepts a `RealClock`).
+`Name` is a single class, not a `pkg::Class` reference (name the source
+package in prose if it helps). A composite is refined by nested bullets
+(a named record / typed columns) or — for `list` — parameterised as
+`list<T>`, a homogeneous list whose every element is the type `T`. All
+of these are enforced by the grammar (§3); the residual element-type
+rules are static (§4).
 
 ## 3. Formal context-free grammar (EBNF)
 
@@ -135,13 +140,13 @@ residual element-type rules are static (§4).
                      | "vector" "<" "any" "," length ">"
                        (* no in / set / | NA: any asserts nothing about type *)
 
-    reference      ::= "function" | "R6" "<" ident ">"
+    reference      ::= "function" | "class" "<" ident ">"
     composite      ::= "list" ( "<" type ">" )? | "data.table" | "data.frame"
                        (* bare `list`/table = unconstrained, or a named record /
                           typed columns when refined by nested bullets (S1/S3).
                           `list<T>` is a HOMOGENEOUS list: EVERY element satisfies the
                           type T — list<character>, list<scalar<numeric>>,
-                          list<R6<Engine>>, list<any>, list<data.table>. T is a `type`
+                          list<class<Engine>>, list<any>, list<data.table>. T is a `type`
                           (no slot-level union / `| NULL` / `?`); a `list<T>` is a leaf
                           and takes no bullets (S1, S3). *)
     promise        ::= "promise" "<" type ">"
@@ -244,8 +249,8 @@ Tokenizing rules (so the grammar is deterministic in practice):
   `scalar<...>` is a parse error (a comma inside its interval or set is
   fine) — that single rule is why `scalar<T, n>` is rejected.
 - **`>`** closes the innermost open generic (depth-aware); `vector<...>`
-  and `R6<...>` each close one level. `R6` must be followed by
-  `<ident>`; a bare `R6` is a parse error.
+  and `class<...>` each close one level. `class` must be followed by
+  `<Name>` (an `ident`); a bare `class` is a parse error.
 - **`..` is exactly two dots** (maximal munch), valid only in a
   `length`; a run of three or more dots (`...`) is a lexical error. A
   lone `.` is a decimal point, valid only inside a numeric bound; `..`
@@ -261,7 +266,7 @@ Tokenizing rules (so the grammar is deterministic in practice):
   spaces. Child `bullets` begin only on a *subsequent* line at strictly
   greater indentation whose first non-space characters are `-`; a `-`
   inside description text (same line) is literal.
-- **Reference and wildcard shapes** — `function`/`R6<Class>` are bare
+- **Reference and wildcard shapes** — `function`/`class<Class>` are bare
   length-1 references (never `scalar<>`/`vector<>`, never
   `in`/`| NA`/length); `any` takes no `in`/set/`| NA` but does accept
   `scalar<>`/`vector<>` for a length check.
@@ -409,7 +414,7 @@ nearest type to its left, at most one per atom. Thus:
 | `raw` | byte atomic | raw vector (no `NA`) |
 | `any` | wildcard | any R object; no type check (length/nullability only) |
 | `function` | reference | a function/closure (length 1) |
-| `R6<Class>` | reference | an R6 instance inheriting `Class` (length 1) |
+| `class<Class>` | reference | an object whose class is `Class` — any object system (S3/S4/RC/R6/S7), subclasses match (length 1) |
 | `list` | composite | a list — bare = unconstrained; `+ bullets` = named record (S3); `list<T>` = homogeneous (every element `T`) |
 | `data.table` | composite | a `data.table` (typed/list-columns when refined, S3) |
 | `data.frame` | composite | a `data.frame` (typed/list-columns when refined, S3) |
@@ -419,7 +424,7 @@ A `list`/`data.table`/`data.frame` **with** nested bullets is a fixed
 named-field structure; **without** bullets it is an unconstrained
 list/table. `list<T>` is the third form — a homogeneous list (or
 list-column) whose every element is `T` (e.g. `list<character>`,
-`list<R6<Engine>>`, `list<any>`).
+`list<class<Engine>>`, `list<any>`).
 
 ## 7. Every construct, with examples
 
@@ -452,13 +457,13 @@ list-column) whose every element is `T` (e.g. `list<character>`,
 # --- reference types: bare, length-1 by nature ---
 (function)                        # a single function/closure
 (function?)                       # a function, or NULL
-(R6<Engine>)                      # a single R6 instance inheriting Engine
-(R6<Engine> | NULL)               # an Engine, or NULL
+(class<Engine>)                      # a single object of class Engine (any system)
+(class<Engine> | NULL)               # an Engine, or NULL
 
 # --- homogeneous lists: list<T> = every element is T ---
 (list<character>)                 # a list, every element a character vector
 (list<scalar<numeric>>)           # a list of single numbers
-(list<R6<Engine>>)                # a list of Engine instances
+(list<class<Engine>>)                # a list of Engine instances
 (list<function>)                  # a list of callbacks
 (list<any>)                       # a list of anything (= bare list at runtime)
 (list<data.table>)                # a list of data.tables
@@ -523,7 +528,7 @@ list-column) whose every element is `T` (e.g. `list<character>`,
 # --- type unions (slot level) ---
 (numeric | character)             # a numeric vector OR a character vector
 (numeric | character | NA)        # numeric, OR character with NAs allowed
-(R6<Reader> | R6<Writer>)         # either R6 class
+(class<Reader> | class<Writer>)         # either class
 (data.table | NULL)               # a data.table or NULL
 
 # --- everything at once ---
@@ -644,7 +649,7 @@ AbstractStore <- R6::R6Class(
     #' @description Write one record; returns self for chaining.
     #' @param key (scalar<character>) the key.
     #' @param value (scalar<numeric> | NULL) the value, or NULL to clear it.
-    #' @return (R6<AbstractStore>) self.
+    #' @return (class<AbstractStore>) self.
     put = function(key, value) {
       assert_args_AbstractStore__put(key, value)
       private$.impl_put(key, value)
@@ -689,8 +694,8 @@ AbstractStore <- R6::R6Class(
 
 # reference / wildcard, nullable / unioned
 (function?)                       # a function, or NULL
-(R6<Engine> | NULL)               # an Engine, or NULL
-(R6<Reader> | R6<Writer>)         # either class
+(class<Engine> | NULL)               # an Engine, or NULL
+(class<Reader> | class<Writer>)         # either class
 (any)                             # truly polymorphic argument, unchecked
 
 # a data.table with list-columns (type the column list<T>)
@@ -728,7 +733,9 @@ AbstractStore <- R6::R6Class(
 # (any | NA)                      # any takes no | NA
 # (scalar<function>)              # function is bare: write (function)
 # (vector<function, 3>)           # function is a length-1 reference (scope choice, §12)
-# (R6 | NULL)                     # R6 must name a class: R6<Class>
+# (class | NULL)                  # class must name a class: class<Name>
+# (class<lubridate::Duration>)    # class<> names ONE class, not pkg::Class
+# (R6<Engine>)                    # R6<> was removed; write class<Engine>
 # (data.table | NA)               # | NA is element-level; not valid on a composite
 # (data.table | data.frame): ...  # S1: bullets need a single bare composite
 # (vector<numeric>)               # vector<> requires a length — use bare (numeric)
@@ -745,15 +752,15 @@ Out of scope for the current grammar — express these in prose or a
 hand-written check. (Homogeneous/element-typed collections, lists of
 callbacks, and columns of model objects are **no longer** here — they
 are now `list<T>`, e.g. `list<scalar<numeric>>`, `list<function>`,
-`list<R6<Model>>`.)
+`list<class<Model>>`.)
 
 - **Composite cardinality** — “a `data.table` with 1..N rows”, “a
   `list<T>` of exactly 3 elements”. Length applies only to atomic/`any`
   `vector<>`; a `list<T>` is unbounded in length.
 - **A *vector* of reference types** — `vector<function>` /
-  `vector<R6<...>>` are rejected (references are length-1). A
+  `vector<class<...>>` are rejected (references are length-1). A
   *collection* of them is fine and expressible: `list<function>`,
-  `list<R6<Engine>>`.
+  `list<class<Engine>>`.
 - **Positional / unnamed records** — `list` bullets describe **named**
   fields; a positional (unnamed) record is out of scope. (A homogeneous
   unnamed list is `list<T>`.)
@@ -766,6 +773,10 @@ are now `list<T>`, e.g. `list<scalar<numeric>>`, `list<function>`,
   wiring (S5). Await the promises (e.g. `promises::promise_all`) and
   annotate the result as `promise<list<T>>`. (If there’s real demand, a
   future version could relax this.)
+- **Verifying that `class<Name>` names a real class** — roxyassert emits
+  `assert_class(x, "Name")` blindly, so a typo (`class<Duraton>`)
+  generates without complaint and fails only at runtime; there is no
+  `document()`-time check that the class exists.
 - **Refining a named type at the use site** — a `@type` reference (S6)
   expands to its definition as-is; `(Price in [0, 1])` on a named
   `Price` is not allowed. Put the refinement in the `@type`, define
@@ -820,8 +831,9 @@ sets are a bare `name_set` (single token) or a `call_set`
 `vector<>`; `scalar<T, n>` is rejected; `..` is one token, valid only in
 length position.
 
-`function`/`R6<Class>` appear only as bare reference types; `R6` always
-names a class.
+`function`/`class<Class>` appear only as bare reference types; `class`
+always names a single class (any object system; no `pkg::` qualifier —
+name the package in prose).
 
 `list`/`data.table`/`data.frame` carry no `in`/`| NA`/length/`vector<>`;
 refined by nested bullets (named record / typed columns, S1/S3) **or**,

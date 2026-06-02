@@ -1,5 +1,18 @@
 # Changelog
 
+## roxyassert 0.4.0
+
+- New `class<Name>` type for asserting an object’s class, generating
+  `assert_class(x, "Name")`. It works for any of R’s object systems (S3,
+  S4, Reference Classes, R6, S7) and for any class you define yourself,
+  and it matches subclasses, so `class<AbstractClock>` accepts a
+  `RealClock`. `Name` is a single class (no `pkg::` qualifier — name the
+  package in prose if useful).
+- Breaking: the `R6<Class>` type is removed in favour of the more
+  general `class<Class>` (identical generated check).
+- Class names are not verified at `document()` time: a typo such as
+  `class<Duraton>` generates without complaint and fails at runtime.
+
 ## roxyassert 0.3.1
 
 - R6 contract generation now works on roxygen2 7.x as well as 8.x. The
