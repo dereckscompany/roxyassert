@@ -17,6 +17,11 @@
 #' Roxygen: list(markdown = TRUE, roclets = c("namespace", "rd", "roxyassert::contract_roclet"))
 #' ```
 #'
+#' List this roclet **after** `"rd"`. Besides generating the contract helpers it
+#' repairs the `man/*.Rd` that `rd` writes (so typed `@param`/`@return`
+#' annotations render under markdown); that repair is a no-op unless `rd` has
+#' already run.
+#'
 #' @return A roxygen2 roclet object.
 #' @export
 contract_roclet <- function() {
@@ -38,6 +43,11 @@ roclet_process.roclet_contract <- function(x, blocks, env, base_path) {
 
 #' @exportS3Method roxygen2::roclet_output
 roclet_output.roclet_contract <- function(x, results, base_path, ...) {
+  # Repair the man/*.Rd the `rd` roclet just wrote (it runs before us): markdown
+  # mangles bare-word type fragments and a browser then hides them. See
+  # .ra_repair_rd_types().
+  .ra_repair_rd_types(base_path)
+
   path <- file.path(base_path, "R", "contracts-generated.R")
   if (length(results) == 0L) {
     if (file.exists(path)) {
@@ -53,6 +63,66 @@ roclet_output.roclet_contract <- function(x, results, base_path, ...) {
   body <- unlist(lapply(results, function(code) c(code, "")), use.names = FALSE)
   writeLines(c(banner, body), path)
   return(path)
+}
+
+# When a package enables markdown, roxygen2 runs each @param / @return description
+# through commonmark, which reads a bare-word fragment like `<POSIXct>` as raw
+# inline HTML and lowers it to `\if{html}{\out{<POSIXct>}}`. That raw passthrough
+# then renders as a phantom (unknown) HTML tag, so a browser silently drops it and
+# the declared type shows as just `(scalar)`. A fragment that carries a space,
+# comma, or bracket (`<numeric in ]0, Inf[>`, `<character, 1..>`) isn't tag-shaped,
+# so commonmark leaves it as escaped text and it renders correctly — hence the
+# visible inconsistency.
+#
+# We repair the *output*, not the input. roxygen2 applies markdown inside its own
+# `roxy_tag_parse.roxy_tag_param`; that method CAN be overridden (it does dispatch),
+# but doing so globally replaces @param parsing for every package documented while
+# roxyassert is loaded — too invasive — so the contained choice is to rewrite the
+# generated Rd: turn the mangled `\if{html}{\out{<Name>}}` back into a plain
+# `<Name>`, which Rd escapes correctly across html/latex/text, identical to the
+# fragments that were never mangled. (This roclet must run after `rd`, which writes
+# the Rd — see the roclet's @description.)
+#
+# Scope. The rewrite fires only on a bare identifier `<[A-Za-z][A-Za-z0-9]*>` —
+# exactly commonmark's tag-name shape (`[A-Za-z][A-Za-z0-9-]*`); a name with a
+# `.`/`_`/space (`<data.table>`, `<numeric in ..>`) is never tag-shaped, so it is
+# never mangled — glued, as a WHOLE word (the `\b`), to one of the grammar's outer
+# category keywords: `scalar`, `class`, `promise`, `list` (keep in sync with the
+# outer categories parsed in R/parse.R; `vector` is omitted because a vector is
+# always `vector<T, len>` and the comma stops commonmark mangling it). The `\b`
+# matters: without it the keyword would match as a *suffix* of a longer word
+# (`subclass`, `blacklist`). This covers every emitted type fragment, including a
+# nested `list<class<T>>` (the inner `<T>` follows `class`). The same shape in prose
+# (`a list<Foo> note`) is also rewritten — there it likewise restores visible text
+# instead of a browser-dropped tag, so it is never harmful — but a fragment NOT
+# glued to a keyword (`foo<bar>`) and roxygen2's own structural tags (`\out{<hr>}`,
+# `<div class=..>`, `</div>`) are left untouched. Known limitation: a real inline
+# HTML tag written with no space after a keyword (`scalar<b>bold</b>`) would get its
+# opening tag un-escaped while the closing tag survives; that input is not a type
+# and is vanishingly unlikely, so it is left as-is.
+.ra_rd_type_categories <- "scalar|class|promise|list"
+.ra_rd_type_pattern <- paste0(
+  "(\\b(?:",
+  .ra_rd_type_categories,
+  "))",
+  "\\\\if\\{html\\}\\{\\\\out\\{(<[A-Za-z][A-Za-z0-9]*>)\\}\\}"
+)
+
+.ra_repair_rd_types <- function(base_path) {
+  man <- file.path(base_path, "man")
+  if (!dir.exists(man)) {
+    return(invisible(character()))
+  }
+  repaired <- character()
+  for (f in list.files(man, pattern = "\\.Rd$", full.names = TRUE)) {
+    lines <- readLines(f, warn = FALSE, encoding = "UTF-8")
+    fixed <- gsub(.ra_rd_type_pattern, "\\1\\2", lines, perl = TRUE)
+    if (!identical(fixed, lines)) {
+      writeLines(fixed, f, useBytes = TRUE)
+      repaired <- c(repaired, f)
+    }
+  }
+  return(invisible(repaired))
 }
 
 # ---- @type: reusable named types --------------------------------------------
