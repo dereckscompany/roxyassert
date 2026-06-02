@@ -310,12 +310,20 @@ are *specified rules*, not stylistic suggestions.
   `as.POSIXct(..., tz = ...)`, `lubridate::ymd_hms(...)`), so the user
   owns constructor/format/tz, and a class/tz mismatch compares silently
   wrong. `Inf`/`-Inf` are open-end **sentinels** — `-Inf` only the low
-  bound, `Inf` only the high — denoting “no bound that side” (the
-  comparison is omitted), not values. **With `| NA`** an interval is
-  lowered NA-aware — `all((x in range) | is.na(x))`, equivalently
-  checked on `x[!is.na(x)]` — parallel to the set form in footnote 2;
-  the default (no `| NA`) rejects NA. An opaque `name_set` or any other
-  `rexpr` is taken on trust — prefer an inline literal where it matters.
+  bound, `Inf` only the high. A **closed** bracket at a sentinel means
+  “no bound that side” (the comparison is omitted), not a value. On a
+  `numeric`, an **open** bracket at a sentinel instead *excludes that
+  infinity* — a finiteness constraint: `]0, Inf[` is “finite and \> 0”,
+  `]-Inf, Inf[` is “any finite double” (lowered with
+  `upper = Inf, upper_inclusive = FALSE` /
+  `lower = -Inf, lower_inclusive = FALSE`). Finiteness is `numeric`-only
+  — `integer`/`count` cannot be `Inf` and a `Date`/`POSIXct` `Inf` bound
+  would be a type mismatch, so for those a sentinel is omitted
+  regardless of bracket. **With `| NA`** an interval is lowered NA-aware
+  — `all((x in range) | is.na(x))`, equivalently checked on
+  `x[!is.na(x)]` — parallel to the set form in footnote 2; the default
+  (no `| NA`) rejects NA. An opaque `name_set` or any other `rexpr` is
+  taken on trust — prefer an inline literal where it matters.
 - **S3 — named composite fields, homogeneous lists, and list-columns.**
   A bulleted `list`/`data.table`/`data.frame` asserts the presence of
   the **named** fields/columns listed (`all(<names> %in% names(x))`,
@@ -501,9 +509,11 @@ list-column) whose every element is `T` (e.g. `list<character>`,
 (scalar<numeric in ]0, 1[>)       # 0 <  x <  1
 (scalar<numeric in ]0, 1]>)       # 0 <  x <= 1
 (scalar<numeric in [-1.5, 2.5]>)  # fractional, signed bounds
-(scalar<numeric in ]0, Inf[>)     # x > 0
-(scalar<numeric in ]-Inf, 0]>)    # x <= 0
-(scalar<integer in [1, Inf[>)     # x >= 1  (integer bounds are whole numbers)
+(scalar<numeric in ]0, Inf[>)     # x > 0 and finite (open bracket excludes Inf)
+(scalar<numeric in ]0, Inf]>)     # x > 0, Inf allowed (closed sentinel: no upper bound)
+(scalar<numeric in ]-Inf, 0]>)    # x <= 0 and finite (open bracket excludes -Inf)
+(scalar<numeric in ]-Inf, Inf[>)  # any finite double
+(scalar<integer in [1, Inf[>)     # x >= 1  (integer can't be Inf, so sentinel omitted)
 (scalar<integer in ]-Inf, 0]>)    # x <= 0  (-Inf is the low sentinel)
 (numeric in [0, 1])               # every element in [0, 1]
 (scalar<Date in [as.Date("2024-01-01"), as.Date("2026-12-31")]>)        # bounds are R exprs, verbatim

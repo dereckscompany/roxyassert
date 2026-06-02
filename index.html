@@ -23,7 +23,7 @@
 
     <a class="navbar-brand me-2" href="index.html">roxyassert</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.5.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.6.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -275,9 +275,8 @@
 </li>
 <li>between 1 and 5 (inclusive) — <code>(scalar&lt;numeric in [1, 5]&gt;)</code>
 </li>
-<li>greater than 0 — <code>(scalar&lt;numeric in ]0, Inf[&gt;)</code>
-</li>
-<li>at most 1 — <code>(scalar&lt;numeric in ]-Inf, 1]&gt;)</code>
+<li>greater than 0 and finite — <code>(scalar&lt;numeric in ]0, Inf[&gt;)</code> (an open bracket at a <code>±Inf</code> sentinel excludes that infinity; close it — <code>]0, Inf]</code> — to allow <code>Inf</code>)</li>
+<li>at most 1 and finite — <code>(scalar&lt;numeric in ]-Inf, 1]&gt;)</code>
 </li>
 <li>every element of a vector in a range — <code>(numeric in [1, 5])</code>
 </li>

@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">roxyassert</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.5.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.6.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -32,9 +32,14 @@
 <div class="row">
   <main id="main" class="col-md-9"><div class="page-header">
       <img src="../logo.png" class="logo" alt=""><h1>Changelog</h1>
-      <small>Source: <a href="https://github.com/dereckscompany/roxyassert/blob/v0.5.0/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
+      <small>Source: <a href="https://github.com/dereckscompany/roxyassert/blob/v0.6.0/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
     </div>
 
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.6.0" id="roxyassert-060">roxyassert 0.6.0<a class="anchor" aria-label="anchor" href="#roxyassert-060"></a></h2>
+<ul><li>Finiteness via interval brackets: on a <code>numeric</code>, an <strong>open</strong> bracket at a <code>±Inf</code> sentinel now <em>excludes</em> that infinity. <code>scalar&lt;numeric in ]0, Inf[&gt;</code> is “finite and &gt; 0” (lowering to <code>assert_between(x, lower = 0, lower_inclusive = FALSE, upper = Inf, upper_inclusive = FALSE)</code>), and <code>]-Inf, Inf[</code> is “any finite double”. A <strong>closed</strong> sentinel still means “no bound that side” and is omitted, so <code>]0, Inf]</code> is unchanged. This is <code>numeric</code>-only — <code>integer</code>/<code>count</code> cannot be <code>Inf</code> and a <code>Date</code>/<code>POSIXct</code> <code>Inf</code> bound would be a type mismatch, so for those a sentinel is omitted regardless of bracket (no behaviour change).</li>
+<li>As a consequence, the only degenerate both-<code>±Inf</code>-sentinel intervals rejected at parse time are now those that bound nothing: both brackets closed (<code>[-Inf, Inf]</code>, any type) or a non-<code>numeric</code> with open brackets (<code>integer in ]-Inf, Inf[</code>). <code>numeric in ]-Inf, Inf[</code> is now valid (“any finite double”).</li>
+</ul></div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.5.0" id="roxyassert-050">roxyassert 0.5.0<a class="anchor" aria-label="anchor" href="#roxyassert-050"></a></h2>
 <ul><li>New <code>count</code> type: a non-negative whole number that accepts both <code>20</code> and <code>20L</code> (lowering to <code>assert_scalar_count</code> / <code>assert_count</code>), unlike <code>integer</code> (strict <code>20L</code>) or <code>numeric</code> (strict double). It is interval-capable (<code>scalar&lt;count in [1, Inf[&gt;</code> is a positive count) but takes no set and no <code>| NA</code> — a count is non-negative and never NA. The vector form needs assert (&gt;= 0.0.8) for <code>assert_count()</code>.</li>

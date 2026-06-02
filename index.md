@@ -211,8 +211,10 @@ for the full per-category rules.
 - length range / at least *n* — `(vector<numeric, 1..10>)` /
   `(vector<numeric, 2..>)`
 - between 1 and 5 (inclusive) — `(scalar<numeric in [1, 5]>)`
-- greater than 0 — `(scalar<numeric in ]0, Inf[>)`
-- at most 1 — `(scalar<numeric in ]-Inf, 1]>)`
+- greater than 0 and finite — `(scalar<numeric in ]0, Inf[>)` (an open
+  bracket at a `±Inf` sentinel excludes that infinity; close it —
+  `]0, Inf]` — to allow `Inf`)
+- at most 1 and finite — `(scalar<numeric in ]-Inf, 1]>)`
 - every element of a vector in a range — `(numeric in [1, 5])`
 - enum, inline set (scalar) — `(scalar<character in c("BUY", "SELL")>)`
 - enum, vector from a constant — `(character in ORDER_SIDE)`
