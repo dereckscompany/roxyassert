@@ -38,6 +38,11 @@ roclet_process.roclet_contract <- function(x, blocks, env, base_path) {
 
 #' @exportS3Method roxygen2::roclet_output
 roclet_output.roclet_contract <- function(x, results, base_path, ...) {
+  # Repair the man/*.Rd the `rd` roclet just wrote (it runs before us): markdown
+  # mangles bare-word type fragments and a browser then hides them. See
+  # .ra_repair_rd_types().
+  .ra_repair_rd_types(base_path)
+
   path <- file.path(base_path, "R", "contracts-generated.R")
   if (length(results) == 0L) {
     if (file.exists(path)) {
@@ -53,6 +58,49 @@ roclet_output.roclet_contract <- function(x, results, base_path, ...) {
   body <- unlist(lapply(results, function(code) c(code, "")), use.names = FALSE)
   writeLines(c(banner, body), path)
   return(path)
+}
+
+# When a package enables markdown, roxygen2 runs each @param / @return description
+# through commonmark, which reads a bare-word type fragment like `<POSIXct>` as raw
+# inline HTML and lowers it to `\if{html}{\out{<POSIXct>}}`. That raw passthrough
+# then renders as a phantom (unknown) HTML tag, so a browser silently drops it and
+# the declared type shows as just `(scalar)`. Type fragments that carry a space,
+# comma, or bracket (`<numeric in ]0, Inf[>`, `<character, 1..>`) don't look like a
+# tag, so they survive as escaped text and render correctly — hence the visible
+# inconsistency.
+#
+# We can't run before markdown (roxygen2 applies it inside its own
+# `roxy_tag_parse.roxy_tag_param`, and R 3.6's S3 lookup finds the owner's own
+# method before any external override), so instead we repair the *output*: rewrite
+# the mangled `\if{html}{\out{<Name>}}` back to a plain `<Name>`, which Rd escapes
+# correctly across html/latex/text — identical to the fragments that were never
+# mangled.
+#
+# The rewrite is scoped so it only ever touches type fragments:
+#   - the bracketed content must be a single bare identifier (`<POSIXct>`,
+#     `<my.Class>`), never an attribute/closing/structural tag (`<div class=..>`,
+#     `</div>`, `<a id=..>`), which carry spaces, `/`, or `=`; and
+#   - it must be glued to a preceding non-space character — a type fragment always
+#     follows its outer category (`scalar`, `class`, `promise`, ...) or a nesting
+#     `<`, whereas roxygen2's R6 layout emits bare tags like `\out{<hr>}` on their
+#     own line (whitespace-led), so a lookbehind for `\S` leaves those untouched.
+.ra_rd_type_pattern <- "(?<=\\S)\\\\if\\{html\\}\\{\\\\out\\{(<[A-Za-z][A-Za-z0-9._]*>)\\}\\}"
+
+.ra_repair_rd_types <- function(base_path) {
+  man <- file.path(base_path, "man")
+  if (!dir.exists(man)) {
+    return(invisible(character()))
+  }
+  repaired <- character()
+  for (f in list.files(man, pattern = "\\.Rd$", full.names = TRUE)) {
+    lines <- readLines(f, warn = FALSE, encoding = "UTF-8")
+    fixed <- gsub(.ra_rd_type_pattern, "\\1", lines, perl = TRUE)
+    if (!identical(fixed, lines)) {
+      writeLines(fixed, f, useBytes = TRUE)
+      repaired <- c(repaired, f)
+    }
+  }
+  return(invisible(repaired))
 }
 
 # ---- @type: reusable named types --------------------------------------------

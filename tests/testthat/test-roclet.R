@@ -153,6 +153,71 @@ test_that("R6 method contracts generate through the real on-disk document() path
   expect_true(any(grepl("^assert_return_Store__count <- function\\(value\\)", code)))
 })
 
+test_that("roclet_output repairs markdown-mangled type fragments in man/*.Rd", {
+  # With markdown on, roxygen2 lowers a bare-word type fragment `<Name>` to
+  # `\if{html}{\out{<Name>}}` (raw HTML a browser then eats). roclet_output must
+  # rewrite those to a plain `<Name>` that renders, WITHOUT touching roxygen2's R6
+  # layout tags (`\out{<hr>}`, `<div class=..>`, `</div>`), and WITHOUT disturbing
+  # fragments that were never mangled (intervals, sets, comma-bearing vectors).
+  dir <- withr::local_tempdir()
+  dir.create(file.path(dir, "R"))
+  writeLines(
+    c(
+      "Package: rdrepair",
+      "Title: Rd repair fixture",
+      "Version: 0.0.0",
+      "Description: Test fixture.",
+      "License: MIT + file LICENSE",
+      "Encoding: UTF-8",
+      'Roxygen: list(markdown = TRUE, roclets = c("namespace", "rd", "roxyassert::contract_roclet"))'
+    ),
+    file.path(dir, "DESCRIPTION")
+  )
+  writeLines(
+    c(
+      "#' Demo",
+      "#' @param a (scalar<POSIXct>) bare atomic.",
+      "#' @param b (list<class<Engine>>) nested generic.",
+      "#' @param c (scalar<character>?) nullable.",
+      "#' @param d (class<A> | class<B>) union.",
+      "#' @param e (scalar<numeric in ]0, Inf[>) interval (never mangled).",
+      "#' @return (promise<data.table>) result.",
+      "#' @export",
+      "demo <- function(a, b, c, d, e) NULL"
+    ),
+    file.path(dir, "R", "demo.R")
+  )
+  writeLines(
+    c(
+      "#' Eng",
+      "#' @description An engine.",
+      "#' @export",
+      "Eng <- R6::R6Class('Eng', public = list(",
+      "  #' @description A method.",
+      "  #' @param x (scalar<POSIXct>) a time.",
+      "  m = function(x) NULL))"
+    ),
+    file.path(dir, "R", "Eng.R")
+  )
+  suppressMessages(roxygen2::roxygenise(dir))
+
+  demo <- paste(readLines(file.path(dir, "man", "demo.Rd")), collapse = "\n")
+  # types render as plain <...>, with no surviving \out wrapper around them
+  expect_match(demo, "(scalar<POSIXct>)", fixed = TRUE)
+  expect_match(demo, "(list<class<Engine>>)", fixed = TRUE) # nested
+  expect_match(demo, "(scalar<character>?)", fixed = TRUE) # nullable
+  expect_match(demo, "(class<A> | class<B>)", fixed = TRUE) # union, both legs
+  expect_match(demo, "(promise<data.table>)", fixed = TRUE) # @return
+  expect_match(demo, "(scalar<numeric in ]0, Inf[>)", fixed = TRUE) # untouched
+  expect_false(grepl("out{<POSIXct>", demo, fixed = TRUE))
+  expect_false(grepl("out{<Engine>", demo, fixed = TRUE))
+
+  eng <- paste(readLines(file.path(dir, "man", "Eng.Rd")), collapse = "\n")
+  expect_match(eng, "(scalar<POSIXct>)", fixed = TRUE) # method param repaired
+  expect_match(eng, "\\out{<hr>}", fixed = TRUE) # R6 layout <hr> preserved
+  expect_match(eng, '\\out{<div class="r">}', fixed = TRUE) # layout preserved
+})
+
 test_that(".ra_r6_is_method_tag classifies method vs class tags across roxygen2 versions", {
   # An explicit r6method binding (roxygen2 >= 8.0.0) is always a method tag.
   expect_true(.ra_r6_is_method_tag(list(r6method = "get", line = 1L), list(line = 99L)))
