@@ -23,7 +23,7 @@
 
     <a class="navbar-brand me-2" href="index.html">roxyassert</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.6.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.7.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -136,6 +136,9 @@
 <p><code>devtools::document()</code> then runs <code>roxyassert</code> alongside the built-in roclets and (re)writes <code>R/contracts-generated.R</code>.</p>
 <blockquote>
 <p><strong>Note — a harmless markdown warning.</strong> With <code>markdown = TRUE</code>, roxygen2’s link resolver sees the <code>[ ]</code> of an interval (<code>[0, 1]</code>) or a <code>[[ ]]</code> subscript bound in a <code>@param</code>/<code>@return</code> description and reports a “could not resolve link” <strong>warning</strong> during <code>document()</code>. It is cosmetic: the <code>.Rd</code> still builds and the generated checks are unaffected — <code>roxyassert</code> reads each tag’s untouched <strong>raw</strong> text, never the markdown-rendered version. You can ignore the warning, or avoid it by escaping the bracket (<code>\[0, 1\]</code>) in the description if your help pages must be warning-clean.</p>
+</blockquote>
+<blockquote>
+<p><strong>Note — type rendering under markdown is handled for you.</strong> With <code>markdown = TRUE</code>, roxygen2 lowers a bare-word type fragment such as <code>&lt;POSIXct&gt;</code> (in <code>scalar&lt;POSIXct&gt;</code>, <code>class&lt;Duration&gt;</code>, <code>promise&lt;T&gt;</code>, a nested generic, etc.) into raw inline HTML, which a browser would otherwise eat as an unknown tag — hiding the type so it shows as just <code>(scalar)</code>. <code>roxyassert</code> repairs the generated <code>man/*.Rd</code> automatically so the full type renders in your help pages and pkgdown site. Write the <code>&lt;...&gt;</code> type syntax exactly as documented here; no backticks or escaping needed for it. (The separate <code>[ ]</code> interval-bracket link warning above is unrelated to rendering — the interval type itself renders fine.)</p>
 </blockquote>
 </div>
 <div class="section level2">

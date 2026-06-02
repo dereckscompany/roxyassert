@@ -108,6 +108,18 @@ roclets and (re)writes `R/contracts-generated.R`.
 > avoid it by escaping the bracket (`\[0, 1\]`) in the description if
 > your help pages must be warning-clean.
 
+> **Note — type rendering under markdown is handled for you.** With
+> `markdown = TRUE`, roxygen2 lowers a bare-word type fragment such as
+> `<POSIXct>` (in `scalar<POSIXct>`, `class<Duration>`, `promise<T>`, a
+> nested generic, etc.) into raw inline HTML, which a browser would
+> otherwise eat as an unknown tag — hiding the type so it shows as just
+> `(scalar)`. `roxyassert` repairs the generated `man/*.Rd`
+> automatically so the full type renders in your help pages and pkgdown
+> site. Write the `<...>` type syntax exactly as documented here; no
+> backticks or escaping needed for it. (The separate `[ ]`
+> interval-bracket link warning above is unrelated to rendering — the
+> interval type itself renders fine.)
+
 ## The annotation grammar
 
 A type annotation is a parenthesised token at the **start** of a
