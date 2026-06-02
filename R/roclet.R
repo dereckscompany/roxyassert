@@ -76,15 +76,28 @@ roclet_output.roclet_contract <- function(x, results, base_path, ...) {
 # correctly across html/latex/text — identical to the fragments that were never
 # mangled.
 #
-# The rewrite is scoped so it only ever touches type fragments:
-#   - the bracketed content must be a single bare identifier (`<POSIXct>`,
-#     `<my.Class>`), never an attribute/closing/structural tag (`<div class=..>`,
-#     `</div>`, `<a id=..>`), which carry spaces, `/`, or `=`; and
-#   - it must be glued to a preceding non-space character — a type fragment always
-#     follows its outer category (`scalar`, `class`, `promise`, ...) or a nesting
-#     `<`, whereas roxygen2's R6 layout emits bare tags like `\out{<hr>}` on their
-#     own line (whitespace-led), so a lookbehind for `\S` leaves those untouched.
-.ra_rd_type_pattern <- "(?<=\\S)\\\\if\\{html\\}\\{\\\\out\\{(<[A-Za-z][A-Za-z0-9._]*>)\\}\\}"
+# The rewrite is scoped so it only ever touches a type fragment, never prose or
+# roxygen2's own structural HTML:
+#   - it must be glued to one of the grammar's outer category keywords (`scalar`,
+#     `vector`, `class`, `promise`, `list`) — a `<Name>` fragment is only ever
+#     emitted immediately after one of those (including a nested `list<class<T>>`,
+#     where the inner `<T>` follows `class`). Anchoring to that closed set, rather
+#     than to "any preceding non-space", is what keeps the rewrite from touching an
+#     incidental `<tag>` a user wrote in prose (`see foo<bar> below`) or roxygen2's
+#     own R6 layout tags (`\out{<hr>}`, `<div class=..>`, `</div>`, `<a id=..>`);
+#   - the bracketed content must be a bare identifier `<[A-Za-z][A-Za-z0-9]*>`.
+#     That is exactly the shape commonmark treats as an HTML tag (its tag-name rule
+#     is `[A-Za-z][A-Za-z0-9-]*`), and roxyassert type/class names are letters and
+#     digits. A name containing `.`/`_`/space (`<data.table>`, `<numeric in ..>`)
+#     is NOT seen as a tag by commonmark, so it is never mangled and needs no
+#     repair.
+.ra_rd_type_categories <- "scalar|vector|class|promise|list"
+.ra_rd_type_pattern <- paste0(
+  "(",
+  .ra_rd_type_categories,
+  ")",
+  "\\\\if\\{html\\}\\{\\\\out\\{(<[A-Za-z][A-Za-z0-9]*>)\\}\\}"
+)
 
 .ra_repair_rd_types <- function(base_path) {
   man <- file.path(base_path, "man")
@@ -94,7 +107,7 @@ roclet_output.roclet_contract <- function(x, results, base_path, ...) {
   repaired <- character()
   for (f in list.files(man, pattern = "\\.Rd$", full.names = TRUE)) {
     lines <- readLines(f, warn = FALSE, encoding = "UTF-8")
-    fixed <- gsub(.ra_rd_type_pattern, "\\1", lines, perl = TRUE)
+    fixed <- gsub(.ra_rd_type_pattern, "\\1\\2", lines, perl = TRUE)
     if (!identical(fixed, lines)) {
       writeLines(fixed, f, useBytes = TRUE)
       repaired <- c(repaired, f)

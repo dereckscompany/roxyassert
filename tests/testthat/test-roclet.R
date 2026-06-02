@@ -178,7 +178,7 @@ test_that("roclet_output repairs markdown-mangled type fragments in man/*.Rd", {
       "#' Demo",
       "#' @param a (scalar<POSIXct>) bare atomic.",
       "#' @param b (list<class<Engine>>) nested generic.",
-      "#' @param c (scalar<character>?) nullable.",
+      "#' @param c (scalar<character>?) nullable; an incidental foo<bar> in prose.",
       "#' @param d (class<A> | class<B>) union.",
       "#' @param e (scalar<numeric in ]0, Inf[>) interval (never mangled).",
       "#' @return (promise<data.table>) result.",
@@ -211,6 +211,10 @@ test_that("roclet_output repairs markdown-mangled type fragments in man/*.Rd", {
   expect_match(demo, "(scalar<numeric in ]0, Inf[>)", fixed = TRUE) # untouched
   expect_false(grepl("out{<POSIXct>", demo, fixed = TRUE))
   expect_false(grepl("out{<Engine>", demo, fixed = TRUE))
+  # an incidental angle-bracket tag in prose (not glued to a category keyword) is
+  # NOT a type fragment and must be left exactly as roxygen2 wrote it — the repair
+  # is anchored to scalar/vector/class/promise/list, never "any preceding char".
+  expect_match(demo, "foo\\if{html}{\\out{<bar>}}", fixed = TRUE)
 
   eng <- paste(readLines(file.path(dir, "man", "Eng.Rd")), collapse = "\n")
   expect_match(eng, "(scalar<POSIXct>)", fixed = TRUE) # method param repaired
