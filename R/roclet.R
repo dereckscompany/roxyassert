@@ -31,14 +31,16 @@ contract_roclet <- function() {
 #' @exportS3Method roxygen2::roclet_process
 roclet_process.roclet_contract <- function(x, blocks, env, base_path) {
   registry <- .ra_type_registry(blocks)
-  helpers <- list()
+  code <- list()
+  exports <- character()
   for (block in blocks) {
-    code <- .ra_block_contract(block, registry)
-    if (length(code) > 0L) {
-      helpers[[length(helpers) + 1L]] <- code
+    res <- .ra_block_contract(block, registry)
+    if (length(res$code) > 0L) {
+      code[[length(code) + 1L]] <- res$code
     }
+    exports <- c(exports, res$exports)
   }
-  return(helpers)
+  return(list(code = code, exports = unique(exports)))
 }
 
 #' @exportS3Method roxygen2::roclet_output
@@ -49,10 +51,14 @@ roclet_output.roclet_contract <- function(x, results, base_path, ...) {
   .ra_repair_rd_types(base_path)
 
   path <- file.path(base_path, "R", "contracts-generated.R")
-  if (length(results) == 0L) {
+  code_results <- results$code
+  exports <- if (is.null(results$exports)) character() else results$exports
+  if (length(code_results) == 0L) {
     if (file.exists(path)) {
       file.remove(path)
     }
+    # Drop any previously-managed export block when there is nothing to emit.
+    .ra_write_namespace_exports(base_path, character())
     return(invisible(character()))
   }
   banner <- c(
@@ -60,8 +66,12 @@ roclet_output.roclet_contract <- function(x, results, base_path, ...) {
     "# Re-generated on devtools::document(). Commit this file like NAMESPACE.",
     ""
   )
-  body <- unlist(lapply(results, function(code) c(code, "")), use.names = FALSE)
+  body <- unlist(lapply(code_results, function(code) c(code, "")), use.names = FALSE)
   writeLines(c(banner, body), path)
+  # Export the @exportassert-marked helpers by appending a managed block to the
+  # package NAMESPACE (the `namespace` roclet runs before us and rewrites it
+  # fresh, so re-appending each run is deterministic).
+  .ra_write_namespace_exports(base_path, exports)
   return(path)
 }
 
@@ -108,6 +118,36 @@ roclet_output.roclet_contract <- function(x, results, base_path, ...) {
   "\\\\if\\{html\\}\\{\\\\out\\{(<[A-Za-z][A-Za-z0-9]*>)\\}\\}"
 )
 
+# Maintain a roxyassert-managed `export(...)` block at the tail of the package
+# NAMESPACE for the @exportassert-marked helpers. The `namespace` roclet runs
+# before us and rewrites NAMESPACE from scratch each document(), so the prior
+# managed block is normally already gone; we strip any leftover and re-append,
+# making the operation idempotent. Passing an empty `exports` removes the block.
+.ra_write_namespace_exports <- function(base_path, exports) {
+  ns <- file.path(base_path, "NAMESPACE")
+  if (!file.exists(ns)) {
+    return(invisible(NULL))
+  }
+  begin <- "# roxyassert @exportassert: begin (managed - do not edit)"
+  end <- "# roxyassert @exportassert: end (managed - do not edit)"
+  lines <- readLines(ns, warn = FALSE)
+  b <- match(begin, lines)
+  e <- match(end, lines)
+  if (!is.na(b) && !is.na(e) && e >= b) {
+    lines <- lines[-(b:e)]
+  }
+  # Drop a trailing blank left by stripping the block, to avoid blank-line drift.
+  while (length(lines) > 0L && !nzchar(lines[[length(lines)]])) {
+    lines <- lines[-length(lines)]
+  }
+  exports <- sort(unique(exports))
+  if (length(exports) > 0L) {
+    lines <- c(lines, "", begin, sprintf("export(%s)", exports), end)
+  }
+  writeLines(lines, ns)
+  return(invisible(ns))
+}
+
 .ra_repair_rd_types <- function(base_path) {
   man <- file.path(base_path, "man")
   if (!dir.exists(man)) {
@@ -137,6 +177,32 @@ roxy_tag_parse.roxy_tag_type <- function(x) {
 
 #' @exportS3Method roxygen2::roxy_tag_parse
 roxy_tag_parse.roxy_tag_noassert <- function(x) {
+  x$val <- x$raw
+  return(x)
+}
+
+# ---- @yesassert / @exportassert ---------------------------------------------
+#
+# @yesassert (on a block that defines one or more @type) emits a standalone,
+# callable `assert_type_<Name>()` for each — useful for a type that no function
+# in the package references but whose shape you still want to validate (and
+# export). The mirror of @noassert: "@noassert" = do not generate here,
+# "@yesassert" = generate here even though nothing uses it.
+#
+# @exportassert (on any block) exports the assert helpers generated FROM THAT
+# block — the standalone `assert_type_*` of an @yesassert block, and/or the
+# `assert_args_*` / `assert_return_*` of a function or R6 method — so downstream
+# packages can call them. Orthogonal to @yesassert. Distinct from roxygen2's
+# `@export`, which exports the documented object itself, not its assert helpers.
+
+#' @exportS3Method roxygen2::roxy_tag_parse
+roxy_tag_parse.roxy_tag_yesassert <- function(x) {
+  x$val <- x$raw
+  return(x)
+}
+
+#' @exportS3Method roxygen2::roxy_tag_parse
+roxy_tag_parse.roxy_tag_exportassert <- function(x) {
   x$val <- x$raw
   return(x)
 }
@@ -238,21 +304,44 @@ roxy_tag_parse.roxy_tag_noassert <- function(x) {
 # ---- per-block: build the helper(s) for one documented object ---------------
 
 .ra_block_contract <- function(block, registry = list()) {
-  if (inherits(block$object, "r6class")) {
-    return(.ra_block_r6(block, registry))
+  # Standalone `assert_type_*` from @yesassert (independent of the object kind),
+  # then the function / R6-method helpers (the original behaviour).
+  ty <- .ra_block_type_asserts(block, registry)
+  fns <- if (inherits(block$object, "r6class")) {
+    .ra_block_r6(block, registry)
+  } else {
+    .ra_block_fn(block, registry)
   }
 
+  code <- ty$code
+  if (length(fns$code) > 0L) {
+    code <- c(if (length(code) > 0L) c(code, "") else code, fns$code)
+  }
+  nms <- c(ty$names, fns$names)
+
+  exports <- character()
+  if (.ra_block_has_tag(block, "exportassert")) {
+    if (length(nms) == 0L) {
+      stop("roxyassert: @exportassert on a block that generates no assert helper", call. = FALSE)
+    }
+    exports <- nms
+  }
+  return(list(code = code, exports = exports))
+}
+
+# The function/method helpers for one block. Returns list(code=, names=) where
+# `names` are the generated helper names (for @exportassert). The plain-function
+# path; the R6 path is .ra_block_r6().
+.ra_block_fn <- function(block, registry) {
   fn <- .ra_block_name(block)
   if (is.null(fn)) {
-    return(character())
+    return(list(code = character(), names = character()))
   }
-
   no <- .ra_block_noassert(block)
   if (isTRUE(no$all)) {
     # Whole function is documented-only: emit no contract.
-    return(character())
+    return(list(code = character(), names = character()))
   }
-
   # Resolve (validate) every documented @param, then drop the @noassert ones from
   # code generation — their types are still validated and rendered, just not
   # enforced (a guard does that).
@@ -265,7 +354,44 @@ roxy_tag_parse.roxy_tag_noassert <- function(x) {
   if (!is.null(ret)) {
     ret <- .ra_resolve_or_stop(ret, registry, "@return")
   }
-  return(.ra_assemble(fn, params, ret))
+  return(list(code = .ra_assemble(fn, params, ret), names = .ra_assemble_names(fn, params, ret)))
+}
+
+# Does the block carry at least one tag of this name?
+.ra_block_has_tag <- function(block, name) {
+  return(length(roxygen2::block_get_tags(block, name)) > 0L)
+}
+
+# For a block carrying @yesassert, emit a standalone assert_type_<Name>() for
+# every @type defined in that block. Returns list(code=, names=).
+.ra_block_type_asserts <- function(block, registry) {
+  if (!.ra_block_has_tag(block, "yesassert")) {
+    return(list(code = character(), names = character()))
+  }
+  type_tags <- roxygen2::block_get_tags(block, "type")
+  if (length(type_tags) == 0L) {
+    stop("roxyassert: @yesassert requires at least one @type in the same block", call. = FALSE)
+  }
+  code <- character()
+  nms <- character()
+  for (tag in type_tags) {
+    name <- .ra_type_def(tag)$name
+    helper <- .ra_build_type_helper(name, registry[[name]])
+    code <- c(if (length(code) > 0L) c(code, "") else code, helper)
+    nms <- c(nms, paste0("assert_type_", name))
+  }
+  return(list(code = code, names = nms))
+}
+
+# A standalone shape validator built from a resolved @type node.
+.ra_build_type_helper <- function(name, node) {
+  ast <- list(alternatives = list(node), null_ok = FALSE)
+  body <- c(generate_checks(ast, "value"), "return(invisible(value))")
+  return(c(
+    sprintf("assert_type_%s <- function(value) {", name),
+    paste0("  ", body),
+    "}"
+  ))
 }
 
 # Resolve a parsed annotation's named types against the registry, re-raising any
@@ -290,6 +416,19 @@ roxy_tag_parse.roxy_tag_noassert <- function(x) {
     out <- c(out, .ra_build_return_helper(fn, ret))
   }
   return(out)
+}
+
+# The helper names .ra_assemble() would emit for `fn` — mirrors its logic so a
+# block can declare them for @exportassert without re-deriving the code.
+.ra_assemble_names <- function(fn, params, ret) {
+  nms <- character()
+  if (length(params) > 0L) {
+    nms <- c(nms, paste0("assert_args_", fn))
+  }
+  if (!is.null(ret)) {
+    nms <- c(nms, paste0("assert_return_", fn))
+  }
+  return(nms)
 }
 
 # Parse one annotation, re-raising any error with the documentation location.
@@ -405,16 +544,17 @@ roxy_tag_parse.roxy_tag_noassert <- function(x) {
 .ra_block_r6 <- function(block, registry = list()) {
   r6 <- .ra_r6_data(block)
   if (is.null(r6)) {
-    return(character())
+    return(list(code = character(), names = character()))
   }
   methods <- r6$self[r6$self$type == "method", , drop = FALSE]
   if (nrow(methods) == 0L) {
-    return(character())
+    return(list(code = character(), names = character()))
   }
 
   class <- block$object$alias
   by_method <- .ra_r6_collect(block, methods)
   out <- character()
+  nms <- character()
   for (method in names(by_method)) {
     info <- by_method[[method]]
     where <- sprintf("method %s()", method)
@@ -423,12 +563,14 @@ roxy_tag_parse.roxy_tag_noassert <- function(x) {
       return(p)
     })
     ret <- if (!is.null(info$ret)) .ra_resolve_or_stop(info$ret, registry, sprintf("@return of %s", where)) else NULL
-    code <- .ra_assemble(paste0(class, "__", method), params, ret)
+    fn <- paste0(class, "__", method)
+    code <- .ra_assemble(fn, params, ret)
     if (length(code) > 0L) {
       out <- c(if (length(out) > 0L) c(out, "") else out, code)
+      nms <- c(nms, .ra_assemble_names(fn, params, ret))
     }
   }
-  return(out)
+  return(list(code = out, names = nms))
 }
 
 # Group the block's method-level @param/@return tags by method name, in source

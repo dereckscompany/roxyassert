@@ -1,3 +1,25 @@
+# roxyassert 0.8.0
+
+* New tag **`@yesassert`**: on a block that defines one or more `@type`, emit a
+  standalone, callable `assert_type_<Name>(value)` for each — even when no
+  function in the package references the type. It is the mirror of `@noassert`
+  (`@noassert` = do not generate a check here; `@yesassert` = generate one here
+  even though nothing uses it). Previously a `@type` only materialised as inlined
+  checks inside a referencing `@param`/`@return`, so a type used by no function
+  produced no callable validator.
+
+* New tag **`@exportassert`**: export the assert helpers generated *from that
+  block* — the `assert_type_*` of a `@yesassert` block, and/or the
+  `assert_args_*` / `assert_return_*` of a function or R6 method — so downstream
+  packages can call them. It is orthogonal to `@yesassert` and distinct from
+  roxygen2's `@export` (which exports the documented object, not its assert
+  helpers). The roclet appends a managed `export(...)` block to the package
+  `NAMESPACE` (re-written deterministically on each `document()`).
+
+* `roclet_process()` now returns a structured `list(code=, exports=)` rather than
+  a bare list of code blocks (internal; affects only direct callers of the roclet
+  such as `roc_proc_text()` in tests).
+
 # roxyassert 0.7.0
 
 * Type annotations now render correctly in the generated documentation when the

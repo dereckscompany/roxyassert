@@ -11,7 +11,7 @@ test_that("the roclet generates arg + return helpers for a typed function", {
     submit <- function(symbol, n, opt = NULL) NULL
   "
   out <- roxygen2::roc_proc_text(contract_roclet(), text)
-  code <- unlist(out, use.names = FALSE)
+  code <- unlist(out$code, use.names = FALSE)
 
   expect_true(any(grepl("^assert_args_submit <- function\\(symbol, n, opt\\) \\{", code)))
   expect_true(any(grepl("assert_scalar_character\\(symbol\\)", code)))
@@ -32,7 +32,7 @@ test_that("a function with no typed tags produces no helpers", {
     g <- function(x) NULL
   "
   out <- roxygen2::roc_proc_text(contract_roclet(), text)
-  expect_equal(length(out), 0L)
+  expect_equal(length(out$code), 0L)
 })
 
 test_that("only annotated params enter the args helper; return-only is allowed", {
@@ -44,7 +44,7 @@ test_that("only annotated params enter the args helper; return-only is allowed",
     #' @export
     h <- function(a, b) NULL
   "
-  code <- unlist(roxygen2::roc_proc_text(contract_roclet(), text), use.names = FALSE)
+  code <- proc_code(text)
   expect_true(any(grepl("^assert_args_h <- function\\(a\\) \\{", code)))
   expect_false(any(grepl("assert_args_h <- function\\(a, b\\)", code)))
   expect_true(any(grepl("^assert_return_h <- function\\(value\\)", code)))
@@ -59,7 +59,7 @@ test_that("a bulleted composite @return generates field checks", {
     #' @export
     report <- function() NULL
   "
-  code <- unlist(roxygen2::roc_proc_text(contract_roclet(), text), use.names = FALSE)
+  code <- proc_code(text)
   expect_true(any(grepl("^assert_return_report <- function\\(value\\)", code)))
   expect_true(any(grepl('assert_has_columns\\(value, c\\("symbol", "score"\\)\\)', code)))
   expect_true(any(grepl('assert_between\\(value\\[\\["score"\\]\\], lower = 0, upper = 1\\)', code)))
@@ -82,7 +82,7 @@ test_that("R6 methods generate <Class>__<method> helpers", {
       )
     )
   "
-  code <- unlist(roxygen2::roc_proc_text(contract_roclet(), text), use.names = FALSE)
+  code <- proc_code(text)
   expect_true(any(grepl("^assert_args_Store__get <- function\\(keys, limit\\)", code)))
   expect_true(any(grepl("assert_character\\(keys\\)", code)))
   expect_true(any(grepl("assert_scalar_integer\\(limit\\)", code)))
@@ -270,7 +270,7 @@ test_that("a multi-name @param with a space ('a, b') validates both names", {
     #' @export
     f <- function(a, b) NULL
   "
-  code <- unlist(roxygen2::roc_proc_text(contract_roclet(), text), use.names = FALSE)
+  code <- proc_code(text)
   expect_true(any(grepl("^assert_args_f <- function\\(a, b\\)", code)))
   expect_true(any(grepl("assert_scalar_double\\(a\\)", code)))
   expect_true(any(grepl("assert_scalar_double\\(b\\)", code)))
@@ -286,7 +286,7 @@ test_that("a promise<T> @return generates a plain resolved-value validator", {
     #' @export
     get_bars <- function(symbol) NULL
   "
-  code <- unlist(roxygen2::roc_proc_text(contract_roclet(), text), use.names = FALSE)
+  code <- proc_code(text)
   expect_true(any(grepl("^assert_return_get_bars <- function\\(value\\)", code)))
   expect_true(any(grepl("assert_data_table\\(value\\)", code)))
   expect_true(any(grepl('assert_has_columns\\(value, c\\("t", "close"\\)\\)', code)))
@@ -303,7 +303,7 @@ test_that("a promise<T> @param is allowed — it lowers to the resolved-type che
     #' @export
     with_logging <- function(p) NULL
   "
-  code <- unlist(roxygen2::roc_proc_text(contract_roclet(), text), use.names = FALSE)
+  code <- proc_code(text)
   expect_true(any(grepl("^assert_args_with_logging <- function\\(p\\)", code)))
   expect_true(any(grepl("assert_data_table\\(p\\)", code)))
   # promise-agnostic in @param position too: no then()/is.promise emitted
@@ -319,7 +319,7 @@ test_that("@noassert documents a param's type but generates no check (plain fn)"
     #' @export
     f <- function(a, b) NULL
   "
-  code <- unlist(roxygen2::roc_proc_text(contract_roclet(), text), use.names = FALSE)
+  code <- proc_code(text)
   expect_true(any(grepl("^assert_args_f <- function\\(b\\)", code)))
   expect_true(any(grepl("assert_scalar_double\\(b\\)", code)))
   expect_false(any(grepl("assert_scalar_character", code))) # a's check is skipped
@@ -333,7 +333,7 @@ test_that("a bare @noassert makes the whole function documented-only", {
     #' @export
     f <- function(a) NULL
   "
-  expect_length(unlist(roxygen2::roc_proc_text(contract_roclet(), text), use.names = FALSE), 0L)
+  expect_length(proc_code(text), 0L)
 })
 
 test_that("@noassert naming an undocumented param is an error", {
@@ -361,7 +361,7 @@ test_that("@noassert works on an R6 method param", {
       )
     )
   "
-  code <- unlist(roxygen2::roc_proc_text(contract_roclet(), text), use.names = FALSE)
+  code <- proc_code(text)
   expect_true(any(grepl("^assert_args_Store__get <- function\\(limit\\)", code)))
   expect_true(any(grepl("assert_scalar_count\\(limit\\)", code)))
   expect_false(any(grepl("assert_character\\(keys\\)", code))) # keys skipped

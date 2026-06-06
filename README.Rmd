@@ -367,6 +367,25 @@ A `@type` resolves at `document()` time by **inline expansion** — the generate
 
 Rules: a `@type` defines a *single type* — add `?` / `| NULL` / unions at the **use site**, not the definition; references work bare, nullable, in a union, and inside `list<…>` / `promise<…>`, but not inside `scalar<>` / `vector<>` (define a scalar alias directly, like `Bps`). Types are package-local.
 
+## Standalone, exportable asserts — `@yesassert` / `@exportassert`
+
+By default a `@type` only materialises as **inlined** checks inside a `@param`/`@return` that references it — so a shape used by no function (or one built internally and never passed as an argument) has no callable validator. Two tags lift that:
+
+- **`@yesassert`** — on a block defining one or more `@type`, emit a standalone `assert_type_<Name>(value)` for each, even if nothing references the type. It is the mirror of `@noassert` (*don't* generate a check here / *do* generate one here).
+- **`@exportassert`** — export the asserts generated **from that block** so other packages can call them. Orthogonal to `@yesassert`, and it works on a function or R6 method block too (exporting its `assert_args_*` / `assert_return_*`). Distinct from roxygen2's `@export`, which exports the documented object, not its assert helpers.
+
+``` r
+#' @type OrderAck (data.table) an order acknowledgement:
+#' - order_id (character) the exchange id.
+#' - status (scalar<character in c("FILLED", "REJECTED")>) outcome.
+#' @yesassert      # also emit a callable assert_type_OrderAck()
+#' @exportassert   # ...and export it for downstream packages
+#' @name shapes
+NULL
+```
+
+`@exportassert` appends a managed `export(...)` block to the package `NAMESPACE`, rewritten deterministically on each `document()`.
+
 ## Generated functions — conventions
 
 - **Two helpers, each optional.** `assert_args_<fn>` is emitted only if the function has at least one typed `@param`; `assert_return_<fn>` only if `@return` carries a parseable type.

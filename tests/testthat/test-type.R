@@ -1,7 +1,7 @@
 # Tests for the @type tag: reusable named types resolved (inline) at document()
 # time. End-to-end via roxygen2::roc_proc_text(); the resolver is also unit-tested.
 
-rt <- function(text) unlist(roxygen2::roc_proc_text(contract_roclet(), text), use.names = FALSE)
+rt <- function(text) proc_code(text)
 
 test_that("a @type expands inline wherever it is referenced", {
   text <- "
