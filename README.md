@@ -526,7 +526,10 @@ NULL
 ```
 
 `@exportassert` appends a managed `export(...)` block to the package
-`NAMESPACE`, rewritten deterministically on each `document()`.
+`NAMESPACE` **and** writes a `\keyword{internal}` Rd documenting the
+exported helpers (R requires exported objects to be documented, so this
+keeps `R CMD check` clean). Both are rewritten deterministically on each
+`document()`.
 
 ## Generated functions — conventions
 

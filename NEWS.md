@@ -14,7 +14,12 @@
   packages can call them. It is orthogonal to `@yesassert` and distinct from
   roxygen2's `@export` (which exports the documented object, not its assert
   helpers). The roclet appends a managed `export(...)` block to the package
-  `NAMESPACE` (re-written deterministically on each `document()`).
+  `NAMESPACE` *and* writes a documenting Rd
+  (`man/roxyassert-generated-asserts.Rd`, `\keyword{internal}`, `\usage` recovered
+  from the generated signatures) — R requires exported objects to be documented,
+  so this keeps `R CMD check` clean. Both are re-written deterministically on each
+  `document()`; the Rd carries roxyassert's own banner (not roxygen2's), so the
+  `rd` roclet never purges it.
 
 * `roclet_process()` now returns a structured `list(code=, exports=)` rather than
   a bare list of code blocks (internal; affects only direct callers of the roclet
