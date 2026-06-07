@@ -23,7 +23,7 @@
 
     <a class="navbar-brand me-2" href="index.html">roxyassert</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.8.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.9.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -498,6 +498,45 @@
 <span><span class="co">#' @return (list&lt;OrderAck&gt;) a batch.</span></span></code></pre></div>
 <p>A <code>@type</code> resolves at <code>document()</code> time by <strong>inline expansion</strong> — the generated checks are identical to writing the shape out, with no runtime cost. A <code>@type</code> may build on another (<code>@type Row (data.table) - score (Score) ...</code>); cycles, unknown names, and duplicate definitions are reported as errors.</p>
 <p>Rules: a <code>@type</code> defines a <em>single type</em> — add <code>?</code> / <code>| NULL</code> / unions at the <strong>use site</strong>, not the definition; references work bare, nullable, in a union, and inside <code>list&lt;…&gt;</code> / <code>promise&lt;…&gt;</code>, but not inside <code>scalar&lt;&gt;</code> / <code>vector&lt;&gt;</code> (define a scalar alias directly, like <code>Bps</code>). Types are package-local.</p>
+<div class="section level3">
+<h3 id="deriving-one-type-from-another--extends-override-pick--omit">Deriving one type from another — <code>extends</code>, override, <code>pick</code> / <code>omit</code>
+<a class="anchor" aria-label="anchor" href="#deriving-one-type-from-another--extends-override-pick--omit"></a>
+</h3>
+<p>A record type can be <strong>built from another</strong> instead of being copied — the same idea as TypeScript’s <code>interface B extends A</code> and <code>Pick</code> / <code>Omit</code>.</p>
+<blockquote>
+<p><strong>One rule for the parentheses:</strong> the parentheses always mean <em>“this is a type.”</em> <code>extends</code> lives <strong>inside</strong> them, and the kind (<code>data.table</code> / <code>list</code> / <code>data.frame</code>) is <strong>inherited from the base</strong> — never restated. There is no second syntax to remember.</p>
+</blockquote>
+<p><strong>Inherit and add columns</strong> — write <code>extends Base</code>, then list only the <em>new</em> columns as bullets:</p>
+<div class="sourceCode" id="cb17"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="co">#' @type Order (data.table):</span></span>
+<span><span class="co">#' - order_id (character) the exchange id.</span></span>
+<span><span class="co">#' - status (character in unlist(ORDER_STATUS)) lifecycle state.</span></span>
+<span><span class="co">#' ... (defined once)</span></span>
+<span></span>
+<span><span class="co">#' @type OrderModifyResult (extends Order):</span></span>
+<span><span class="co">#' - order_id_old (character) the id before the change.</span></span>
+<span><span class="co">#' - order_id_new (character) the id after the change.</span></span></code></pre></div>
+<p><code>OrderModifyResult</code> is every <code>Order</code> column <strong>plus</strong> the two new ones, in order — with no duplicated definition to drift.</p>
+<p><strong>Override a column</strong> — redeclare it by name; the redeclaration replaces the inherited one <em>in place</em> (its position is kept). This is a trusted full replacement: roxyassert is a generator, not a type checker, so it does not verify the new type is a narrowing of the old.</p>
+<div class="sourceCode" id="cb18"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="co">#' @type ClosedOrder (extends Order):</span></span>
+<span><span class="co">#' - status (character in unlist(c("FILLED", "CANCELLED", "EXPIRED")))</span></span></code></pre></div>
+<p><strong>Multiple inheritance</strong> — list several bases (all must be the same kind). A column defined by more than one base is an <strong>error unless you resolve it</strong> — either redeclare it (the override wins) or drop it with <code>pick</code>/<code>omit</code>:</p>
+<div class="sourceCode" id="cb19"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="co">#' @type MarginOrder (extends Order, MarginFields):</span></span></code></pre></div>
+<p><strong>Subset with <code>pick</code> / <code>omit</code></strong> (mutually exclusive; every named column must exist in a base):</p>
+<div class="sourceCode" id="cb20"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="co">#' @type OrderSummary (extends Order pick order_id, status):</span></span>
+<span><span class="co">#' @type PublicOrder  (extends Order omit order_id_client):</span></span></code></pre></div>
+<p><code>pick</code>/<code>omit</code> act on the <strong>inherited</strong> columns; redeclaring a column you just removed is an error. The keywords <code>extends</code> / <code>pick</code> / <code>omit</code> cannot be used as <code>@type</code> names, and listing a base or column twice is an error.</p>
+<p>All of this works <strong>inline</strong> too — define the shape right in a <code>@param</code> / <code>@return</code>, no name needed:</p>
+<div class="sourceCode" id="cb21"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="co">#' @param legs (extends Order pick order_id, status) the legs.</span></span>
+<span><span class="co">#' @return (extends Order):</span></span>
+<span><span class="co">#' - order_id_old (character) prior id.</span></span>
+<span><span class="co">#' - order_id_new (character) new id.</span></span></code></pre></div>
+<p>Derivation is pure <code>document()</code>-time list algebra over the resolved columns: it reuses the existing <code>@type</code> registry, cycle / unknown-base detection, and lowering, with no runtime cost. Two derivations are deliberately <strong>out of scope</strong> for now (each is a separate, larger feature): <em>renaming</em> a column (use <code>omit</code> + re-add) and <em>generic / parameterized</em> types (<code>Paged&lt;T&gt;</code>).</p>
+</div>
 </div>
 <div class="section level2">
 <h2 id="standalone-exportable-asserts--genassert--exportassert">Standalone, exportable asserts — <code>@genassert</code> / <code>@exportassert</code>
@@ -510,7 +549,7 @@
 <li>
 <strong><code>@exportassert</code></strong> — export the asserts generated <strong>from that block</strong> so other packages can call them. Works on a function or R6 method block too (exporting its <code>assert_args_*</code> / <code>assert_return_*</code>). Distinct from roxygen2’s <code>@export</code>, which exports the documented object, not its assert helpers.</li>
 </ul>
-<div class="sourceCode" id="cb17"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb22"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co">#' @type OrderAck (data.table) an order acknowledgement:</span></span>
 <span><span class="co">#' - order_id (character) the exchange id.</span></span>
 <span><span class="co">#' - status (scalar&lt;character in c("FILLED", "REJECTED")&gt;) outcome.</span></span>
@@ -559,6 +598,8 @@
 <strong>A named type shows as its bare name in rendered docs</strong> — <code>@type</code> is resolved only for the generated checks, so a help page / pkgdown site shows <code>(OrderAck)</code> verbatim, not its expanded shape, with no auto-generated topic or link. To give a type a help page, document its <code>@type</code> block like any object (add a title/description and <code>@name</code>); reference it as a markdown link (<code>[OrderAck]</code>) for a clickable cross-reference. (Auto-generated type pages and links may come later.)</li>
 <li>
 <strong>A <code>class&lt;Name&gt;</code> name is not verified at <code>document()</code> time</strong> — roxyassert emits <code>assert_class(x, "Name")</code> blindly, so a typo such as <code>class&lt;Duraton&gt;</code> generates without complaint and fails only at runtime.</li>
+<li>
+<strong>An <code>extends</code> override is not checked for compatibility</strong> — redeclaring an inherited column replaces it with whatever you write; roxyassert has no subtype lattice, so it does not verify the override narrows the base column (it trusts the author). Column <em>renaming</em> and <em>generic / parameterized</em> types (<code>Paged&lt;T&gt;</code>) are likewise not supported yet.</li>
 </ul>
 </div>
 <div class="section level2">
@@ -574,7 +615,7 @@
 <div class="section level2">
 <h2 id="citation">Citation<a class="anchor" aria-label="anchor" href="#citation"></a>
 </h2>
-<div class="sourceCode" id="cb18"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb23"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/utils/citation.html" class="external-link">citation</a></span><span class="op">(</span><span class="st">"roxyassert"</span><span class="op">)</span></span></code></pre></div>
 </div>
 </div>

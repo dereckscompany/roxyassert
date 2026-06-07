@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">roxyassert</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.8.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.9.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -32,9 +32,24 @@
 <div class="row">
   <main id="main" class="col-md-9"><div class="page-header">
       <img src="../logo.png" class="logo" alt=""><h1>Changelog</h1>
-      <small>Source: <a href="https://github.com/dereckscompany/roxyassert/blob/v0.8.0/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
+      <small>Source: <a href="https://github.com/dereckscompany/roxyassert/blob/v0.9.0/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
     </div>
 
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.9.0" id="roxyassert-090">roxyassert 0.9.0<a class="anchor" aria-label="anchor" href="#roxyassert-090"></a></h2>
+<ul><li>
+<p><strong>Record-type derivation for <code>@type</code></strong> — build one record shape from another instead of copying columns, the same idea as TypeScript’s <code>extends</code> / <code>Pick</code> / <code>Omit</code>. Inside the parentheses (the kind is inherited from the base, never restated):</p>
+<ul><li>
+<strong><code>extends Base</code></strong> — inherit the base’s columns, then add new ones as bullets: <code>@type OrderModifyResult (extends Order):</code> plus the modify-only columns.</li>
+<li>
+<strong>Override</strong> — redeclaring an inherited column by name replaces it in place (a trusted full replacement; roxyassert has no subtype lattice, so it is not checked for being a narrowing).</li>
+<li>
+<strong>Multiple inheritance</strong> — <code>(extends A, B)</code>; a column defined by more than one base is an error unless the derived type redeclares it.</li>
+<li>
+<strong><code>pick</code> / <code>omit</code></strong> — <code>(extends Order pick id, status)</code> / <code>(extends Order omit secret)</code>; mutually exclusive, names must exist in a base.</li>
+</ul><p>Works both as a named <code>@type</code> and <strong>inline</strong> in a <code>@param</code>/<code>@return</code> (<code>@return (extends Order):</code> + bullets). Pure <code>document()</code>-time column splicing — it reuses the existing <code>@type</code> registry, cycle / unknown-base detection, and lowering, with no runtime cost and no change to generated code. Column <em>renaming</em> and <em>generic / parameterized</em> types remain out of scope (see the grammar vignette’s <em>Non-goals</em>).</p>
+</li>
+</ul></div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.8.0" id="roxyassert-080">roxyassert 0.8.0<a class="anchor" aria-label="anchor" href="#roxyassert-080"></a></h2>
 <ul><li><p>New tag <strong><code>@genassert</code></strong>: on a block that defines one or more <code>@type</code>, emit a standalone, callable <code>assert_type_&lt;Name&gt;(value)</code> for <em>every</em> <code>@type</code> in that block — even when no function references the type. Previously a <code>@type</code> only materialised as inlined checks inside a referencing <code>@param</code>/<code>@return</code>, so a type used by no function (or one built internally and never passed as an argument) had no callable validator.</p></li>

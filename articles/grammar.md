@@ -111,7 +111,7 @@ rules are static (§4).
                           written EITHER as a "| NULL" alternative OR a trailing "?",
                           never both *)
 
-    type           ::= atomic | wildcard | reference | composite | promise | named
+    type           ::= atomic | wildcard | reference | composite | derived | promise | named
     named          ::= ident
                        (* an identifier that is not a built-in type: a reference to a
                           type declared elsewhere with `@type` (S6). Resolved inline at
@@ -153,6 +153,16 @@ rules are static (§4).
                           list<class<Engine>>, list<any>, list<data.table>. T is a `type`
                           (no slot-level union / `| NULL` / `?`); a `list<T>` is a leaf
                           and takes no bullets (S1, S3). *)
+    derived        ::= "extends" ident ( "," ident )*
+                           ( ( "pick" | "omit" ) ident ( "," ident )* )?
+                       (* a DERIVED composite (S7): inherit the columns of the named
+                          base record(s), then add / override columns via nested bullets
+                          and/or narrow with pick / omit. The composite KIND is inherited
+                          from the base(s) and never restated (no `data.table extends`);
+                          the whole derivation sits INSIDE the parentheses, like any
+                          type. Resolved at document() time by splicing columns; bases
+                          resolve through `named`, so cycle / unknown-base detection is
+                          reused. *)
     promise        ::= "promise" "<" type ">"
                        (* a result resolving to the type T, delivered synchronously
                           OR as a promises::promise (S5). T is a single `type` (no
@@ -282,6 +292,13 @@ Tokenizing rules (so the grammar is deterministic in practice):
   belongs to `character`. `| NULL` is not positional: the grammar fixes
   it to the slot tail, so a mid-union `(numeric | NULL | character)` is
   a parse error.
+- **`extends` name lists.** A slot opening with the keyword `extends` is
+  a `derived` composite: a comma-separated list of base `ident`s, then
+  an optional `pick`/`omit` keyword with its own comma-separated `ident`
+  list of column names. Both lists are plain identifiers (no brackets /
+  `rexpr`); each ends at the first token that is not `ident` `","`.
+  Nested `bullets` after the `)` add or override columns exactly as for
+  a bare composite (S1).
 
 ## 4. Static rules (beyond the context-free grammar)
 
@@ -383,6 +400,32 @@ are *specified rules*, not stylistic suggestions.
   (resolved transitively); a **cycle**, an **unknown** name, a
   **duplicate** `@type`, and a name that **shadows a built-in** are all
   errors. Types are **package-local**.
+- **S7 — record derivation (`extends`).** A `derived` type splices the
+  resolved columns of its base(s) with this type’s own field bullets and
+  any `pick`/`omit`, producing a plain composite that lowers exactly
+  like a hand-written record (no runtime cost). The composite **kind is
+  inherited**: every base must resolve to a bare composite (S3) and all
+  bases must share one kind (mixing `list` with `data.table` is an
+  error); the derived type never restates the kind. **Inherited columns
+  come first, in base order**, then this type’s added columns in source
+  order. A bullet whose name **matches** an inherited column **overrides
+  it in place** (its position is kept) — a *trusted full replacement*,
+  **not** checked for being a narrowing (roxyassert has no subtype
+  lattice, so the author owns compatibility). A bullet with a **new**
+  name appends. A column defined by **more than one base** is an error
+  **unless** the derived type redeclares it (the override resolves the
+  tie). `pick` keeps only the listed inherited columns, `omit` drops
+  them; the two are **mutually exclusive** and every listed name must
+  exist in a base. The collision check runs **after** `pick`/`omit`, so
+  dropping a shared column with `pick`/`omit` also resolves the
+  conflict; conversely, redeclaring a column that `pick`/`omit` removed
+  is an error. Listing a **base** twice, declaring a **column** twice,
+  or restating the kind (`data.table extends …`) are errors, and the
+  keywords `extends`/`pick`/`omit` may not be `@type` names. Bases
+  resolve through `named` (S6), so an **unknown base** and a **cycle**
+  reuse S6’s detection. Works in a `@type` definition and **inline** in
+  a `@param`/`@return`. Column *renaming* and *generic / parameterized*
+  types are out of scope (§12).
 
 ## 5. Binding & precedence (why `|` is never ambiguous)
 
@@ -804,6 +847,16 @@ are now `list<T>`, e.g. `list<scalar<numeric>>`, `list<function>`,
   `Price` is not allowed. Put the refinement in the `@type`, define
   another `@type`, or write the refined type inline. **Cross-package**
   named types are also out of scope — `@type` is package-local.
+- **Renaming a derived column** — a `derived` type (S7, `extends`) can
+  add, override, `pick` and `omit` columns, but cannot *rename* an
+  inherited column (there is no `old -> new` operator). Use `omit` +
+  re-add under the new name. A renamed column is, for assertion
+  purposes, a different record.
+- **Generic / parameterized types** — a `@type` template over a type
+  variable (`@type Paged<T>` instantiated as `Paged<Order>`) is out of
+  scope. The `<…>` syntax only *applies* a known container (`list<T>`,
+  `promise<T>`, `class<T>`) to a concrete type; it does not *define* a
+  type parameter.
 
 ## 13. `@noassert` — document a type without enforcing it
 
@@ -893,6 +946,12 @@ for `list`, parameterised as `list<T>` where `T` is a single `type`
 (homogeneous, no slot-union/`| NULL`/`?`, a leaf with no bullets);
 `list<any>` ≡ bare `list` at runtime; a list-column is typed `list<T>`,
 and an atomic-typed column rejects list-cells.
+
+a `derived` composite (`extends Base…`) sits inside the parentheses,
+inherits its kind from the base(s) (never restated), inherited columns
+first then added/overridden ones (override in place, trusted/unchecked),
+errors on a multi-base column collision unless redeclared, and
+`pick`/`omit` are mutually exclusive over existing base columns (S7).
 
 everything after `)` is free-text description (roxyassert ignores it); a
 `:` adjacent to it is cosmetic; canonical style omits it.
