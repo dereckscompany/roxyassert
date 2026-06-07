@@ -17,4 +17,9 @@ generates argument and return assertion helpers from your typed \verb{@param} /
 \details{
 \if{html}{\out{<div class="sourceCode dcf">}}\preformatted{Roxygen: list(markdown = TRUE, roclets = c("namespace", "rd", "roxyassert::contract_roclet"))
 }\if{html}{\out{</div>}}
+
+List this roclet \strong{after} \code{"rd"}. Besides generating the contract helpers it
+repairs the \verb{man/*.Rd} that \code{rd} writes (so typed \verb{@param}/\verb{@return}
+annotations render under markdown); that repair is a no-op unless \code{rd} has
+already run.
 }

@@ -1,3 +1,36 @@
+# roxyassert 0.8.0
+
+* New tag **`@genassert`**: on a block that defines one or more `@type`, emit a
+  standalone, callable `assert_type_<Name>(value)` for *every* `@type` in that
+  block — even when no function references the type. Previously a `@type` only
+  materialised as inlined checks inside a referencing `@param`/`@return`, so a type
+  used by no function (or one built internally and never passed as an argument)
+  had no callable validator.
+
+* New tag **`@exportassert`**: export the assert helpers generated *from that
+  block* — the `assert_type_*` of a `@genassert` block, and/or the
+  `assert_args_*` / `assert_return_*` of a function or R6 method — so downstream
+  packages can call them. Distinct from roxygen2's `@export` (which exports the
+  documented object, not its assert helpers). The roclet appends a managed
+  `export(...)` block to the package `NAMESPACE` *and* writes a documenting Rd
+  (`man/roxyassert-generated-asserts.Rd`, `\keyword{internal}`, `\usage` recovered
+  from the generated signatures) — R requires exported objects to be documented,
+  so this keeps `R CMD check` clean. Both are re-written deterministically on each
+  `document()`; the Rd carries roxyassert's own banner (not roxygen2's), so the
+  `rd` roclet never purges it.
+
+* `@genassert` and `@exportassert` are **bare, whole-block flags** — they are not
+  selective like `@noassert` (which exempts named *parameters* of one function): a
+  `@type` is its own definition, so per-type control comes from putting a `@type`
+  in its own block. A stray name list on either tag is an error, not silently
+  ignored. The exported helper names are roxyassert-generated (including R6
+  `assert_args_<Class>__<method>`): they are public, though hidden from the help
+  index via `\keyword{internal}`.
+
+* `roclet_process()` now returns a structured `list(code=, exports=)` rather than
+  a bare list of code blocks — a behaviour change to the return value of an
+  exported S3 method, affecting any direct caller (e.g. `roc_proc_text()`).
+
 # roxyassert 0.7.0
 
 * Type annotations now render correctly in the generated documentation when the
