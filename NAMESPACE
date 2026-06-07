@@ -3,7 +3,7 @@
 S3method(roxygen2::roclet_output,roclet_contract)
 S3method(roxygen2::roclet_process,roclet_contract)
 S3method(roxygen2::roxy_tag_parse,roxy_tag_exportassert)
+S3method(roxygen2::roxy_tag_parse,roxy_tag_genassert)
 S3method(roxygen2::roxy_tag_parse,roxy_tag_noassert)
 S3method(roxygen2::roxy_tag_parse,roxy_tag_type)
-S3method(roxygen2::roxy_tag_parse,roxy_tag_yesassert)
 export(contract_roclet)

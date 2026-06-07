@@ -141,7 +141,7 @@ test_that("R6 method contracts generate through the real on-disk document() path
   # does not use `env`, so a dummy is fine.
   blocks <- suppressMessages(roxygen2::parse_package(dir))
   results <- roxygen2::roclet_process(contract_roclet(), blocks, env = NULL, base_path = dir)
-  code <- unlist(results, use.names = FALSE)
+  code <- unlist(results$code, use.names = FALSE)
 
   expect_true(any(grepl("^assert_args_Store__get <- function\\(keys, limit\\)", code)))
   expect_true(any(grepl("assert_character\\(keys\\)", code)))
