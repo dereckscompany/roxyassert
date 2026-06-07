@@ -1,3 +1,27 @@
+# roxyassert 0.9.0
+
+* **Record-type derivation for `@type`** — build one record shape from another
+  instead of copying columns, the same idea as TypeScript's `extends` / `Pick` /
+  `Omit`. Inside the parentheses (the kind is inherited from the base, never
+  restated):
+
+  * **`extends Base`** — inherit the base's columns, then add new ones as bullets:
+    `@type OrderModifyResult (extends Order):` plus the modify-only columns.
+  * **Override** — redeclaring an inherited column by name replaces it in place
+    (a trusted full replacement; roxyassert has no subtype lattice, so it is not
+    checked for being a narrowing).
+  * **Multiple inheritance** — `(extends A, B)`; a column defined by more than one
+    base is an error unless the derived type redeclares it.
+  * **`pick` / `omit`** — `(extends Order pick id, status)` /
+    `(extends Order omit secret)`; mutually exclusive, names must exist in a base.
+
+  Works both as a named `@type` and **inline** in a `@param`/`@return`
+  (`@return (extends Order):` + bullets). Pure `document()`-time column splicing —
+  it reuses the existing `@type` registry, cycle / unknown-base detection, and
+  lowering, with no runtime cost and no change to generated code. Column *renaming*
+  and *generic / parameterized* types remain out of scope (see the grammar
+  vignette's *Non-goals*).
+
 # roxyassert 0.8.0
 
 * New tag **`@genassert`**: on a block that defines one or more `@type`, emit a
