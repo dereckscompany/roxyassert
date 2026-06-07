@@ -105,10 +105,9 @@ test_that("pick/omit error on an unknown column or when used together", {
   base <- paste0(order, "NULL\n")
   expect_match(err(paste0(base, "#' @type P (extends Order pick nope)\nNULL\n", noref)), "pick.*not in the base")
   expect_match(err(paste0(base, "#' @type O (extends Order omit nope)\nNULL\n", noref)), "omit.*not in the base")
-  # pick and omit on one head: only the first projection parses, the rest is
-  # unexpected trailing input -> error (you cannot use both).
+  # pick and omit on one head -> dedicated error (you cannot use both).
   both <- paste0(base, "#' @type PO (extends Order pick id omit status)\nNULL\n", noref)
-  expect_error(rt(both))
+  expect_match(err(both), "cannot both be used")
 })
 
 # ---- errors: unknown base, cycle, non-composite -----------------------------
@@ -174,4 +173,114 @@ test_that("parse_annotation captures extends, pick and omit", {
   expect_equal(parse_annotation("(extends A, B)")$alternatives[[1]]$extends, c("A", "B"))
   expect_equal(parse_annotation("(extends Order pick id, status)")$alternatives[[1]]$pick, c("id", "status"))
   expect_equal(parse_annotation("(extends Order omit status)")$alternatives[[1]]$omit, "status")
+})
+
+# ---- pick/omit vs multi-base collisions -------------------------------------
+
+test_that("pick/omit can resolve a multi-base collision; an unresolved one still errors", {
+  defs <- paste0(
+    "#' @type A (data.table):\n#' - x (character) ax.\n#' - y (character) ay.\nNULL\n",
+    "#' @type B (data.table):\n#' - x (numeric) bx.\n#' - z (numeric) bz.\nNULL\n"
+  )
+  ret <- "#' F.\n#' @return (C) v.\n#' @export\nf <- function() NULL"
+  # omit the colliding column -> succeeds with the rest
+  expect_true(any(grepl(
+    'assert_has_columns\\(value, c\\("y", "z"\\)\\)',
+    rt(paste0(defs, "#' @type C (extends A, B omit x)\nNULL\n", ret))
+  )))
+  # pick a non-colliding subset -> succeeds
+  expect_true(any(grepl(
+    'assert_has_columns\\(value, c\\("y", "z"\\)\\)',
+    rt(paste0(defs, "#' @type C (extends A, B pick y, z)\nNULL\n", ret))
+  )))
+  # a collision NOT removed by the projection still errors
+  expect_match(err(paste0(defs, "#' @type C (extends A, B pick x, y)\nNULL\n", noref)), "more than one base")
+})
+
+test_that("override resolving a collision keeps the inherited position", {
+  defs <- paste0(
+    "#' @type A (data.table):\n#' - x (character) ax.\n#' - y (character) ay.\nNULL\n",
+    "#' @type B (data.table):\n#' - x (numeric) bx.\n#' - z (numeric) bz.\nNULL\n"
+  )
+  code <- rt(paste0(defs, "#' @type C (extends A, B):\n#' - x (logical) cx.\nNULL\n",
+    "#' F.\n#' @return (C) v.\n#' @export\nf <- function() NULL"))
+  # x keeps first (A's) position; columns x, y, z; x now logical
+  expect_true(any(grepl('assert_has_columns\\(value, c\\("x", "y", "z"\\)\\)', code)))
+  expect_true(any(grepl('assert_logical\\(value\\[\\["x"\\]\\]\\)', code)))
+})
+
+# ---- richer column types in derived records ---------------------------------
+
+test_that("a derived record can inherit/add list<T> and nullable columns", {
+  text <- paste0(
+    "#' @type Base (data.table):\n#' - id (character) id.\n#' - note (character?) optional.\nNULL\n",
+    "#' @type Tagged (extends Base):\n#' - tags (list<character>) a list-column.\nNULL\n",
+    "#' F.\n#' @return (Tagged?) maybe.\n#' @export\nf <- function() NULL"
+  )
+  code <- rt(text)
+  expect_true(any(grepl('assert_has_columns\\(value, c\\("id", "note", "tags"\\)\\)', code)))
+  expect_true(any(grepl('assert_list_of\\(value\\[\\["tags"\\]\\], "character"\\)', code)))
+  # nullable derived return wraps the whole expansion
+  expect_true(any(grepl('if \\(!is.null\\(value\\)\\)', code)))
+  # the inherited nullable column wraps its own check
+  expect_true(any(grepl('if \\(!is.null\\(value\\[\\["note"\\]\\]\\)\\)', code)))
+})
+
+test_that("a derived type works inside list<> and promise<>", {
+  text <- paste0(
+    order, "NULL\n",
+    "#' @type Mod (extends Order):\n#' - old (character) prior.\nNULL\n",
+    "#' F.\n#' @param xs (list<Mod>) many.\n#' @return (promise<Mod>) async one.\n#' @export\nf <- function(xs) NULL"
+  )
+  code <- rt(text)
+  expect_true(any(grepl('assert_list\\(xs\\)', code)))
+  expect_true(any(grepl('for \\(.x in xs\\)', code)))
+  # promise<Mod> validates the resolved record
+  expect_true(any(grepl('assert_has_columns\\(value, c\\("id", "status", "old"\\)\\)', code)))
+})
+
+test_that("extends works inline in an R6 method @return", {
+  text <- paste0(order, "NULL\n", "
+    #' @title Engine
+    #' @description An engine.
+    Engine <- R6::R6Class('Engine',
+      public = list(
+        #' @description Modify an order.
+        #' @return (extends Order):
+        #' - extra (character) bonus.
+        modify = function() NULL
+      )
+    )
+  ")
+  code <- rt(text)
+  expect_true(any(grepl('^assert_return_Engine__modify <- function\\(value\\)', code)))
+  expect_true(any(grepl('assert_has_columns\\(value, c\\("id", "status", "extra"\\)\\)', code)))
+})
+
+# ---- more error paths -------------------------------------------------------
+
+test_that("derivation rejects malformed forms with clear errors", {
+  base <- paste0(order, "NULL\n")
+  # duplicate base
+  expect_match(err(paste0(base, "#' @type D (extends Order, Order)\nNULL\n", noref)), "more than once")
+  # duplicate local column
+  expect_match(err(paste0(base,
+    "#' @type D (extends Order):\n#' - new (character) a.\n#' - new (integer) b.\nNULL\n", noref)), "more than once")
+  # restating the inherited kind
+  expect_match(err(paste0(base, "#' @type D (data.table extends Order)\nNULL\n", noref)), "inherited from the base")
+  # redeclaring a column that pick/omit removed
+  expect_match(err(paste0(base,
+    "#' @type D (extends Order omit status):\n#' - status (integer) s.\nNULL\n", noref)), "excluded by pick/omit")
+  # a derivation keyword cannot be a @type name
+  expect_match(err(paste0("#' @type extends (data.table):\n#' - a (character) x.\nNULL\n", noref)), "shadow")
+})
+
+test_that("@noassert suppresses a derived-typed parameter's check", {
+  text <- paste0(
+    order, "NULL\n",
+    "#' @type Mod (extends Order):\n#' - old (character) prior.\nNULL\n",
+    "#' F.\n#' @param m (Mod) the mod.\n#' @noassert m\n#' @export\nf <- function(m) NULL"
+  )
+  code <- rt(text)
+  expect_false(any(grepl('assert_has_columns\\(m,', code)))
 })

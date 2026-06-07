@@ -394,8 +394,13 @@ These context-sensitive constraints are checked by the generator; they are
   than one base** is an error **unless** the derived type redeclares it (the
   override resolves the tie). `pick` keeps only the listed inherited columns,
   `omit` drops them; the two are **mutually exclusive** and every listed name must
-  exist in a base. Bases resolve through `named` (S6), so an **unknown base** and a
-  **cycle** reuse S6's detection. Works in a `@type` definition and **inline** in a
+  exist in a base. The collision check runs **after** `pick`/`omit`, so dropping a
+  shared column with `pick`/`omit` also resolves the conflict; conversely,
+  redeclaring a column that `pick`/`omit` removed is an error. Listing a **base**
+  twice, declaring a **column** twice, or restating the kind (`data.table extends
+  …`) are errors, and the keywords `extends`/`pick`/`omit` may not be `@type` names.
+  Bases resolve through `named` (S6), so an **unknown base** and a **cycle** reuse
+  S6's detection. Works in a `@type` definition and **inline** in a
   `@param`/`@return`. Column *renaming* and *generic / parameterized* types are out
   of scope (§12).
 

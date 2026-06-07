@@ -27,8 +27,11 @@
 .ra_set_ok <- c(.ra_ordered_num, .ra_temporal, .ra_enumerable) # accept `in c(..)`
 .ra_na_ok <- c(.ra_ordered_num, .ra_temporal, .ra_enumerable, .ra_plain) # accept `| NA`
 
-# Built-in type words a @type name may not shadow.
-.ra_type_reserved <- c(.ra_atomic, .ra_composite, "any", "function", "class", "scalar", "vector", "promise")
+# Built-in type words and derivation keywords a @type name may not shadow.
+.ra_type_reserved <- c(
+  .ra_atomic, .ra_composite, "any", "function", "class", "scalar", "vector", "promise",
+  "extends", "pick", "omit"
+)
 
 # ---- cursor over the annotation text ----------------------------------------
 
@@ -530,6 +533,13 @@ parse_annotation <- function(text) {
 # same `named` path, so unknown-base and cycle detection are reused unchanged.
 .ra_merge_extends <- function(node, registry, stack) {
   bases <- node$extends
+  if (anyDuplicated(bases)) {
+    stop(
+      "roxyassert: 'extends' lists a base more than once: ",
+      paste(unique(bases[duplicated(bases)]), collapse = ", "),
+      call. = FALSE
+    )
+  }
   resolved <- lapply(bases, function(b) .ra_resolve_node(list(kind = "named", name = b), registry, stack))
   for (i in seq_along(resolved)) {
     b <- resolved[[i]]
@@ -554,19 +564,21 @@ parse_annotation <- function(text) {
   } else {
     character()
   }
-  # Inherited columns, in base order. A name in more than one base errors unless
-  # the child redeclares it (the override applied below resolves the tie).
+  dup_local <- unique(local_names[duplicated(local_names)])
+  if (length(dup_local) > 0L) {
+    stop("roxyassert: the derived type declares column '", dup_local[[1]], "' more than once", call. = FALSE)
+  }
+  # Inherited columns, in base order. A name in more than one base is RECORDED here
+  # but only errors LATER (after projection) if it survives and is not redeclared —
+  # so `extends A, B omit x` can resolve a collision by dropping the shared column.
   inherited <- list()
   seen <- character()
+  dup <- character()
   for (b in resolved) {
     for (f in b$fields) {
       if (f$name %in% seen) {
-        if (!(f$name %in% local_names)) {
-          stop(
-            "roxyassert: column '", f$name, "' is defined by more than one base; ",
-            "redeclare it in the derived type to resolve the conflict",
-            call. = FALSE
-          )
+        if (!(f$name %in% dup)) {
+          dup <- c(dup, f$name)
         }
         next
       }
@@ -574,8 +586,8 @@ parse_annotation <- function(text) {
       inherited[[length(inherited) + 1L]] <- f
     }
   }
-  # pick / omit projection over the inherited columns (mutually exclusive; every
-  # named column must exist in a base).
+  # pick / omit projection over the inherited columns (mutually exclusive — also
+  # guarded at parse time; every named column must exist in a base).
   if (!is.null(node$pick) && !is.null(node$omit)) {
     stop("roxyassert: 'pick' and 'omit' cannot both be used on one 'extends'", call. = FALSE)
   }
@@ -593,8 +605,20 @@ parse_annotation <- function(text) {
     }
     inherited <- Filter(function(f) !(f$name %in% node$omit), inherited)
   }
+  # A multi-base collision that SURVIVED projection and is not redeclared locally is
+  # unresolved -> error (drop it with pick/omit, or redeclare it).
+  retained <- vapply(inherited, function(f) f$name, character(1))
+  unresolved <- setdiff(intersect(dup, retained), local_names)
+  if (length(unresolved) > 0L) {
+    stop(
+      "roxyassert: column '", unresolved[[1]], "' is defined by more than one base; ",
+      "redeclare it in the derived type (or pick/omit it) to resolve the conflict",
+      call. = FALSE
+    )
+  }
   # Local field bullets: override an inherited column IN PLACE (keeping its
-  # position), or append a genuinely new column.
+  # position), or append a genuinely NEW column. Redeclaring a base column that
+  # pick/omit removed is contradictory -> error.
   fields <- inherited
   if (length(node$fields) > 0L) {
     for (lf in node$fields) {
@@ -602,6 +626,12 @@ parse_annotation <- function(text) {
       idx <- match(lf$name, pos)
       if (!is.na(idx)) {
         fields[[idx]] <- lf
+      } else if (lf$name %in% seen) {
+        stop(
+          "roxyassert: column '", lf$name, "' was excluded by pick/omit but is ",
+          "redeclared; drop it from pick/omit, or remove the bullet",
+          call. = FALSE
+        )
       } else {
         fields[[length(fields) + 1L]] <- lf
       }
@@ -673,6 +703,11 @@ parse_annotation <- function(text) {
   if (w %in% .ra_composite) {
     element <- NULL
     .ra_ws(p)
+    if (.ra_peek_word(p) == "extends") {
+      .ra_err(p, paste0(
+        "the kind is inherited from the base - write '(extends Base)', not '(", w, " extends Base)'"
+      ))
+    }
     if (w == "list" && .ra_ch(p) == "<") {
       p$pos <- p$pos + 1L
       element <- .ra_parse_type(p)
@@ -710,30 +745,36 @@ parse_annotation <- function(text) {
 # bases are not yet resolvable here). Field bullets (column additions / overrides)
 # attach as `$fields` through the normal bullet path, exactly like a bare composite.
 .ra_parse_extends <- function(p) {
-  bases <- .ra_read_name_list(p)
+  bases <- .ra_read_name_list(p, "a base name after 'extends'")
   pick <- NULL
   omit <- NULL
   proj <- .ra_peek_word(p)
   if (proj == "pick" || proj == "omit") {
     .ra_read_word(p)
-    cols <- .ra_read_name_list(p)
+    cols <- .ra_read_name_list(p, paste0("a column name after '", proj, "'"))
     if (proj == "pick") {
       pick <- cols
     } else {
       omit <- cols
+    }
+    # Only one projection per derivation: a second pick/omit is an explicit error
+    # (rather than the opaque "trailing input" the leftover would otherwise give).
+    nxt <- .ra_peek_word(p)
+    if (nxt == "pick" || nxt == "omit") {
+      .ra_err(p, "'pick' and 'omit' cannot both be used on one 'extends'")
     }
   }
   return(list(kind = "composite", base = NULL, extends = bases, pick = pick, omit = omit, element = NULL, fields = NULL))
 }
 
 # A comma-separated list of identifiers: the base name(s) after `extends`, or the
-# column names after `pick` / `omit`.
-.ra_read_name_list <- function(p) {
+# column names after `pick` / `omit`. `what` names what is expected, for the error.
+.ra_read_name_list <- function(p, what) {
   names <- character()
   repeat {
     nm <- .ra_read_word(p)
     if (nm == "") {
-      .ra_err(p, "expected a name")
+      .ra_err(p, paste0("expected ", what))
     }
     names <- c(names, nm)
     .ra_ws(p)

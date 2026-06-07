@@ -395,7 +395,7 @@ A record type can be **built from another** instead of being copied — the same
 #' - status (character in unlist(c("FILLED", "CANCELLED", "EXPIRED")))
 ```
 
-**Multiple inheritance** — list several bases (all must be the same kind). A column defined by more than one base is an **error unless the derived type redeclares it** (the override then resolves the tie):
+**Multiple inheritance** — list several bases (all must be the same kind). A column defined by more than one base is an **error unless you resolve it** — either redeclare it (the override wins) or drop it with `pick`/`omit`:
 
 ```r
 #' @type MarginOrder (extends Order, MarginFields):
@@ -407,6 +407,8 @@ A record type can be **built from another** instead of being copied — the same
 #' @type OrderSummary (extends Order pick order_id, status):
 #' @type PublicOrder  (extends Order omit order_id_client):
 ```
+
+`pick`/`omit` act on the **inherited** columns; redeclaring a column you just removed is an error. The keywords `extends` / `pick` / `omit` cannot be used as `@type` names, and listing a base or column twice is an error.
 
 All of this works **inline** too — define the shape right in a `@param` / `@return`, no name needed:
 

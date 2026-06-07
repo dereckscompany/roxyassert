@@ -536,8 +536,9 @@ does not verify the new type is a narrowing of the old.
 ```
 
 **Multiple inheritance** — list several bases (all must be the same
-kind). A column defined by more than one base is an **error unless the
-derived type redeclares it** (the override then resolves the tie):
+kind). A column defined by more than one base is an **error unless you
+resolve it** — either redeclare it (the override wins) or drop it with
+`pick`/`omit`:
 
 ``` r
 #' @type MarginOrder (extends Order, MarginFields):
@@ -550,6 +551,11 @@ must exist in a base):
 #' @type OrderSummary (extends Order pick order_id, status):
 #' @type PublicOrder  (extends Order omit order_id_client):
 ```
+
+`pick`/`omit` act on the **inherited** columns; redeclaring a column you
+just removed is an error. The keywords `extends` / `pick` / `omit`
+cannot be used as `@type` names, and listing a base or column twice is
+an error.
 
 All of this works **inline** too — define the shape right in a `@param`
 / `@return`, no name needed:
