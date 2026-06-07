@@ -15,3 +15,8 @@ contract_roclet()
 A roxygen2 roclet object.
 
 ## Details
+
+List this roclet **after** `"rd"`. Besides generating the contract
+helpers it repairs the `man/*.Rd` that `rd` writes (so typed
+`@param`/`@return` annotations render under markdown); that repair is a
+no-op unless `rd` has already run.

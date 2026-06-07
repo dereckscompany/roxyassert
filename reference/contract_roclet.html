@@ -11,7 +11,7 @@ generates argument and return assertion helpers from your typed @param /
 
     <a class="navbar-brand me-2" href="../index.html">roxyassert</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.7.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.8.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -36,7 +36,7 @@ generates argument and return assertion helpers from your typed @param /
 <div class="row">
   <main id="main" class="col-md-9"><div class="page-header">
       <img src="../logo.png" class="logo" alt=""><h1>roxyassert contract roclet</h1>
-      <small class="dont-index">Source: <a href="https://github.com/dereckscompany/roxyassert/blob/v0.7.0/R/roclet.R" class="external-link"><code>R/roclet.R</code></a></small>
+      <small class="dont-index">Source: <a href="https://github.com/dereckscompany/roxyassert/blob/v0.8.0/R/roclet.R" class="external-link"><code>R/roclet.R</code></a></small>
       <div class="d-none name"><code>contract_roclet.Rd</code></div>
     </div>
 
@@ -58,6 +58,10 @@ generates argument and return assertion helpers from your typed <code>@param</co
     <div class="section level2">
     <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
     <p></p><div class="sourceCode dcf"><pre><code></code></pre><p></p></div>
+<p>List this roclet <strong>after</strong> <code>"rd"</code>. Besides generating the contract helpers it
+repairs the <code>man/*.Rd</code> that <code>rd</code> writes (so typed <code>@param</code>/<code>@return</code>
+annotations render under markdown); that repair is a no-op unless <code>rd</code> has
+already run.</p>
     </div>
 
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>

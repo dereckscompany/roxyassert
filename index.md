@@ -511,6 +511,48 @@ in a union, and inside `list<…>` / `promise<…>`, but not inside
 `scalar<>` / `vector<>` (define a scalar alias directly, like `Bps`).
 Types are package-local.
 
+## Standalone, exportable asserts — `@genassert` / `@exportassert`
+
+By default a `@type` only materialises as **inlined** checks inside a
+`@param`/`@return` that references it — so a shape used by no function
+(or one built internally and never passed as an argument) has no
+callable validator. Two tags lift that:
+
+- **`@genassert`** — on a block defining one or more `@type`, emit a
+  standalone `assert_type_<Name>(value)` for *every* `@type` in that
+  block, even if nothing references it.
+- **`@exportassert`** — export the asserts generated **from that block**
+  so other packages can call them. Works on a function or R6 method
+  block too (exporting its `assert_args_*` / `assert_return_*`).
+  Distinct from roxygen2’s `@export`, which exports the documented
+  object, not its assert helpers.
+
+``` r
+
+#' @type OrderAck (data.table) an order acknowledgement:
+#' - order_id (character) the exchange id.
+#' - status (scalar<character in c("FILLED", "REJECTED")>) outcome.
+#' @genassert      # also emit a callable assert_type_OrderAck()
+#' @exportassert   # ...and export it for downstream packages
+#' @name shapes
+NULL
+```
+
+Both are **bare, whole-block flags**. They are deliberately *not*
+selective like `@noassert` (which exempts named *parameters* of one
+function): a `@type` is its own definition, so for per-type control put
+a `@type` in its own block — a stray name list on either tag is an
+error, not silently ignored.
+
+`@exportassert` appends a managed `export(...)` block to the package
+`NAMESPACE` **and** writes a `\keyword{internal}` Rd documenting the
+exported helpers (R requires exported objects to be documented, so this
+keeps `R CMD check` clean). Both are rewritten deterministically on each
+`document()`. Note the exported names are roxyassert-generated
+(including R6 `assert_args_<Class>__<method>`): they become part of your
+package’s public namespace, though `\keyword{internal}` keeps them out
+of the help index.
+
 ## Generated functions — conventions
 
 - **Two helpers, each optional.** `assert_args_<fn>` is emitted only if
