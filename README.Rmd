@@ -367,6 +367,58 @@ A `@type` resolves at `document()` time by **inline expansion** — the generate
 
 Rules: a `@type` defines a *single type* — add `?` / `| NULL` / unions at the **use site**, not the definition; references work bare, nullable, in a union, and inside `list<…>` / `promise<…>`, but not inside `scalar<>` / `vector<>` (define a scalar alias directly, like `Bps`). Types are package-local.
 
+### Deriving one type from another — `extends`, override, `pick` / `omit`
+
+A record type can be **built from another** instead of being copied — the same idea as TypeScript's `interface B extends A` and `Pick` / `Omit`.
+
+> **One rule for the parentheses:** the parentheses always mean *"this is a type."* `extends` lives **inside** them, and the kind (`data.table` / `list` / `data.frame`) is **inherited from the base** — never restated. There is no second syntax to remember.
+
+**Inherit and add columns** — write `extends Base`, then list only the *new* columns as bullets:
+
+```r
+#' @type Order (data.table):
+#' - order_id (character) the exchange id.
+#' - status (character in unlist(ORDER_STATUS)) lifecycle state.
+#' ... (defined once)
+
+#' @type OrderModifyResult (extends Order):
+#' - order_id_old (character) the id before the change.
+#' - order_id_new (character) the id after the change.
+```
+
+`OrderModifyResult` is every `Order` column **plus** the two new ones, in order — with no duplicated definition to drift.
+
+**Override a column** — redeclare it by name; the redeclaration replaces the inherited one *in place* (its position is kept). This is a trusted full replacement: roxyassert is a generator, not a type checker, so it does not verify the new type is a narrowing of the old.
+
+```r
+#' @type ClosedOrder (extends Order):
+#' - status (character in unlist(c("FILLED", "CANCELLED", "EXPIRED")))
+```
+
+**Multiple inheritance** — list several bases (all must be the same kind). A column defined by more than one base is an **error unless the derived type redeclares it** (the override then resolves the tie):
+
+```r
+#' @type MarginOrder (extends Order, MarginFields):
+```
+
+**Subset with `pick` / `omit`** (mutually exclusive; every named column must exist in a base):
+
+```r
+#' @type OrderSummary (extends Order pick order_id, status):
+#' @type PublicOrder  (extends Order omit order_id_client):
+```
+
+All of this works **inline** too — define the shape right in a `@param` / `@return`, no name needed:
+
+```r
+#' @param legs (extends Order pick order_id, status) the legs.
+#' @return (extends Order):
+#' - order_id_old (character) prior id.
+#' - order_id_new (character) new id.
+```
+
+Derivation is pure `document()`-time list algebra over the resolved columns: it reuses the existing `@type` registry, cycle / unknown-base detection, and lowering, with no runtime cost. Two derivations are deliberately **out of scope** for now (each is a separate, larger feature): *renaming* a column (use `omit` + re-add) and *generic / parameterized* types (`Paged<T>`).
+
 ## Standalone, exportable asserts — `@genassert` / `@exportassert`
 
 By default a `@type` only materialises as **inlined** checks inside a `@param`/`@return` that references it — so a shape used by no function (or one built internally and never passed as an argument) has no callable validator. Two tags lift that:
@@ -410,6 +462,7 @@ Things deliberately not supported yet — each is rejected with a clear error, a
 - **Refining a named type at the use site** — once `@type Price (scalar<numeric>)` is defined you can't write `(Price in [0, 1])`; the refinement must live in the definition (define a second `@type`, or write the refined type inline). Named types are also package-local (no cross-package reuse yet).
 - **A named type shows as its bare name in rendered docs** — `@type` is resolved only for the generated checks, so a help page / pkgdown site shows `(OrderAck)` verbatim, not its expanded shape, with no auto-generated topic or link. To give a type a help page, document its `@type` block like any object (add a title/description and `@name`); reference it as a markdown link (`[OrderAck]`) for a clickable cross-reference. (Auto-generated type pages and links may come later.)
 - **A `class<Name>` name is not verified at `document()` time** — roxyassert emits `assert_class(x, "Name")` blindly, so a typo such as `class<Duraton>` generates without complaint and fails only at runtime.
+- **An `extends` override is not checked for compatibility** — redeclaring an inherited column replaces it with whatever you write; roxyassert has no subtype lattice, so it does not verify the override narrows the base column (it trusts the author). Column *renaming* and *generic / parameterized* types (`Paged<T>`) are likewise not supported yet.
 
 ## Status
 
