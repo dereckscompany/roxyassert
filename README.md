@@ -497,6 +497,83 @@ in a union, and inside `list<…>` / `promise<…>`, but not inside
 `scalar<>` / `vector<>` (define a scalar alias directly, like `Bps`).
 Types are package-local.
 
+### Deriving one type from another — `extends`, override, `pick` / `omit`
+
+A record type can be **built from another** instead of being copied —
+the same idea as TypeScript’s `interface B extends A` and `Pick` /
+`Omit`.
+
+> **One rule for the parentheses:** the parentheses always mean *“this
+> is a type.”* `extends` lives **inside** them, and the kind
+> (`data.table` / `list` / `data.frame`) is **inherited from the base**
+> — never restated. There is no second syntax to remember.
+
+**Inherit and add columns** — write `extends Base`, then list only the
+*new* columns as bullets:
+
+``` r
+#' @type Order (data.table):
+#' - order_id (character) the exchange id.
+#' - status (character in unlist(ORDER_STATUS)) lifecycle state.
+#' ... (defined once)
+
+#' @type OrderModifyResult (extends Order):
+#' - order_id_old (character) the id before the change.
+#' - order_id_new (character) the id after the change.
+```
+
+`OrderModifyResult` is every `Order` column **plus** the two new ones,
+in order — with no duplicated definition to drift.
+
+**Override a column** — redeclare it by name; the redeclaration replaces
+the inherited one *in place* (its position is kept). This is a trusted
+full replacement: roxyassert is a generator, not a type checker, so it
+does not verify the new type is a narrowing of the old.
+
+``` r
+#' @type ClosedOrder (extends Order):
+#' - status (character in unlist(c("FILLED", "CANCELLED", "EXPIRED")))
+```
+
+**Multiple inheritance** — list several bases (all must be the same
+kind). A column defined by more than one base is an **error unless you
+resolve it** — either redeclare it (the override wins) or drop it with
+`pick`/`omit`:
+
+``` r
+#' @type MarginOrder (extends Order, MarginFields):
+```
+
+**Subset with `pick` / `omit`** (mutually exclusive; every named column
+must exist in a base):
+
+``` r
+#' @type OrderSummary (extends Order pick order_id, status):
+#' @type PublicOrder  (extends Order omit order_id_client):
+```
+
+`pick`/`omit` act on the **inherited** columns; redeclaring a column you
+just removed is an error. The keywords `extends` / `pick` / `omit`
+cannot be used as `@type` names, and listing a base or column twice is
+an error.
+
+All of this works **inline** too — define the shape right in a `@param`
+/ `@return`, no name needed:
+
+``` r
+#' @param legs (extends Order pick order_id, status) the legs.
+#' @return (extends Order):
+#' - order_id_old (character) prior id.
+#' - order_id_new (character) new id.
+```
+
+Derivation is pure `document()`-time list algebra over the resolved
+columns: it reuses the existing `@type` registry, cycle / unknown-base
+detection, and lowering, with no runtime cost. Two derivations are
+deliberately **out of scope** for now (each is a separate, larger
+feature): *renaming* a column (use `omit` + re-add) and *generic /
+parameterized* types (`Paged<T>`).
+
 ## Standalone, exportable asserts — `@genassert` / `@exportassert`
 
 By default a `@type` only materialises as **inlined** checks inside a
@@ -600,6 +677,12 @@ reference’s *Non-goals* section is the full formal list.)
   roxyassert emits `assert_class(x, "Name")` blindly, so a typo such as
   `class<Duraton>` generates without complaint and fails only at
   runtime.
+- **An `extends` override is not checked for compatibility** —
+  redeclaring an inherited column replaces it with whatever you write;
+  roxyassert has no subtype lattice, so it does not verify the override
+  narrows the base column (it trusts the author). Column *renaming* and
+  *generic / parameterized* types (`Paged<T>`) are likewise not
+  supported yet.
 
 ## Status
 

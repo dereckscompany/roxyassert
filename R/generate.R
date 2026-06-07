@@ -150,6 +150,16 @@ generate_checks <- function(ast, expr) {
 }
 
 .rg_composite <- function(node, expr) {
+  # Defensive (parallels the unresolved-`named` guard in .rg_type): an `extends`
+  # node carries base = NULL until .ra_merge_extends resolves it. The roclet always
+  # resolves before generating, so this only fires on direct internal-API misuse.
+  if (is.null(node$base)) {
+    stop(
+      "roxyassert: internal error - a composite reached code generation with an ",
+      "unresolved base (an 'extends' must be resolved before generation)",
+      call. = FALSE
+    )
+  }
   checks <- sprintf("%s(%s)", .rg_composite_fn[[node$base]], expr)
   if (node$base == "list" && !is.null(node$element)) {
     el <- node$element
