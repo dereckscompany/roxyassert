@@ -1,17 +1,20 @@
-citHeader("To cite roxyassert in publications use:")
+# Citation is built from DESCRIPTION metadata — R supplies `meta` (the parsed
+# DESCRIPTION) when this file is evaluated, so package name, title, version,
+# authors, year, and URL are never hard-coded and this file never goes stale.
+# Add bibentry() calls below for published papers.
+
+year <- if (is.null(meta$Date)) format(Sys.Date(), "%Y") else sub("-.*", "", meta$Date)
+url <- if (is.null(meta$URL)) NULL else trimws(strsplit(meta$URL, ",")[[1]][1])
+authors <- eval(parse(text = meta$`Authors@R`))
+
+citHeader(sprintf("To cite %s in publications use:", meta$Package))
 
 bibentry(
-  bibtype  = "Manual",
-  title    = "roxyassert: Generate Runtime Assertions from roxygen2 Documentation",
-  author   = person("Dereck", "Mezquita", comment = c(ORCID = "0000-0002-9307-6762")),
-  year     = "2026",
-  note     = "R package version 0.0.0.9000",
-  url      = "https://github.com/dereckscompany/roxyassert",
-  key      = "roxyassert-2026",
-  textVersion = paste(
-    "Mezquita, D. (2026).",
-    "roxyassert: Generate Runtime Assertions from roxygen2 Documentation.",
-    "R package version 0.0.0.9000.",
-    "Available at https://github.com/dereckscompany/roxyassert"
-  )
+  bibtype = "Manual",
+  title   = sprintf("%s: %s", meta$Package, meta$Title),
+  author  = authors,
+  year    = year,
+  note    = sprintf("R package version %s", meta$Version),
+  url     = url,
+  key     = sprintf("%s-%s", meta$Package, year)
 )
