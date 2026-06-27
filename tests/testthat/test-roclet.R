@@ -182,9 +182,11 @@ test_that("roclet_output repairs markdown-mangled type fragments in man/*.Rd", {
       "#' @param d (class<A> | class<B>) union.",
       "#' @param e (scalar<numeric in ]0, Inf[>) interval (never mangled).",
       "#' @param f (list<integer>) bare list (exercises the list branch directly).",
+      "#' @param g (scalar<integer in [1, 100]>) closed interval (commonmark links it).",
+      "#' @param h (scalar<numeric in [-1.5, Inf]>) closed interval, signed/Inf bounds.",
       "#' @return (promise<data.table>) result.",
       "#' @export",
-      "demo <- function(a, b, c, d, e, f) NULL"
+      "demo <- function(a, b, c, d, e, f, g, h) NULL"
     ),
     file.path(dir, "R", "demo.R")
   )
@@ -211,6 +213,12 @@ test_that("roclet_output repairs markdown-mangled type fragments in man/*.Rd", {
   expect_match(demo, "(promise<data.table>)", fixed = TRUE) # @return
   expect_match(demo, "(scalar<numeric in ]0, Inf[>)", fixed = TRUE) # untouched
   expect_match(demo, "(list<integer>)", fixed = TRUE) # bare `list` branch
+  # A fully-closed interval is lowered to a dangling `\link{low, high}`; the repair
+  # restores the brackets and leaves no broken cross-reference behind.
+  expect_match(demo, "(scalar<integer in [1, 100]>)", fixed = TRUE)
+  expect_match(demo, "(scalar<numeric in [-1.5, Inf]>)", fixed = TRUE) # signed/Inf bounds
+  expect_false(grepl("\\link{1, 100}", demo, fixed = TRUE))
+  expect_false(grepl("\\link{-1.5, Inf}", demo, fixed = TRUE))
   expect_false(grepl("out{<POSIXct>", demo, fixed = TRUE))
   expect_false(grepl("out{<Engine>", demo, fixed = TRUE))
   # An incidental angle-bracket tag in prose must be left exactly as roxygen2 wrote

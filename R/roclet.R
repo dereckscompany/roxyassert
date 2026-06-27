@@ -121,6 +121,27 @@ roclet_output.roclet_contract <- function(x, results, base_path, ...) {
   "\\\\if\\{html\\}\\{\\\\out\\{(<[A-Za-z][A-Za-z0-9]*>)\\}\\}"
 )
 
+# A closed interval `[low, high]` is the second commonmark hazard in a type
+# fragment. Where a bare `<tag>` is lowered to raw HTML (above), a `[..]` is read
+# as a shortcut reference link and lowered to `\link{low, high}` — a dangling Rd
+# cross-reference: it warns at document() time and renders as a broken link. Only
+# the FULLY-closed form is mangled; every half-open form the grammar also accepts
+# (`[1, Inf[`, `]0, 1]`, `]0, Inf[`) carries an unmatched bracket, so commonmark
+# leaves it as text. We repair the output the same way: rewrite the generated
+# `\link{low, high}` back to `[low, high]`. The body is constrained to an interval
+# shape — a signed number or `Inf` on each side of the comma — which no real Rd
+# link target (an R topic / `pkg::name`) can match, so a genuine `\link{}` is
+# never disturbed; and a literal `[1, 2]` an author wrote in prose is restored to
+# exactly that, which is what they meant.
+.ra_rd_interval_bound <- "-?(?:\\d+(?:\\.\\d+)?|Inf)"
+.ra_rd_interval_link_pattern <- paste0(
+  "\\\\link\\{(",
+  .ra_rd_interval_bound,
+  "\\s*,\\s*",
+  .ra_rd_interval_bound,
+  ")\\}"
+)
+
 # Write a single Rd documenting every @exportassert-marked helper. R requires
 # exported objects to be documented, so an undocumented export would trip an
 # `R CMD check` WARNING. The file carries roxyassert's own banner (NOT roxygen2's),
@@ -260,6 +281,7 @@ roclet_output.roclet_contract <- function(x, results, base_path, ...) {
   for (f in list.files(man, pattern = "\\.Rd$", full.names = TRUE)) {
     lines <- readLines(f, warn = FALSE, encoding = "UTF-8")
     fixed <- gsub(.ra_rd_type_pattern, "\\1\\2", lines, perl = TRUE)
+    fixed <- gsub(.ra_rd_interval_link_pattern, "[\\1]", fixed, perl = TRUE)
     if (!identical(fixed, lines)) {
       writeLines(fixed, f, useBytes = TRUE)
       repaired <- c(repaired, f)
