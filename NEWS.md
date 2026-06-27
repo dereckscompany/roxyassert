@@ -1,3 +1,17 @@
+# roxyassert 0.9.1
+
+* **Closed-interval doc rendering** — a fully-closed interval bound in a type, e.g.
+  `@param n (scalar<integer in [1, 100]>)`, no longer renders as a broken Rd link.
+  With markdown on, commonmark reads `[1, 100]` as a shortcut reference link and
+  lowers it to a dangling `\link{1, 100}` (which warns at `document()` time and
+  renders as a broken cross-reference) — the same class of output mangling the
+  `<...>` repair already handles. The Rd post-processor now also rewrites an
+  interval-shaped `\link{low, high}` back to `[low, high]`. Only the fully-closed
+  form was ever affected; the half-open forms (`[1, Inf[`, `]0, 1]`, `]0, Inf[`)
+  carry an unmatched bracket and were always left as text. The repair is
+  constrained to a numeric interval body (a signed number or `Inf` on each side of
+  the comma), so a genuine `\link{}` cross-reference is never touched.
+
 # roxyassert 0.9.0
 
 * **Record-type derivation for `@type`** — build one record shape from another
