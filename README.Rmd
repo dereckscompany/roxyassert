@@ -63,11 +63,13 @@ renv::install("dereckscompany/roxyassert")
 
 ## Setup
 
-Register the roclet in your package's `DESCRIPTION`:
+Register the roclet in your package's `DESCRIPTION`, listing it **alongside** roxygen2's three defaults — `collate`, `namespace`, `rd`:
 
 ```dcf
-Roxygen: list(markdown = TRUE, roclets = c("namespace", "rd", "roxyassert::contract_roclet"))
+Roxygen: list(markdown = TRUE, roclets = c("collate", "namespace", "rd", "roxyassert::contract_roclet"))
 ```
+
+> **Warning — the `roclets` list replaces the defaults; it is not additive.** Naming any roclet turns off roxygen2's default set, so you must re-list `collate`, `namespace` and `rd` yourself. Dropping `collate` is the dangerous slip: for a package that uses `@include` tags, only the `collate` roclet keeps the DESCRIPTION `Collate:` field in sync. Without it, `document()` silently stops updating `Collate`, a newly added `R/*.R` file is never listed, and `R CMD INSTALL`/`R CMD check` then fails with `files in '.../R' missing from 'Collate' field: <file>.R` — the package becomes uninstallable. `devtools::load_all()`/`devtools::test()` ignore `Collate`, so it passes locally and only bites in a real check. Keep all four names in the list.
 
 The generated helpers call `assert::*` functions by their bare names, so make `assert` an import of your package — add it to `Imports` and bring its namespace in once (e.g. a package-level `#' @import assert`):
 

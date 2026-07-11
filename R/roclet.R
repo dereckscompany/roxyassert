@@ -14,8 +14,15 @@
 #' `@return` documentation:
 #'
 #' ```dcf
-#' Roxygen: list(markdown = TRUE, roclets = c("namespace", "rd", "roxyassert::contract_roclet"))
+#' Roxygen: list(markdown = TRUE, roclets = c("collate", "namespace", "rd", "roxyassert::contract_roclet"))
 #' ```
+#'
+#' The `roclets` list **replaces** roxygen2's default set rather than extending
+#' it, so re-list `collate`, `namespace` and `rd` alongside this roclet. Dropping
+#' `collate` is the dangerous slip: an `@include`-using package then stops having
+#' its DESCRIPTION `Collate:` field maintained, and `R CMD INSTALL`/`R CMD check`
+#' fails with `files in '.../R' missing from 'Collate' field` even though
+#' `load_all()`/`test()` still pass locally.
 #'
 #' List this roclet **after** `"rd"`. Besides generating the contract helpers it
 #' repairs the `man/*.Rd` that `rd` writes (so typed `@param`/`@return`
@@ -205,7 +212,13 @@ roclet_output.roclet_contract <- function(x, results, base_path, ...) {
     items <- character()
     other <- setdiff(argnames, "value")
     if (length(other) > 0L) {
-      items <- c(items, sprintf("\\item{%s}{A function argument validated by the assert helper.}", paste(other, collapse = ", ")))
+      items <- c(
+        items,
+        sprintf(
+          "\\item{%s}{A function argument validated by the assert helper.}",
+          paste(other, collapse = ", ")
+        )
+      )
     }
     if ("value" %in% argnames) {
       items <- c(items, "\\item{value}{The value or shaped object validated by the assert helper.}")
@@ -242,7 +255,13 @@ roclet_output.roclet_contract <- function(x, results, base_path, ...) {
     # is nothing to export, quietly do nothing; if exports WERE requested, fail
     # loudly rather than silently drop them (and leave a documenting Rd dangling).
     if (length(exports) > 0L) {
-      stop("roxyassert: cannot export @exportassert helpers - no NAMESPACE found. List the `namespace` roclet before `roxyassert::contract_roclet` in DESCRIPTION.", call. = FALSE)
+      stop(
+        paste0(
+          "roxyassert: cannot export @exportassert helpers - no NAMESPACE found. ",
+          "List the `namespace` roclet before `roxyassert::contract_roclet` in DESCRIPTION."
+        ),
+        call. = FALSE
+      )
     }
     return(invisible(NULL))
   }
@@ -343,10 +362,16 @@ roxy_tag_parse.roxy_tag_exportassert <- function(x) {
 .ra_assert_bare_tag <- function(block, tagname) {
   for (tag in roxygen2::block_get_tags(block, tagname)) {
     if (nzchar(trimws(.ra_tag_text(tag)))) {
-      stop(sprintf(
-        "roxyassert: @%s takes no arguments; it applies to the whole block. For per-type control, put a @type in its own block.",
-        tagname
-      ), call. = FALSE)
+      stop(
+        sprintf(
+          paste0(
+            "roxyassert: @%s takes no arguments; it applies to the whole block. ",
+            "For per-type control, put a @type in its own block."
+          ),
+          tagname
+        ),
+        call. = FALSE
+      )
     }
   }
   return(invisible(NULL))
@@ -468,7 +493,13 @@ roxy_tag_parse.roxy_tag_exportassert <- function(x) {
   if (.ra_block_has_tag(block, "exportassert")) {
     .ra_assert_bare_tag(block, "exportassert")
     if (length(nms) == 0L) {
-      stop("roxyassert: @exportassert on a block that generates no assert helper (add @genassert to its @type, or typed @param/@return to a function).", call. = FALSE)
+      stop(
+        paste0(
+          "roxyassert: @exportassert on a block that generates no assert helper ",
+          "(add @genassert to its @type, or typed @param/@return to a function)."
+        ),
+        call. = FALSE
+      )
     }
     exports <- nms
   }

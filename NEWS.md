@@ -1,3 +1,8 @@
+# roxyassert 0.9.2
+
+* **Setup docs: keep roxygen2's default roclets (closes #16).** The README, the `demo` vignette, and the `contract_roclet()` help topic showed `roclets = c("namespace", "rd", "roxyassert::contract_roclet")` — silently missing `collate`. Because naming any roclet *replaces* roxygen2's default set rather than extending it, that snippet turned off the `collate` roclet, so an `@include`-using package stopped having its DESCRIPTION `Collate:` field maintained and became uninstallable (`R CMD INSTALL`/`R CMD check` fails with `files in '.../R' missing from 'Collate' field`, while `load_all()`/`test()` still pass locally — exactly the trap that once broke `tradebot-core`). All three now show `roclets = c("collate", "namespace", "rd", "roxyassert::contract_roclet")` with a warning callout explaining the replace-not-append behaviour and the `collate` consequence.
+* **Lint: reflow the 5 over-120-character lines in `R/parse.R` and `R/roclet.R` (closes #20).** A one-over `return(list(...))` and four long error strings are wrapped across lines; the error-message text is byte-identical (verified) and there is no logic change. `line_length_linter` is now clean across `R/`.
+
 # roxyassert 0.9.1
 
 * **Closed-interval doc rendering** — a fully-closed interval bound in a type, e.g.
