@@ -15,8 +15,15 @@ generates argument and return assertion helpers from your typed \verb{@param} /
 \verb{@return} documentation:
 }
 \details{
-\if{html}{\out{<div class="sourceCode dcf">}}\preformatted{Roxygen: list(markdown = TRUE, roclets = c("namespace", "rd", "roxyassert::contract_roclet"))
+\if{html}{\out{<div class="sourceCode dcf">}}\preformatted{Roxygen: list(markdown = TRUE, roclets = c("collate", "namespace", "rd", "roxyassert::contract_roclet"))
 }\if{html}{\out{</div>}}
+
+The \code{roclets} list \strong{replaces} roxygen2's default set rather than extending
+it, so re-list \code{collate}, \code{namespace} and \code{rd} alongside this roclet. Dropping
+\code{collate} is the dangerous slip: an \verb{@include}-using package then stops having
+its DESCRIPTION \verb{Collate:} field maintained, and \verb{R CMD INSTALL}/\verb{R CMD check}
+fails with \verb{files in '.../R' missing from 'Collate' field} even though
+\code{load_all()}/\code{test()} still pass locally.
 
 List this roclet \strong{after} \code{"rd"}. Besides generating the contract helpers it
 repairs the \verb{man/*.Rd} that \code{rd} writes (so typed \verb{@param}/\verb{@return}

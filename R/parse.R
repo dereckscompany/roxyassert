@@ -29,8 +29,17 @@
 
 # Built-in type words and derivation keywords a @type name may not shadow.
 .ra_type_reserved <- c(
-  .ra_atomic, .ra_composite, "any", "function", "class", "scalar", "vector", "promise",
-  "extends", "pick", "omit"
+  .ra_atomic,
+  .ra_composite,
+  "any",
+  "function",
+  "class",
+  "scalar",
+  "vector",
+  "promise",
+  "extends",
+  "pick",
+  "omit"
 )
 
 # ---- cursor over the annotation text ----------------------------------------
@@ -545,7 +554,9 @@ parse_annotation <- function(text) {
     b <- resolved[[i]]
     if (!identical(b$kind, "composite") || !is.null(b$element)) {
       stop(
-        "roxyassert: 'extends ", bases[[i]], "': a base must be a record type ",
+        "roxyassert: 'extends ",
+        bases[[i]],
+        "': a base must be a record type ",
         "(list / data.table / data.frame with columns)",
         call. = FALSE
       )
@@ -554,7 +565,8 @@ parse_annotation <- function(text) {
   kinds <- unique(vapply(resolved, function(b) b$base, character(1)))
   if (length(kinds) > 1L) {
     stop(
-      "roxyassert: 'extends' bases have mixed kinds (", paste(kinds, collapse = ", "),
+      "roxyassert: 'extends' bases have mixed kinds (",
+      paste(kinds, collapse = ", "),
       "); all bases must be the same composite kind",
       call. = FALSE
     )
@@ -611,7 +623,9 @@ parse_annotation <- function(text) {
   unresolved <- setdiff(intersect(dup, retained), local_names)
   if (length(unresolved) > 0L) {
     stop(
-      "roxyassert: column '", unresolved[[1]], "' is defined by more than one base; ",
+      "roxyassert: column '",
+      unresolved[[1]],
+      "' is defined by more than one base; ",
       "redeclare it in the derived type (or pick/omit it) to resolve the conflict",
       call. = FALSE
     )
@@ -628,7 +642,9 @@ parse_annotation <- function(text) {
         fields[[idx]] <- lf
       } else if (lf$name %in% seen) {
         stop(
-          "roxyassert: column '", lf$name, "' was excluded by pick/omit but is ",
+          "roxyassert: column '",
+          lf$name,
+          "' was excluded by pick/omit but is ",
           "redeclared; drop it from pick/omit, or remove the bullet",
           call. = FALSE
         )
@@ -704,9 +720,14 @@ parse_annotation <- function(text) {
     element <- NULL
     .ra_ws(p)
     if (.ra_peek_word(p) == "extends") {
-      .ra_err(p, paste0(
-        "the kind is inherited from the base - write '(extends Base)', not '(", w, " extends Base)'"
-      ))
+      .ra_err(
+        p,
+        paste0(
+          "the kind is inherited from the base - write '(extends Base)', not '(",
+          w,
+          " extends Base)'"
+        )
+      )
     }
     if (w == "list" && .ra_ch(p) == "<") {
       p$pos <- p$pos + 1L
@@ -764,7 +785,15 @@ parse_annotation <- function(text) {
       .ra_err(p, "'pick' and 'omit' cannot both be used on one 'extends'")
     }
   }
-  return(list(kind = "composite", base = NULL, extends = bases, pick = pick, omit = omit, element = NULL, fields = NULL))
+  return(list(
+    kind = "composite",
+    base = NULL,
+    extends = bases,
+    pick = pick,
+    omit = omit,
+    element = NULL,
+    fields = NULL
+  ))
 }
 
 # A comma-separated list of identifiers: the base name(s) after `extends`, or the

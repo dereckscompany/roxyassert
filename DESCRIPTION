@@ -1,6 +1,6 @@
 Package: roxyassert
 Title: Generate Runtime Assertions from roxygen2 Documentation
-Version: 0.9.1
+Version: 0.9.2
 URL: https://dereckscompany.github.io/roxyassert,
     https://github.com/dereckscompany/roxyassert
 BugReports: https://github.com/dereckscompany/roxyassert/issues

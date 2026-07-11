@@ -23,11 +23,13 @@ See the [README](https://github.com/dereckscompany/roxyassert) for the complete 
 
 ## Setup
 
-Register the roclet in `DESCRIPTION`:
+Register the roclet in `DESCRIPTION`, **alongside** roxygen2's three defaults (`collate`, `namespace`, `rd`):
 
 ```dcf
-Roxygen: list(markdown = TRUE, roclets = c("namespace", "rd", "roxyassert::contract_roclet"))
+Roxygen: list(markdown = TRUE, roclets = c("collate", "namespace", "rd", "roxyassert::contract_roclet"))
 ```
+
+> **Warning — the `roclets` list replaces the defaults; it is not additive.** Naming any roclet turns off roxygen2's default set, so re-list `collate`, `namespace` and `rd` yourself. Dropping `collate` is the dangerous slip: for an `@include`-using package it is the roclet that keeps the DESCRIPTION `Collate:` field in sync, so without it `document()` stops updating `Collate`, a new `R/*.R` file goes unlisted, and `R CMD INSTALL`/`R CMD check` fails with `files in '.../R' missing from 'Collate' field` — while `load_all()`/`test()` still pass locally. Keep all four names.
 
 ## Annotate a function
 
