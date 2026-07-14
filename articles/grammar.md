@@ -1,0 +1,985 @@
+# The roxyassert annotation grammar — complete reference
+
+The authoritative, exhaustive reference for the roxyassert annotation
+language. Every construct, and a representative spanning set of
+combinations, is written out so the language can be audited against
+itself — it must agree with itself everywhere.
+
+## 1. Design invariants
+
+1.  **One home per concept.** The element type and its element-level
+    modifiers (`in`, `| NA`) and a `vector`’s length live in `<>` (or
+    attach to a bare atomic type); the whole-argument modifiers
+    (`?`/`| NULL`, type unions) sit outside.
+2.  **“Bare” means different things by category.** A bare *atomic* type
+    is a vector of any length (`scalar<...>` is the only way to say
+    length 1); a bare *wildcard* (`any`) is any object; a bare
+    *reference* type (`function`/`class<Class>`) is a single length-1
+    object; a bare *composite* is an unconstrained `list`/table (§2,
+    §6).
+3.  **`NA` and `NULL` are reserved words, never type names** — this
+    keeps `|` unambiguous.
+4.  **Element-level binds tighter than slot-level.** `in` / `| NA` bind
+    to the nearest atom on their left, before any slot-level `|` union
+    or `?`.
+5.  **The language is recursive.** A composite contains *full
+    annotations* in its bullets, to any depth.
+6.  **Values are copied verbatim; the generator never coerces.** Every
+    value the user writes — an interval bound, a set element — is an R
+    expression emitted into the generated check exactly as written (`0`,
+    `as.Date("2024-01-01")`, `c("BUY", "SELL")`, `ORDER_SIDE`).
+    roxyassert performs no coercion and invents no time zone or format.
+    Intervals are ISO/Bourbaki bracket notation around two such
+    expressions. Element/atom type agreement is checked for inline
+    literals and taken on trust for opaque expressions (S2).
+7.  **A type may only carry what its category supports** (§2). The
+    grammar makes *category-level* nonsense unrepresentable — an
+    interval on `complex`, a set on `logical`/`raw`, a fractional or
+    expression bound on `integer` (integer bounds are literal whole
+    numbers or `±Inf`), a `vector` of `function`, `| NA` on `raw`, a
+    constraint on `any`. `Inf`/`-Inf` are side-specific sentinels
+    (`-Inf` low only, `Inf` high only). A `numeric` bound, by contrast,
+    is an opaque expression — a number (`0`) or any R expression —
+    checked only for being valid R. A `Date`/`POSIXct` bound must be a
+    class-matching expression (`as.Date(...)`): a bare number is
+    rejected as a type error (S2), and any other expression is taken on
+    trust.
+
+## 2. Type categories
+
+Every base type sits in exactly one category, and the category alone (no
+per-type exceptions) decides which modifiers are legal:
+
+| Category | Types | `in [interval]` | `in c(set)` | `| NA` | length / `vector<>` | shape |
+|----|----|:--:|:--:|:--:|:--:|----|
+| **Ordered atomic** | `integer` `numeric` `Date` `POSIXct` | ✅ | ✅¹ | ✅ | ✅ | bare / `scalar<>` / `vector<>` |
+| **Enumerable atomic** | `character` `factor` | ❌ | ✅² | ✅ | ✅ | bare / `scalar<>` / `vector<>` |
+| **Plain atomic** | `complex` `logical` | ❌ | ❌ | ✅ | ✅ | bare / `scalar<>` / `vector<>` |
+| **Byte atomic** | `raw` | ❌ | ❌ | ❌ | ✅ | bare / `scalar<>` / `vector<>` |
+| **Count** | `count` | ✅ | ❌ | ❌ | ✅ | bare / `scalar<>` / `vector<>` |
+| **Wildcard** | `any` | ❌ | ❌ | ❌ | ✅ | bare / `scalar<>` / `vector<>` |
+| **Reference** | `function` `class<Class>` | ❌ | ❌ | ❌ | ❌ | **bare only** (length-1 by nature) |
+| **Composite** | `list` `data.table` `data.frame` | ❌ | ❌ | ❌ | ❌ | bare, **nested bullets**, or `list<T>` (`list` only) |
+| **Promise** | `promise<T>` | ❌ | ❌ | ❌ | ❌ | wraps one resolved `type` `T`; collapses to `T` (S5) |
+
+¹ Sets compare with `==`/`%in%` and apply no normalisation. `integer`
+and whole-day `Date` sets (from `as.Date`/`Sys.Date`) are **exact** and
+fine; `numeric` sets are floating-point-fragile, and `POSIXct` (and any
+sub-day `Date`) sets are precision/time-zone-fragile, so are
+**discouraged** — prefer intervals. Interval bounds and set elements for
+`Date`/`POSIXct` are written as ordinary R expressions of the matching
+class — `as.Date("2024-01-01")`,
+`as.POSIXct("2024-01-01 09:00", tz = "America/New_York")` — and copied
+verbatim, so the user (not roxyassert) chooses the constructor, format,
+and time zone (S2). A `Date`/`POSIXct` bound’s class and time zone are
+taken on trust and compared with `<`/`>` (which coerce), so a class/tz
+mismatch yields a silently-wrong range check — keep the bound and the
+value in the same class/tz. `integer` bounds are literal whole numbers;
+`Inf`/`-Inf` are open-end sentinels (S2). ² On `character` and `factor`
+a set constrains the **realised values** (`as.character(x) %in% set`);
+with `| NA` the generated check is
+`all(as.character(x) %in% set | is.na(x))`. It does **not** assert a
+factor’s declared [`levels()`](https://rdrr.io/r/base/levels.html) — for
+that, use prose (out of scope, §12).
+
+`any` asserts **nothing** about type — the generator emits no type
+check, only the requested length/nullability. It is the explicit escape
+hatch for a polymorphic argument, an unconstrained list/record field, or
+a `data.table` list-column of arbitrary cells (S3).
+`complex`/`logical`/`raw` take no set (degenerate or
+floating-point-fragile), and `raw` has no `NA` representation.
+`function`/`class` are bare length-1 references; a `class<Name>` asserts
+the value’s class via [`inherits()`](https://rdrr.io/r/base/class.html),
+so it works for any object system (S3, S4, Reference Classes, R6, S7)
+and matches subclasses (`class<AbstractClock>` accepts a `RealClock`).
+`Name` is a single class, not a `pkg::Class` reference (name the source
+package in prose if it helps). A composite is refined by nested bullets
+(a named record / typed columns) or — for `list` — parameterised as
+`list<T>`, a homogeneous list whose every element is the type `T`. All
+of these are enforced by the grammar (§3); the residual element-type
+rules are static (§4).
+
+## 3. Formal context-free grammar (EBNF)
+
+    annotation     ::= "(" slot ")" description? bullets?
+                       (* everything after ) is free-text description (roxyassert
+                          ignores it); any ":" adjacent to it is cosmetic.
+                          bullets gated by S1 *)
+
+    slot           ::= type ( "|" type )*  ( ( "|" "NULL" ) | "?" )?
+                       (* a union of >=1 types; the whole argument may be NULL,
+                          written EITHER as a "| NULL" alternative OR a trailing "?",
+                          never both *)
+
+    type           ::= atomic | wildcard | reference | composite | derived | promise | named
+    named          ::= ident
+                       (* an identifier that is not a built-in type: a reference to a
+                          type declared elsewhere with `@type` (S6). Resolved inline at
+                          document() time; takes no in / | NA / bullets at the use site
+                          (refine in the @type, not here). *)
+
+    atomic         ::= atom
+                     | "scalar" "<" atom ">"
+                     | "vector" "<" atom "," length ">"
+                       (* a bare atom is a vector of any length; vector<> requires a
+                          length (a length-less vector<atom> is a parse error — use
+                          bare `atom`) *)
+
+    atom           ::= "integer"     ( "in" ( int_interval  | set ) )?  ( "|" "NA" )?
+                     | "numeric"     ( "in" ( num_interval  | set ) )?  ( "|" "NA" )?
+                     | temporal      ( "in" ( time_interval | set ) )?  ( "|" "NA" )?
+                     | enumerable    ( "in" set )?                      ( "|" "NA" )?
+                     | plain                                            ( "|" "NA" )?
+                     | "raw"
+                     | "count"       ( "in" int_interval )?
+                       (* count: a non-negative whole number (double OR integer);
+                          whole-number interval bounds like integer; no set, no NA *)
+
+    temporal       ::= "Date" | "POSIXct"
+    enumerable     ::= "character" | "factor"
+    plain          ::= "complex" | "logical"
+
+    wildcard       ::= "any"
+                     | "scalar" "<" "any" ">"
+                     | "vector" "<" "any" "," length ">"
+                       (* no in / set / | NA: any asserts nothing about type *)
+
+    reference      ::= "function" | "class" "<" ident ">"
+    composite      ::= "list" ( "<" type ">" )? | "data.table" | "data.frame"
+                       (* bare `list`/table = unconstrained, or a named record /
+                          typed columns when refined by nested bullets (S1/S3).
+                          `list<T>` is a HOMOGENEOUS list: EVERY element satisfies the
+                          type T — list<character>, list<scalar<numeric>>,
+                          list<class<Engine>>, list<any>, list<data.table>. T is a `type`
+                          (no slot-level union / `| NULL` / `?`); a `list<T>` is a leaf
+                          and takes no bullets (S1, S3). *)
+    derived        ::= "extends" ident ( "," ident )*
+                           ( ( "pick" | "omit" ) ident ( "," ident )* )?
+                       (* a DERIVED composite (S7): inherit the columns of the named
+                          base record(s), then add / override columns via nested bullets
+                          and/or narrow with pick / omit. The composite KIND is inherited
+                          from the base(s) and never restated (no `data.table extends`);
+                          the whole derivation sits INSIDE the parentheses, like any
+                          type. Resolved at document() time by splicing columns; bases
+                          resolve through `named`, so cycle / unknown-base detection is
+                          reused. *)
+    promise        ::= "promise" "<" type ">"
+                       (* a result resolving to the type T, delivered synchronously
+                          OR as a promises::promise (S5). T is a single `type` (no
+                          slot-level union / `| NULL` / `?` inside `<>`, as with
+                          list<T>; a data.table T may still take field bullets, which
+                          describe the resolved table). A union `T | promise<T>` (same
+                          T) is the sync-or-async pattern and collapses to the single
+                          resolved T; nested promise<promise<T>> collapses likewise.
+                          promise<T> stands for a whole slot value, so it may NOT be a
+                          list element or sit inside scalar<>/vector<>. Most natural on
+                          @return, but allowed anywhere. *)
+
+    int_interval   ::= low int_lo  "," int_hi  high
+    num_interval   ::= low num_lo  "," num_hi  high
+    time_interval  ::= low time_lo "," time_hi high
+    low            ::= "["    (* closed *) | "]"   (* open *)
+    high           ::= "]"    (* closed *) | "["   (* open *)
+    int_lo         ::= "-"? digit+ | "-Inf"
+    int_hi         ::= "-"? digit+ | "Inf"
+    num_lo         ::= signed_number | "-Inf" | rexpr
+    num_hi         ::= signed_number | "Inf"  | rexpr
+    time_lo        ::= "-Inf" | rexpr
+    time_hi        ::= "Inf"  | rexpr
+                       (* Only the LOW bound may be -Inf and only the HIGH may be Inf;
+                          a wrong-side sentinel ([Inf, 0]) is a parse error. A
+                          Date/POSIXct bound is an R expression of the matching class,
+                          emitted verbatim — as.Date("2024-01-01"),
+                          as.POSIXct("2024-01-01 09:00", tz = "America/New_York"),
+                          lubridate::ymd_hms("...") — so the user owns the constructor
+                          and time zone; roxyassert never coerces. *)
+
+    set            ::= name_set | call_set
+    name_set       ::= ident       (* a bare constant; a single maximal-munch token,
+                                      terminated by | , ) > or ?; may NOT be a
+                                      compound or indexing R expression *)
+    call_set       ::= rexpr       (* a call / index / any expression with brackets
+                                      or an operator — c("a", "b"), pkg::CONST *)
+
+    length         ::= int          (* exactly n *)
+                     | int ".." int (* inclusive range *)
+                     | int ".."     (* at least n *)
+
+    bullets        ::= bullet+      (* siblings at one indentation depth *)
+    bullet         ::= "- " name " (" slot ")" description? bullets?
+                       (* everything after ) is free-text description; any ":" is
+                          cosmetic. trailing bullets gated by S1. *)
+    name           ::= ident | "**" ident "**"   (* bold optional, no semantic effect *)
+
+    (* lexical terminals *)
+    int            ::= digit+
+    signed_number  ::= "-"? digit+ ( "." digit+ )?
+    ident          ::= letter ( letter | digit | "." | "_" )*
+    rexpr          ::= (* any valid R expression; opaque, emitted verbatim *)
+    description    ::= (* free text; the remainder of the same physical line *)
+
+Tokenizing rules (so the grammar is deterministic in practice):
+
+- **One scan order.** An `rexpr` region (a `call_set`, or a
+  `Date`/`POSIXct` bound) is consumed **first**, by a string-aware,
+  bracket-balanced R scan that skips string/character literals and
+  balances `(` `[` `{`. Only **after** a bound/set is fully consumed
+  does the next structural token count. Consequently any `,` `|` `>` `<`
+  `[` `]` inside a balanced `rexpr` is invisible to the annotation
+  tokenizer; only top-level structural tokens are seen.
+- **Interval scan (single pass).** A `[` or `]` immediately after `in`
+  opens an interval. Each bound is then scanned by the string-aware
+  bracket-balanced rexpr scan (rule 1), the two bounds separated by
+  exactly one *top-level* comma; the interval is closed by the first
+  top-level `]` or `[` that appears **after** the high bound has been
+  fully balanced. So a bound may itself end in `]` (e.g. `df[["t"]]`):
+  the balancer consumes it first, and only the bracket *after* it closes
+  the interval. Commas/brackets inside a balanced `rexpr` bound are
+  invisible; an open interval `]0, Inf[` never unbalances anything.
+- **Bound classification (ordered choice).** A bound is matched by
+  ordered choice: a bare `-Inf`/`Inf` is **always** lexed as the
+  sentinel token (before `rexpr`), then a `signed_number` (maximal munch
+  of `-?digit+(.digit+)?` with nothing trailing before the comma/close),
+  then any other `rexpr`. The sentinel is **side-gated** — `-Inf` only
+  in the low slot, `Inf` only in the high — so a wrong-side bare
+  sentinel (`[Inf, 0]`, `]a, -Inf]`) has no production and is a genuine
+  parse error; because a bare `±Inf` always lexes as the sentinel it
+  cannot fall through to `rexpr`. (An `rexpr` that merely *evaluates* to
+  `±Inf` is opaque and, if it makes the interval degenerate, is caught
+  by S4.) A bound that lexes as a sentinel or `signed_number` is a
+  literal (subject to S2/S4); anything else is a trusted `rexpr` (S2).
+- **Set dispatch after `in`.** If the next char is `[` or `]`, parse an
+  interval. Otherwise scan an R expression: a lone maximal-munch `ident`
+  with nothing trailing before `| , ) > ?` is a `name_set`; anything
+  containing `(`/`[`/an operator is a `call_set` (bracket-balanced,
+  string-aware). A bare `name_set` may not be compound or indexed —
+  `FOO | NA` is the set `FOO` plus an atom-level `| NA`, and `foo[1:2]`
+  must be written as the `call_set` it is. The terminating `|` is then
+  resolved by §5 (`NA` → atom, `NULL`/type → slot).
+- **The `vector` length comma.** Inside `vector<...>` the element `atom`
+  — with its `in (...)` and `| NA` — is consumed first; the atom/length
+  comma is the first top-level comma that remains. `scalar<...>` has
+  **no length production**, so any *top-level* comma inside
+  `scalar<...>` is a parse error (a comma inside its interval or set is
+  fine) — that single rule is why `scalar<T, n>` is rejected.
+- **`>`** closes the innermost open generic (depth-aware); `vector<...>`
+  and `class<...>` each close one level. `class` must be followed by
+  `<Name>` (an `ident`); a bare `class` is a parse error.
+- **`..` is exactly two dots** (maximal munch), valid only in a
+  `length`; a run of three or more dots (`...`) is a lexical error. A
+  lone `.` is a decimal point, valid only inside a numeric bound; `..`
+  in a bound position and a lone `.` in a length position are lexical
+  errors.
+- **Everything after `)` is free-text description.** roxyassert parses
+  only the `(slot)` token; the rest of the line is description it
+  ignores, so any `:` adjacent to it (`(type): desc`, `(type) desc:`) is
+  cosmetic — the canonical style omits it. The `name` of a bullet is the
+  single token before the first `(` at the bullet’s top level; the
+  `slot` is the balanced-parenthesis group opened by that `(`, found
+  with the same string-aware scan as `annotation`. Names contain no
+  spaces. Child `bullets` begin only on a *subsequent* line at strictly
+  greater indentation whose first non-space characters are `-`; a `-`
+  inside description text (same line) is literal.
+- **Reference and wildcard shapes** — `function`/`class<Class>` are bare
+  length-1 references (never `scalar<>`/`vector<>`, never
+  `in`/`| NA`/length); `any` takes no `in`/set/`| NA` but does accept
+  `scalar<>`/`vector<>` for a length check.
+- **Union `| NA` (one-token look-ahead past the `|`).** Each union
+  member is parsed as a full `atom`, which eagerly consumes its own
+  optional `| NA` before the slot’s union loop resumes; the
+  disambiguation is the token *after* the `|` (`NA` → element, reserved;
+  `NULL`/typename → slot). So in `(numeric | character | NA)` the `| NA`
+  belongs to `character`. `| NULL` is not positional: the grammar fixes
+  it to the slot tail, so a mid-union `(numeric | NULL | character)` is
+  a parse error.
+- **`extends` name lists.** A slot opening with the keyword `extends` is
+  a `derived` composite: a comma-separated list of base `ident`s, then
+  an optional `pick`/`omit` keyword with its own comma-separated `ident`
+  list of column names. Both lists are plain identifiers (no brackets /
+  `rexpr`); each ends at the first token that is not `ident` `","`.
+  Nested `bullets` after the `)` add or override columns exactly as for
+  a bare composite (S1).
+
+## 4. Static rules (beyond the context-free grammar)
+
+These context-sensitive constraints are checked by the generator; they
+are *specified rules*, not stylistic suggestions.
+
+- **S1 — composite nesting.** Nested `bullets` may follow an
+  `annotation` or a `bullet` only when its slot has exactly one non-NULL
+  alternative and that alternative is a **bare**
+  `list`/`data.table`/`data.frame` (no `<T>` parameter). Any other slot
+  — including a `list<T>`, which is a leaf — takes no children;
+  `(data.table | data.frame)` with bullets is rejected (which field-set
+  would they describe?).
+- **S2 — bound/set element type and lowering.** Every interval bound and
+  set element is an R expression **emitted verbatim** — roxyassert never
+  coerces. For an inline literal the generator checks it matches the
+  atom’s type: a number for `numeric`; for `integer`, an interval
+  *bound* is a bare whole number (`[1, 5]`, per `int_lo`/`int_hi`) while
+  a *set* element carries the `L` suffix (`c(1L, 2L, 3L)`; a bare
+  `c(1, 2, 3)` for an `integer` set is rejected — no coercion); a
+  **character literal** for both `character` and `factor` sets (a
+  `factor` set is given by its character labels, matched via
+  `as.character(x)`, footnote 2). For `Date`/`POSIXct` “type” means the
+  S3 class (`inherits(x, "Date")`), not `typeof`; the bound is a
+  class-matching expression the user supplies (`as.Date(...)`,
+  `as.POSIXct(..., tz = ...)`, `lubridate::ymd_hms(...)`), so the user
+  owns constructor/format/tz, and a class/tz mismatch compares silently
+  wrong. `Inf`/`-Inf` are open-end **sentinels** — `-Inf` only the low
+  bound, `Inf` only the high. A **closed** bracket at a sentinel means
+  “no bound that side” (the comparison is omitted), not a value. On a
+  `numeric`, an **open** bracket at a sentinel instead *excludes that
+  infinity* — a finiteness constraint: `]0, Inf[` is “finite and \> 0”,
+  `]-Inf, Inf[` is “any finite double” (lowered with
+  `upper = Inf, upper_inclusive = FALSE` /
+  `lower = -Inf, lower_inclusive = FALSE`). Finiteness is `numeric`-only
+  — `integer`/`count` cannot be `Inf` and a `Date`/`POSIXct` `Inf` bound
+  would be a type mismatch, so for those a sentinel is omitted
+  regardless of bracket. **With `| NA`** an interval is lowered NA-aware
+  — `all((x in range) | is.na(x))`, equivalently checked on
+  `x[!is.na(x)]` — parallel to the set form in footnote 2; the default
+  (no `| NA`) rejects NA. An opaque `name_set` or any other `rexpr` is
+  taken on trust — prefer an inline literal where it matters.
+- **S3 — named composite fields, homogeneous lists, and list-columns.**
+  A bulleted `list`/`data.table`/`data.frame` asserts the presence of
+  the **named** fields/columns listed (`all(<names> %in% names(x))`,
+  plus the per-column type for tables). A `list<T>` instead asserts
+  every element satisfies `T`, applied element-wise (`assert_list_of`
+  for a flat element type; an element-wise loop of `T`’s full check when
+  `T` carries length/range/`| NA`). `list<any>` imposes **no**
+  per-element check — it lowers to a bare `assert_list(x)`, so `list`
+  and `list<any>` are the same runtime check. A column declared with an
+  **atomic** type rejects a list-cell — the intended way to catch an
+  accidental list-column; to declare one *deliberately*, type it
+  `list<T>` (each cell a `T`, e.g. `list<character>`) or `list<any>`.
+  Positional/unnamed *records* are out of scope (§12). Field checks
+  apply only when the value is non-`NULL`: a `| NULL`/`?` value
+  short-circuits them.
+- **S4 — non-empty interval.** For literal numeric/integer bounds, the
+  low bound must be ≤ the high bound (and strictly \< when either end is
+  open), so an empty or reversed interval (`]1, 1[`, `[5, 1]`) — whose
+  check can never pass — is rejected at generation time. (A wrong-side
+  sentinel such as `[Inf, 0]` is caught earlier, by the grammar.)
+  `Date`/`POSIXct`/`rexpr` bounds are opaque and not range-checked.
+- **S5 — promise is the resolved type, async-agnostic.** A `promise<T>`
+  (and the union `T | promise<T>`, same T) lowers to the checks for the
+  resolved type `T` *only* — roxyassert never emits
+  [`promises::then()`](https://rstudio.github.io/promises/reference/then.html)
+  or `is.promise()`, because the same generated validator must serve a
+  function whether it works with `T` directly or a promise of `T`. The
+  caller wires the async by applying the generated
+  `function(value) value` validator however they need — it *is* a
+  `then()` callback, e.g. `promises::then(impl, assert_return_fn)` for
+  an always-async result, or branching on a known `async` flag for a
+  sync-or-async one. `promise<T>` is most natural on `@return` but is
+  **allowed in any slot position** (roxyassert does not police it: a
+  function that takes a promise input is valid; the caller decides how
+  to apply the generated check to the resolved value). It stands for a
+  **whole slot value**, so it may not be a `list<>` element or sit
+  inside `scalar<>`/`vector<>` (a list of promises cannot be validated
+  synchronously per element). The `T | promise<T>` union must resolve to
+  a single `T` — every alternative must be the *same* type, same base,
+  shape and refinement values (a promise unioned with a different type
+  is rejected); nested `promise<promise<T>>` is peeled to `T`.
+  Refinements (sets, bounds) are compared by **parsing** them, so
+  cosmetic spacing differs harmlessly — `numeric in c(1, 2)` and
+  `numeric in c(1,2)` match, while `[0, 1]` and `]0, 1[` do not. The
+  emitted check still uses the verbatim text you wrote (§1.6); only the
+  equality test parses.
+- **S6 — named types (`@type`).** A `@type Name (type)` block declares a
+  reusable named type; a bare `Name` (anything that is not a built-in
+  type) in an annotation is a reference, **resolved inline** at
+  document() time — the generated checks are exactly those of the named
+  type’s definition (no runtime cost). A `@type` defines a **single
+  type**: no slot-level `|` union, `?`, or `| NULL` in the definition
+  (those go at the use site). A reference is usable bare, nullable, in a
+  union, and inside `list<…>` / `promise<…>`, but **not** inside
+  `scalar<>`/`vector<>` (define a scalar/vector alias directly) and it
+  takes **no use-site refinement** (`in` / `| NA` / bullets) — the shape
+  lives only in the definition. A `@type` may reference another
+  (resolved transitively); a **cycle**, an **unknown** name, a
+  **duplicate** `@type`, and a name that **shadows a built-in** are all
+  errors. Types are **package-local**.
+- **S7 — record derivation (`extends`).** A `derived` type splices the
+  resolved columns of its base(s) with this type’s own field bullets and
+  any `pick`/`omit`, producing a plain composite that lowers exactly
+  like a hand-written record (no runtime cost). The composite **kind is
+  inherited**: every base must resolve to a bare composite (S3) and all
+  bases must share one kind (mixing `list` with `data.table` is an
+  error); the derived type never restates the kind. **Inherited columns
+  come first, in base order**, then this type’s added columns in source
+  order. A bullet whose name **matches** an inherited column **overrides
+  it in place** (its position is kept) — a *trusted full replacement*,
+  **not** checked for being a narrowing (roxyassert has no subtype
+  lattice, so the author owns compatibility). A bullet with a **new**
+  name appends. A column defined by **more than one base** is an error
+  **unless** the derived type redeclares it (the override resolves the
+  tie). `pick` keeps only the listed inherited columns, `omit` drops
+  them; the two are **mutually exclusive** and every listed name must
+  exist in a base. The collision check runs **after** `pick`/`omit`, so
+  dropping a shared column with `pick`/`omit` also resolves the
+  conflict; conversely, redeclaring a column that `pick`/`omit` removed
+  is an error. Listing a **base** twice, declaring a **column** twice,
+  or restating the kind (`data.table extends …`) are errors, and the
+  keywords `extends`/`pick`/`omit` may not be `@type` names. Bases
+  resolve through `named` (S6), so an **unknown base** and a **cycle**
+  reuse S6’s detection. Works in a `@type` definition and **inline** in
+  a `@param`/`@return`. Column *renaming* and *generic / parameterized*
+  types are out of scope (§12).
+
+## 5. Binding & precedence (why `|` is never ambiguous)
+
+A `|` is resolved by **one-token look-ahead past it** — the token that
+follows:
+
+| What follows `|` | Reads as | Level |
+|----|----|----|
+| `NA` | elements may be missing | element (part of an atom) |
+| `NULL` | the whole argument may be `NULL` | slot (tail only) |
+| a type (`atomic` / `wildcard` / `reference` / `composite`) | a union alternative | slot |
+
+`NA`/`NULL` are reserved and can never start a type, so this peek is
+unambiguous. Only `| NA` is *positional* (it attaches to the atom on its
+left); `| NULL` is fixed by the grammar to the slot tail and never
+appears mid-union. `| NA` is valid **only after an atom** (never after a
+closed `scalar<>`/`vector<>`, never on `raw`, `any`, reference, or
+composite), and binds to the **immediately preceding atom** — the
+nearest type to its left, at most one per atom. Thus:
+
+- `(scalar<numeric> | NA)` is **invalid**; write
+  `(scalar<numeric | NA>)`.
+- in `(numeric | character | NA)` the `| NA` binds to `character` only —
+  a numeric vector, **or** a character vector whose elements may be
+  `NA`.
+- in `(numeric in [0, 1] | NA)` the `in` and `| NA` both attach to
+  `numeric`.
+
+## 6. Base types
+
+| Type | Category | R meaning |
+|----|----|----|
+| `integer` | ordered atomic | integer vector |
+| `numeric` | ordered atomic | double vector |
+| `Date` | ordered atomic | `Date` vector |
+| `POSIXct` | ordered atomic | date-time vector |
+| `character` | enumerable atomic | character vector |
+| `factor` | enumerable atomic | factor |
+| `complex` | plain atomic | complex vector |
+| `logical` | plain atomic | `TRUE`/`FALSE` vector |
+| `raw` | byte atomic | raw vector (no `NA`) |
+| `count` | count | non-negative whole number(s), `20` or `20L` (`assert_scalar_count` / `assert_count`); no `NA`, no set |
+| `any` | wildcard | any R object; no type check (length/nullability only) |
+| `function` | reference | a function/closure (length 1) |
+| `class<Class>` | reference | an object whose class is `Class` — any object system (S3/S4/RC/R6/S7), subclasses match (length 1) |
+| `list` | composite | a list — bare = unconstrained; `+ bullets` = named record (S3); `list<T>` = homogeneous (every element `T`) |
+| `data.table` | composite | a `data.table` (typed/list-columns when refined, S3) |
+| `data.frame` | composite | a `data.frame` (typed/list-columns when refined, S3) |
+| `promise<T>` | promise | a result resolving to `T`, sync or async (S5) |
+
+A `list`/`data.table`/`data.frame` **with** nested bullets is a fixed
+named-field structure; **without** bullets it is an unconstrained
+list/table. `list<T>` is the third form — a homogeneous list (or
+list-column) whose every element is `T` (e.g. `list<character>`,
+`list<class<Engine>>`, `list<any>`).
+
+## 7. Every construct, with examples
+
+``` r
+# --- bare atomic = vector (any length) ---
+(character)                       # character vector, length >= 1
+(numeric)                         # double vector
+(integer)                         # integer vector
+(logical)                         # logical vector
+(complex)                         # complex vector
+(raw)                             # raw vector
+(Date)                            # Date vector
+(POSIXct)                         # date-time vector
+(factor)                          # factor of any length
+
+# --- wildcard: any asserts nothing about type ---
+(any)                             # any R object, unchecked
+(any?)                            # anything, or NULL
+(scalar<any>)                     # a single object of any type
+(vector<any, 3>)                  # length 3, elements of any type(s)
+(vector<any, 1..>)                # at least one element, any type(s)
+
+# --- scalar (length 1) ---
+(scalar<character>)
+(scalar<numeric>)
+(scalar<complex>)
+(scalar<raw>)                     # a single byte
+(scalar<logical | NA>)            # tri-state flag: TRUE / FALSE / NA
+
+# --- count: a non-negative whole number (accepts 20 or 20L) ---
+(count)                           # a vector of counts
+(scalar<count>)                   # one count, 0, 1, 2, ...
+(scalar<count in [1, Inf[>)       # a positive count (>= 1)
+(scalar<count in [1, Inf[>?)      # a positive count, or NULL
+(vector<count, 3>)                # three counts
+
+# --- reference types: bare, length-1 by nature ---
+(function)                        # a single function/closure
+(function?)                       # a function, or NULL
+(class<Engine>)                      # a single object of class Engine (any system)
+(class<Engine> | NULL)               # an Engine, or NULL
+
+# --- homogeneous lists: list<T> = every element is T ---
+(list<character>)                 # a list, every element a character vector
+(list<scalar<numeric>>)           # a list of single numbers
+(list<class<Engine>>)                # a list of Engine instances
+(list<function>)                  # a list of callbacks
+(list<any>)                       # a list of anything (= bare list at runtime)
+(list<data.table>)                # a list of data.tables
+
+# --- promise returns: resolved type, sync or async ---
+(promise<data.table>)             # a promise resolving to a data.table
+(promise<scalar<numeric>>)        # a promise resolving to one number
+(data.table | promise<data.table>)  # a data.table OR a promise of one (sync-or-async)
+
+# --- vector with explicit length (every atom type) ---
+(vector<numeric, 10>)             # exactly 10
+(vector<numeric, 1..10>)          # 1 to 10 inclusive
+(vector<integer, 2..>)            # at least 2
+(vector<character, 0..>)          # any length, including 0
+(vector<logical, 3>)              # three flags
+(vector<raw, 32>)                 # a 32-byte hash
+(vector<factor in c("a", "b"), 2..>)               # set + open length
+(vector<numeric in [0, 1], 1..>)                   # interval + open-ended length
+(vector<Date in [as.Date("2024-01-01"), as.Date("2024-12-31")], 1..7>)  # rexpr-comma vs length-comma
+
+# --- intervals (ordered atomics only; -Inf is the low sentinel, Inf the high) ---
+(scalar<numeric in [0, 1]>)       # 0 <= x <= 1
+(scalar<numeric in ]0, 1[>)       # 0 <  x <  1
+(scalar<numeric in ]0, 1]>)       # 0 <  x <= 1
+(scalar<numeric in [-1.5, 2.5]>)  # fractional, signed bounds
+(scalar<numeric in ]0, Inf[>)     # x > 0 and finite (open bracket excludes Inf)
+(scalar<numeric in ]0, Inf]>)     # x > 0, Inf allowed (closed sentinel: no upper bound)
+(scalar<numeric in ]-Inf, 0]>)    # x <= 0 and finite (open bracket excludes -Inf)
+(scalar<numeric in ]-Inf, Inf[>)  # any finite double
+(scalar<integer in [1, Inf[>)     # x >= 1  (integer can't be Inf, so sentinel omitted)
+(scalar<integer in ]-Inf, 0]>)    # x <= 0  (-Inf is the low sentinel)
+(numeric in [0, 1])               # every element in [0, 1]
+(scalar<Date in [as.Date("2024-01-01"), as.Date("2026-12-31")]>)        # bounds are R exprs, verbatim
+(scalar<Date in [as.Date("2024-01-01"), Inf[>)                          # on or after a date (Inf high sentinel)
+(scalar<Date in ]-Inf, as.Date("2024-12-31")]>)                         # on or before a date (-Inf low sentinel)
+(scalar<POSIXct in [as.POSIXct("2024-01-01 00:00", tz = "America/New_York"), Inf[>)  # user owns the tz
+(scalar<POSIXct in [lubridate::ymd_hms("2024-01-01 00:00:00"), lubridate::ymd_hms("2025-01-01 00:00:00")[>)  # any constructor
+
+# --- sets / enums (ordered + enumerable atomics) ---
+(scalar<character in c("BUY", "SELL")>)   # inline set, scalar
+(character in c("BUY", "SELL"))           # vector, every element in the set
+(scalar<character in ORDER_SIDE>)         # set from a bare constant name
+(integer in c(1L, 2L, 3L))                # exact integer enum (bare vector)
+(scalar<integer in c(1L, 2L, 3L)>)        # exact integer enum (scalar)
+(factor in c("low", "med", "high"))       # constrains realised values (footnote 2)
+(Date in c(as.Date("2024-01-01"), as.Date("2024-06-30")))   # set elements are R exprs, verbatim
+(numeric in c(0.25, 0.5, 1.0))            # discouraged: floating-point ==
+
+# --- NA permission (atomics except raw; default: NA not allowed) ---
+(numeric | NA)                    # numeric vector, NAs allowed
+(scalar<numeric | NA>)            # one numeric or NA
+(scalar<integer | NA>)            # one integer or NA
+(scalar<POSIXct | NA>)            # one timestamp or NA
+(complex | NA)                    # complex vector, NAs allowed
+(vector<numeric | NA, 10>)        # 10 numerics, NAs allowed
+(numeric in [0, 1] | NA)          # constrained + NA-allowed
+(factor in c("low", "med", "high") | NA)   # missing-category factor
+
+# --- nullable slot (whole argument) ---
+(scalar<numeric>?)                # one numeric, or NULL
+(scalar<numeric> | NULL)          # identical to the above (use one, not both)
+(character?)                      # character vector, or NULL
+
+# --- type unions (slot level) ---
+(numeric | character)             # a numeric vector OR a character vector
+(numeric | character | NA)        # numeric, OR character with NAs allowed
+(class<Reader> | class<Writer>)         # either class
+(data.table | NULL)               # a data.table or NULL
+
+# --- everything at once ---
+(vector<numeric in ]0, 1] | NA, 1..100>?)
+# NULL, OR a numeric vector of length 1..100 whose elements lie in (0,1] and may be NA
+```
+
+## 8. Demo 1 — every inline form on one function
+
+``` r
+
+#' Place a batch of orders.
+#'
+#' @param symbol (scalar<character>) the `BASE/QUOTE` pair.
+#' @param sides (character in c("BUY", "SELL")) one side per order.
+#' @param quantities (vector<numeric in ]0, Inf[, 1..500>) positive sizes, up to 500.
+#' @param limits (vector<numeric in ]0, Inf[ | NA, 1..500>) limit prices; NA = market.
+#' @param leverage (scalar<integer in [1, 125]>?) leverage, or NULL for spot.
+#' @param tags (vector<character, 0..>) free-form labels (possibly none).
+#' @param tag (scalar<character> | NULL) optional client tag.
+#' @param venue (scalar<character in VENUES>) a known venue id.
+#' @param tier (scalar<factor in c("retail", "vip")>) account tier.
+#' @param dry_run (scalar<logical | NA>) simulate only; NA = use account default.
+#' @param not_before (scalar<POSIXct>?) earliest send time, or NULL.
+#' @param on_fill (function?) optional fill callback.
+#' @param userdata (any?) opaque payload passed back to `on_fill`, or NULL.
+#' @param config (list) execution config (a bulleted composite param, S1):
+#' - slippage_bps (scalar<numeric in [0, Inf[>) allowed slippage.
+#' - retries (scalar<integer in [0, 5]>) max retries.
+#' @return (data.table) the acknowledgements (see Demo 2 for nested returns).
+#' @export
+place_batch <- function(symbol, sides, quantities, limits, leverage = NULL,
+                        tags = character(), tag = NULL, venue, tier, dry_run,
+                        not_before = NULL, on_fill = NULL, userdata = NULL,
+                        config = list()) {
+  assert_args_place_batch(symbol, sides, quantities, limits, leverage,
+                          tags, tag, venue, tier, dry_run, not_before, on_fill,
+                          userdata, config)
+  result <- ...
+  return(assert_return_place_batch(result))
+}
+```
+
+## 9. Demo 2 — the kitchen sink: a deeply nested composite return
+
+``` r
+
+#' Run a full report.
+#'
+#' @param symbols (character) one or more `BASE/QUOTE` pairs.
+#' @param top_n (scalar<integer in [1, Inf[>) rows to keep per section.
+#' @return (list) the report:
+#' - **status** (scalar<character in c("ok", "partial", "failed")>) overall outcome.
+#' - generated_at (scalar<POSIXct>) when the report was produced.
+#' - window (scalar<Date in [as.Date("2000-01-01"), as.Date("2100-01-01")]>) as-of date.
+#' - sections (list) one entry per requested view:
+#'   - matches (data.table) ranked matches:
+#'     - symbol (character) the pair.
+#'     - score (numeric in [0, 1]) normalised rank score.
+#'     - drawdown (numeric in ]-Inf, 0]) worst observed drawdown.
+#'     - side (factor in c("BUY", "SELL")) order side.
+#'     - flags (character | NA) label(s), NA where none apply.
+#'     - extras (list<numeric>) a list-column; each cell a numeric vector.
+#'   - rejected (data.table | NULL) rows dropped, or NULL if none:
+#'     - symbol (character) the pair.
+#'     - reason (scalar<character in c("liquidity", "filter", "error")>) why.
+#'   - cursor (scalar<character>?) next-page cursor, or NULL at the end.
+#' - audit (data.frame) a flat audit log:
+#'   - at (POSIXct) event time.
+#'   - level (factor in c("info", "warn", "error")) severity.
+#'   - message (character) the message.
+#'   - context (list<any>) an arbitrary list-column (no per-cell check).
+#' - diagnostics (list) run diagnostics:
+#'   - warnings (vector<character, 0..>) messages (possibly none).
+#'   - retries (scalar<integer in [0, Inf[>) retry count.
+#'   - timings (list) millisecond timings:
+#'     - parse_ms (scalar<numeric in [0, Inf[>) parse time.
+#'     - run_ms (scalar<numeric in [0, Inf[>) run time.
+#'     - per_source (data.table) a row per source:
+#'       - source (character) source id.
+#'       - ms (numeric in [0, Inf[) time for that source.
+#' @export
+report <- function(symbols, top_n) {
+  assert_args_report(symbols, top_n)
+  result <- ...
+  return(assert_return_report(result))
+}
+```
+
+## 10. Demo 3 — an abstract R6 class enforcing every return kind
+
+``` r
+
+#' @title AbstractStore
+#' @description A store contract; subclasses implement `.impl_*`. Each public
+#'   method validates its inputs and its return from the documented types.
+AbstractStore <- R6::R6Class(
+  "AbstractStore",
+  public = list(
+    #' @description Fetch records by key.
+    #' @param keys (character) keys to fetch.
+    #' @param limit (scalar<integer in [1, Inf[>?) optional max rows.
+    #' @return (data.table) the records:
+    #' - key (character) the key.
+    #' - value (numeric | NA) the value, NA if unset.
+    #' - updated_at (POSIXct) last write time.
+    get = function(keys, limit = NULL) {
+      assert_args_AbstractStore__get(keys, limit)
+      return(assert_return_AbstractStore__get(private$.impl_get(keys, limit)))
+    },
+
+    #' @description Count records.
+    #' @return (scalar<integer in [0, Inf[>) the count.
+    count = function() {
+      return(assert_return_AbstractStore__count(private$.impl_count()))
+    },
+
+    #' @description Write one record; returns self for chaining.
+    #' @param key (scalar<character>) the key.
+    #' @param value (scalar<numeric> | NULL) the value, or NULL to clear it.
+    #' @return (class<AbstractStore>) self.
+    put = function(key, value) {
+      assert_args_AbstractStore__put(key, value)
+      private$.impl_put(key, value)
+      return(invisible(assert_return_AbstractStore__put(self)))
+    },
+
+    #' @description Fetch one record, or NULL if absent.
+    #' @param key (scalar<character>) the key.
+    #' @return (list | NULL) the record, or NULL:
+    #' - key (scalar<character>) the key.
+    #' - value (scalar<numeric | NA>) the value.
+    find = function(key) {
+      assert_args_AbstractStore__find(key)
+      return(assert_return_AbstractStore__find(private$.impl_find(key)))
+    }
+  ),
+  private = list(
+    .impl_get = function(keys, limit) stop("not implemented"),
+    .impl_count = function() stop("not implemented"),
+    .impl_put = function(key, value) stop("not implemented"),
+    .impl_find = function(key) stop("not implemented")
+  )
+)
+```
+
+## 11. Demo 4 — corner cases and tricky combinations
+
+``` r
+# union mixing a constrained vector, NA permission, and NULL
+(numeric in [0, 1] | NA | character?)
+# read: NULL, OR (a numeric vector in [0,1], NAs allowed) OR (a character vector)
+# (the `?` is the slot tail, INSIDE the parens — never `(...)?`)
+
+# scalar union, nullable
+(scalar<integer in [1, 6]> | scalar<character in c("d6")>?)
+
+# length-pinned, NA-allowed, range-constrained, nullable
+(vector<numeric in [-1, 1] | NA, 3>?)
+
+# set from a bare constant, as a vector
+(character in CURRENCIES)
+
+# reference / wildcard, nullable / unioned
+(function?)                       # a function, or NULL
+(class<Engine> | NULL)               # an Engine, or NULL
+(class<Reader> | class<Writer>)         # either class
+(any)                             # truly polymorphic argument, unchecked
+
+# a data.table with list-columns (type the column list<T>)
+(data.table)
+# - id (character) identifier.
+# - tags (list<character>) a list-column; each cell a character vector.
+# - blob (list<any>) a list-column of arbitrary cells (no per-cell check).
+
+# nested list whose only field is a nullable nested table
+(list)
+# - page (scalar<integer in [1, Inf[>) page number.
+# - rows (data.table | NULL) the page, or NULL when empty:
+#   - id (character) identifier.
+#   - amount (numeric in ]0, Inf[ | NA) positive amount, NA if pending.
+
+# --- intentionally INVALID ---
+# (scalar<numeric, 1>)            # scalar takes no length
+# (scalar<numeric> | NA)          # | NA must be inside <>: use (scalar<numeric | NA>)
+# (numeric | NULL?)               # pick one nullability marker, not both
+# (numeric)?                      # '?' goes inside the parens: write (numeric?)
+# (complex in [0, 1])             # interval on a non-ordered type
+# (character in [0, 1])           # interval on a non-ordered type (use a set)
+# (integer in [0.5, 2.5])         # fractional bounds on integer
+# (integer in c(1, 2, 3))         # S2: integer set needs the L suffix: c(1L, 2L, 3L)
+# (character in c(1, 2))          # S2: character set elements must be string literals
+# (Date in [0, 1])                # S2: a Date bound must be of class Date, not a bare number
+# (numeric in [Inf, 0])           # Inf is the HIGH sentinel only; -Inf the low
+# (numeric in ]-Inf, Inf[)        # both-sentinel: imposes no bound (drop the `in [..]`)
+# (numeric in ]1, 1[)             # S4: empty / reversed interval (never satisfiable)
+# (logical in c(TRUE, FALSE))     # logical takes no set (degenerate)
+# (complex in c(0+0i, 1+0i))      # complex takes no set
+# (raw in OPCODES)                # raw takes no set
+# (raw | NA)                      # raw has no NA representation
+# (any in c(1, 2))                # any takes no constraint
+# (any | NA)                      # any takes no | NA
+# (scalar<function>)              # function is bare: write (function)
+# (vector<function, 3>)           # function is a length-1 reference (scope choice, §12)
+# (class | NULL)                  # class must name a class: class<Name>
+# (class<lubridate::Duration>)    # class<> names ONE class, not pkg::Class
+# (R6<Engine>)                    # R6<> was removed; write class<Engine>
+# (data.table | NA)               # | NA is element-level; not valid on a composite
+# (data.table | data.frame): ...  # S1: bullets need a single bare composite
+# (vector<numeric>)               # vector<> requires a length — use bare (numeric)
+# (list<numeric>): ...            # S1: list<T> is a leaf and takes no bullets
+# (promise)                       # promise must name its resolved type: promise<T>
+# (numeric | promise<character>)  # S5: a promise union must resolve to one type
+# (list<promise<numeric>>)        # promise<T> is a whole-slot value, not a list element
+# (scalar<promise<numeric>>)      # scalar<>/vector<> wrap an atom or `any`, not a promise
+```
+
+## 12. Non-goals (deliberately inexpressible)
+
+Out of scope for the current grammar — express these in prose or a
+hand-written check. (Homogeneous/element-typed collections, lists of
+callbacks, and columns of model objects are **no longer** here — they
+are now `list<T>`, e.g. `list<scalar<numeric>>`, `list<function>`,
+`list<class<Model>>`.)
+
+- **Composite cardinality** — “a `data.table` with 1..N rows”, “a
+  `list<T>` of exactly 3 elements”. Length applies only to atomic/`any`
+  `vector<>`; a `list<T>` is unbounded in length.
+- **A *vector* of reference types** — `vector<function>` /
+  `vector<class<...>>` are rejected (references are length-1). A
+  *collection* of them is fine and expressible: `list<function>`,
+  `list<class<Engine>>`.
+- **Positional / unnamed records** — `list` bullets describe **named**
+  fields; a positional (unnamed) record is out of scope. (A homogeneous
+  unnamed list is `list<T>`.)
+- **A factor’s declared
+  [`levels()`](https://rdrr.io/r/base/levels.html)** — a set checks
+  realised values, not the level schema (footnote 2).
+- **A list of un-resolved promises** — `list<promise<T>>` is rejected:
+  each element would be an unresolved promise, which can’t be validated
+  synchronously, and roxyassert never emits the per-element `then()`
+  wiring (S5). Await the promises
+  (e.g. [`promises::promise_all`](https://rstudio.github.io/promises/reference/promise_all.html))
+  and annotate the result as `promise<list<T>>`. (If there’s real
+  demand, a future version could relax this.)
+- **Verifying that `class<Name>` names a real class** — roxyassert emits
+  `assert_class(x, "Name")` blindly, so a typo (`class<Duraton>`)
+  generates without complaint and fails only at runtime; there is no
+  `document()`-time check that the class exists.
+- **Refining a named type at the use site** — a `@type` reference (S6)
+  expands to its definition as-is; `(Price in [0, 1])` on a named
+  `Price` is not allowed. Put the refinement in the `@type`, define
+  another `@type`, or write the refined type inline. **Cross-package**
+  named types are also out of scope — `@type` is package-local.
+- **Renaming a derived column** — a `derived` type (S7, `extends`) can
+  add, override, `pick` and `omit` columns, but cannot *rename* an
+  inherited column (there is no `old -> new` operator). Use `omit` +
+  re-add under the new name. A renamed column is, for assertion
+  purposes, a different record.
+- **Generic / parameterized types** — a `@type` template over a type
+  variable (`@type Paged<T>` instantiated as `Paged<Order>`) is out of
+  scope. The `<…>` syntax only *applies* a known container (`list<T>`,
+  `promise<T>`, `class<T>`) to a concrete type; it does not *define* a
+  type parameter.
+
+## 13. `@noassert` — document a type without enforcing it
+
+roxyassert couples documentation and enforcement: a `(type)` on a
+`@param` both renders in the help page **and** generates a check.
+`@noassert` decouples them — the type is still shown, but no check is
+generated — for a parameter that a hand-written guard already validates
+(so the generated check would be redundant, or would pre-empt the
+guard’s better error message).
+
+- `@noassert <names>` exempts the named parameters (comma- or
+  space-separated); their `(type)` still renders, but no `assert_*` is
+  emitted for them.
+- A bare `@noassert` makes the **whole** function (or R6 method)
+  documented-only.
+- Naming a parameter that is not documented is an error.
+- Exempted parameters are still parsed and validated (a malformed type
+  is still caught) — only their code generation is skipped.
+- Works for plain functions and R6 methods.
+
+``` r
+
+#' @param symbol (scalar<character>) a normalised BASE/QUOTE pair.
+#' @noassert symbol
+#' ...
+ticker = function(symbol) {
+  assert_normalised_symbol(symbol)   # the guard enforces; symbol's type is doc-only
+  ...
+}
+```
+
+## 14. Self-consistency checklist
+
+Every base type sits in exactly one category (§2); every modifier it
+carries is a ✅ in that category’s row — no per-type exceptions.
+
+`in [interval]` appears only on `integer`/`numeric`/`Date`/`POSIXct`;
+integer bounds are literal whole numbers / `±Inf` (no expression); a
+`numeric` bound is a number or any expression; a `Date`/`POSIXct` bound
+must be a class-matching expression, so a bare-number bound
+(`Date in [0, 1]`) is rejected as a type error (S2); `-Inf` only as the
+low bound, `Inf` only as the high.
+
+`in c(set)` appears only on ordered + enumerable atomics; never on
+`complex`/`logical`/`raw`/`any`; exact on `integer`/whole-day `Date`,
+discouraged on `numeric`/`POSIXct` (`==`); on `factor`/`character` it
+constrains realised values, not levels, NA-aware under `| NA` (footnote
+2).
+
+interval/set bound types match the atom, and intervals are non-empty
+(S2, S4).
+
+`| NA` appears only after an atom (bare or inside `<>`), never on `raw`,
+`any`, reference, or composite; binds to the nearest atom on its left;
+never after a closed `scalar<>`/`vector<>`.
+
+`?` and `| NULL` mean the same thing and never appear together.
+
+`|` is followed only by `NA` (element), `NULL` (slot), or a type
+(union); a union member carries its own `| NA`.
+
+`any` carries no `in`/set/`| NA` and emits no type check; only length
+(`scalar<any>`/`vector<any, n>`) and nullability apply.
+
+intervals use square brackets only (`[`/`]` low, `]`/`[` high —
+closed/open, any combination); never
+`( )`/[`{ }`](https://rdrr.io/r/base/Paren.html); one top-level comma;
+brackets/commas inside an `rexpr` bound are invisible to the tokenizer.
+
+sets are a bare `name_set` (single token) or a `call_set`
+(call/index/operator expression); never
+[`{ }`](https://rdrr.io/r/base/Paren.html); `enum` is not a construct
+(the word appears only as prose).
+
+`vector<>` requires a length (`,` n / a..b / a..); a length-less
+`vector<T>` is rejected (use bare `T`); a length appears only inside
+`vector<>`; `scalar<T, n>` is rejected; `..` is one token, valid only in
+length position.
+
+`function`/`class<Class>` appear only as bare reference types; `class`
+always names a single class (any object system; no `pkg::` qualifier —
+name the package in prose).
+
+`list`/`data.table`/`data.frame` carry no `in`/`| NA`/length/`vector<>`;
+refined by nested bullets (named record / typed columns, S1/S3) **or**,
+for `list`, parameterised as `list<T>` where `T` is a single `type`
+(homogeneous, no slot-union/`| NULL`/`?`, a leaf with no bullets);
+`list<any>` ≡ bare `list` at runtime; a list-column is typed `list<T>`,
+and an atomic-typed column rejects list-cells.
+
+a `derived` composite (`extends Base…`) sits inside the parentheses,
+inherits its kind from the base(s) (never restated), inherited columns
+first then added/overridden ones (override in place, trusted/unchecked),
+errors on a multi-base column collision unless redeclared, and
+`pick`/`omit` are mutually exclusive over existing base columns (S7).
+
+everything after `)` is free-text description (roxyassert ignores it); a
+`:` adjacent to it is cosmetic; canonical style omits it.
+
+`promise<T>` lowers to `T`’s checks with no `then()`/`is.promise()`
+emitted (the caller wires the async); `T | promise<T>` (same T)
+collapses to the resolved `T`, nested `promise<promise<T>>` collapses
+too, and a promise unioned with a *different* type is rejected;
+`promise<T>` is a whole-slot value, so it is rejected as a list element
+or inside `scalar<>`/`vector<>` (S5).
+
+a bare identifier that is not a built-in type is a `@type` reference
+(S6), resolved inline to its definition; a `@type` is a single type (no
+use-site `?`/`|`/`| NULL` in the def), usable bare / nullable / unioned
+/ inside `list<>`/`promise<>` but not inside `scalar<>`/`vector<>`, with
+no use-site refinement; unknown names, duplicates, built-in shadowing,
+and cycles are errors; package-local.
+
+`count` is a non-negative whole number accepting `20` or `20L`
+(`assert_scalar_count`/`assert_count`); interval-capable with
+whole-number bounds; no set, no `| NA`.
+
+`@noassert <names>` (or bare, for the whole block) documents a type but
+emits no check; exempted params are still validated; an undocumented
+name is an error.
+
+generated names are `assert_args_<fn>` / `assert_return_<fn>`, and
+`assert_args_<Class>__<method>` / `assert_return_<Class>__<method>` for
+R6 (double underscore). \`\`\`
