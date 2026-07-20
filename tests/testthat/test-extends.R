@@ -213,9 +213,9 @@ test_that("override resolving a collision keeps the inherited position", {
 
 test_that("a derived record can inherit/add list<T> and nullable columns", {
   text <- paste0(
-    "#' @type Base (data.table):\n#' - id (character) id.\n#' - note (character?) optional.\nNULL\n",
+    "#' @type Base (data.table):\n#' - id (character) id.\n#' - note (character | NULL) optional.\nNULL\n",
     "#' @type Tagged (extends Base):\n#' - tags (list<character>) a list-column.\nNULL\n",
-    "#' F.\n#' @return (Tagged?) maybe.\n#' @export\nf <- function() NULL"
+    "#' F.\n#' @return (Tagged | NULL) maybe.\n#' @export\nf <- function() NULL"
   )
   code <- rt(text)
   expect_true(any(grepl('assert_has_columns\\(value, c\\("id", "note", "tags"\\)\\)', code)))

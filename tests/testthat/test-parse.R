@@ -197,6 +197,56 @@ test_that("a composite with no bullets keeps fields NULL", {
   expect_null(parse_annotation("(data.table) just a table.")$alternatives[[1]]$fields)
 })
 
+# ---- optional record keys (name-side '?') ------------------------------------
+
+test_that("a name-side '?' marks the field optional and is stripped", {
+  node <- parse_annotation("(list)\n- c? (scalar<character>) x.")$alternatives[[1]]
+  expect_equal(node$fields[[1]]$name, "c")
+  expect_true(node$fields[[1]]$optional)
+  # a plain field is required
+  plain <- parse_annotation("(list)\n- c (scalar<character>) x.")$alternatives[[1]]
+  expect_false(plain$fields[[1]]$optional)
+})
+
+test_that("the four required/optional x value-null combinations parse distinctly", {
+  node <- parse_annotation(paste(
+    "(list) cfg:",
+    "- a (scalar<character>) required, must be character.",
+    "- b (scalar<character>?) required, may be NULL.",
+    "- c? (scalar<character>) may be absent.",
+    "- d? (scalar<character>?) may be absent, or NULL.",
+    sep = "\n"
+  ))$alternatives[[1]]
+  expect_false(node$fields[[1]]$optional)
+  expect_false(node$fields[[1]]$ast$null_ok)
+  expect_false(node$fields[[2]]$optional)
+  expect_true(node$fields[[2]]$ast$null_ok)
+  expect_true(node$fields[[3]]$optional)
+  expect_false(node$fields[[3]]$ast$null_ok)
+  expect_true(node$fields[[4]]$optional)
+  expect_true(node$fields[[4]]$ast$null_ok)
+})
+
+test_that("the slot records which null marker carried the nullability", {
+  expect_null(parse_annotation("(scalar<numeric>)")$null_marker)
+  expect_equal(parse_annotation("(scalar<numeric>?)")$null_marker, "question")
+  expect_equal(parse_annotation("(scalar<numeric> | NULL)")$null_marker, "union")
+  # field bullets go through the same slot parser, so they record it too
+  node <- parse_annotation("(list)\n- b (scalar<character>?) x.")$alternatives[[1]]
+  expect_equal(node$fields[[1]]$ast$null_marker, "question")
+})
+
+test_that("a name-side '?' with no name, or a doubled one, is an error", {
+  expect_error(parse_annotation("(list)\n- ? (scalar<character>) x."), "needs a name")
+  expect_error(parse_annotation("(list)\n- name?? (scalar<character>) x."), "written once")
+})
+
+test_that("a **bold** optional field name keeps both effects", {
+  node <- parse_annotation("(list)\n- **c?** (scalar<character>) x.")$alternatives[[1]]
+  expect_equal(node$fields[[1]]$name, "c")
+  expect_true(node$fields[[1]]$optional)
+})
+
 # ---- conformance review regressions -----------------------------------------
 
 test_that("interval bounds and call_sets balance square brackets (rexpr scan)", {
