@@ -885,9 +885,9 @@ name concerns the **key**; a `?` inside the type parens concerns the **value**.
 | bullet | key may be absent | value may be `NULL` |
 |---|:---:|:---:|
 | `- a (scalar<character>)` | ❌ | ❌ |
-| `- b (scalar<character> \| NULL)` | ❌ | ✅ |
+| <code>- b (scalar&lt;character&gt; &#124; NULL)</code> | ❌ | ✅ |
 | `- c? (scalar<character>)` | ✅ | ❌ |
-| `- d? (scalar<character> \| NULL)` | ✅ | ✅ |
+| <code>- d? (scalar&lt;character&gt; &#124; NULL)</code> | ✅ | ✅ |
 
 This is the TypeScript distinction: `- c? (scalar<character>)` is `c?: string`
 (an optional **property**), while `| NULL` inside the parens is `| null` (a
