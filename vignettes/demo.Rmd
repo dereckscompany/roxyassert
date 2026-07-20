@@ -41,7 +41,7 @@ A type annotation is a parenthesised token at the start of a `@param` or `@retur
 #' @param symbol (scalar<character>) normalised `BASE/QUOTE` pair.
 #' @param side (scalar<character in c("BUY", "SELL")>) order side.
 #' @param quantity (scalar<numeric in ]0, Inf[>) order size (positive).
-#' @param price_limit (scalar<numeric>?) limit price; `NULL` for market orders.
+#' @param price_limit (scalar<numeric> | NULL) limit price; `NULL` for market orders.
 #' @return (data.table) the accepted order:
 #' - order_id (character) exchange order id.
 #' - quantity (numeric) accepted size.
@@ -69,7 +69,7 @@ AbstractStore <- R6::R6Class(
   public = list(
     #' @description Fetch records by key.
     #' @param keys (character) one or more keys to fetch.
-    #' @param limit (scalar<integer>?) optional max rows.
+    #' @param limit (scalar<integer> | NULL) optional max rows.
     #' @return (data.table) the matched records:
     #' - key (character) the record key.
     #' - value (numeric) the stored value.

@@ -1,3 +1,34 @@
+# roxyassert 0.10.0
+
+* **Optional record keys, and deprecation of the type-side `?`.** A record
+  field bullet can now mark its key *optional* — the key may be absent from the
+  record, exactly like TypeScript's `name?: string`. The `?` position is now
+  load-bearing, so the older type-side `?` null marker (inside the parens)
+  starts its deprecation in favour of the explicit `| NULL`.
+
+  * **Optional key** — a `?` hugging the field **name** in a bullet
+    (`- name? (type)`) means the key may be **absent**; when present, its value
+    is still checked against the type. Only the required keys enter the
+    `assert_has_names` / `assert_has_columns` presence assertion; an optional
+    key's checks run under `if ("name" %in% names(x))` — `names()`, never
+    `!is.null(x[["name"]])`, because an absent key and a present-`NULL` key
+    both read as `NULL` in R and the grammar's tri-state (absent /
+    present-`NULL` / present-value) depends on telling them apart. Works for
+    `list` records and `data.table` / `data.frame` columns, composes with
+    `| NULL` on the value (`- d? (scalar<character> | NULL)`), and is inherited
+    through `extends`.
+  * **Deprecation** — the type-side `?` (`(scalar<character>?)`) still parses
+    and still means "the value may be `NULL`", but the roclet now emits **one
+    warning per annotated tag** that uses it at `document()` time, naming the
+    tag. `| NULL` and the new name-side `?` produce no warning.
+    `parse_annotation()` itself stays warning-free.
+  * **Errors** — `- ? (type)` (a `?` with no name) and `- name?? (type)` (a
+    doubled marker) are parse errors with clear messages.
+  * The grammar vignette gains a section *Optional record keys* (the
+    four-combinations table, the TypeScript comparison, and the
+    names()-vs-`NULL` rationale) and a new static rule **S8**; the EBNF bullet
+    production documents the name-side `?`.
+
 # roxyassert 0.9.2
 
 * **Setup docs: keep roxygen2's default roclets (closes #16).** The README, the `demo` vignette, and the `contract_roclet()` help topic showed `roclets = c("namespace", "rd", "roxyassert::contract_roclet")` — silently missing `collate`. Because naming any roclet *replaces* roxygen2's default set rather than extending it, that snippet turned off the `collate` roclet, so an `@include`-using package stopped having its DESCRIPTION `Collate:` field maintained and became uninstallable (`R CMD INSTALL`/`R CMD check` fails with `files in '.../R' missing from 'Collate' field`, while `load_all()`/`test()` still pass locally — exactly the trap that once broke `tradebot-core`). All three now show `roclets = c("collate", "namespace", "rd", "roxyassert::contract_roclet")` with a warning callout explaining the replace-not-append behaviour and the `collate` consequence.

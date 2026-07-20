@@ -160,8 +160,8 @@ length); the whole-argument modifiers sit outside it:
   the *element type* — **bare or wrapped**. `(numeric in [0, Inf[)` is a
   non-negative numeric vector; `(scalar<numeric in [0, Inf[>)` is a
   single non-negative number.
-- **Slot (whole argument):** a trailing `?` (may be `NULL`) and `|`
-  type-unions.
+- **Slot (whole argument):** `| NULL` (may be `NULL` — the older
+  trailing `?` form is deprecated) and `|` type-unions.
 
 The bracket / token reference:
 
@@ -175,7 +175,9 @@ The bracket / token reference:
 - `,` — a vector **length** (inside `<>`).
 - `| NA` — elements may be `NA` (bare or wrapped); default: **not**
   allowed.
-- `?` / `| NULL` — the whole argument may be `NULL` (slot level).
+- `| NULL` — the whole argument may be `NULL` (slot level). The
+  type-side `?` form still parses but is deprecated — it warns once per
+  tag at `document()` time; write `| NULL`.
 - `| <type>` — a union with another type, e.g. `numeric | character`.
 
 The `|` operator is read by what follows it: **`NA`** = elements may be
@@ -212,13 +214,13 @@ by nested bullets, and `list` additionally as `list<T>`):
 
 `function` and `class<Class>` are **reference types**: written bare
 (`(function)`, `(class<Engine>)`), nullable as a slot
-(`(class<Engine>?)`), never wrapped in `scalar<>`/`vector<>` and never
-carrying `in`/`| NA`/length. `class<Class>` checks the value’s class
-with `inherits()`, so it works for any object system (S3, S4, Reference
-Classes, R6, S7) and matches subclasses (`class<AbstractClock>` accepts
-a `RealClock`). `Class` names a single class, not a `pkg::Class`
-reference — name the source package in prose if it helps. Intervals
-(`in [ , ]`) apply to the ordered types
+(`(class<Engine> | NULL)`), never wrapped in `scalar<>`/`vector<>` and
+never carrying `in`/`| NA`/length. `class<Class>` checks the value’s
+class with `inherits()`, so it works for any object system (S3, S4,
+Reference Classes, R6, S7) and matches subclasses
+(`class<AbstractClock>` accepts a `RealClock`). `Class` names a single
+class, not a `pkg::Class` reference — name the source package in prose
+if it helps. Intervals (`in [ , ]`) apply to the ordered types
 (`integer`/`numeric`/`Date`/`POSIXct`); sets (`in c(...)`) apply to the
 ordered and enumerable atomics
 (`integer`/`numeric`/`Date`/`POSIXct`/`character`/`factor`) — `complex`,
@@ -243,8 +245,8 @@ for the full per-category rules.
 - enum, inline set (scalar) — `(scalar<character in c("BUY", "SELL")>)`
 - enum, vector from a constant — `(character in ORDER_SIDE)`
 - `NA` elements allowed — `(numeric | NA)`
-- nullable slot — `(scalar<numeric>?)` ≡ `(scalar<numeric> | NULL)` (use
-  one, not both)
+- nullable slot — `(scalar<numeric> | NULL)` (the `(scalar<numeric>?)`
+  form is equivalent but deprecated)
 - union of types — `(numeric | character)`
 - a count, `20` or `20L` — `(scalar<count>)`; a positive count —
   `(scalar<count in [1, Inf[>)`
@@ -280,7 +282,11 @@ is skipped — and naming an undocumented parameter is an error.
 you can compose tables inside lists inside lists. Each bullet is
 `- name (type) description`; a `:` after the `)` is tolerated but
 optional, and **bold around the name is optional**
-(`- **name** (type) ...` also works).
+(`- **name** (type) ...` also works). A `?` hugging the field **name**
+marks the key optional — `- name? (type) ...` means the key may be
+**absent**; when it is present, its value is still checked against the
+type (TypeScript’s `name?: type`; see the grammar reference for the full
+tri-state).
 
 ``` r
 #' @return (list) the query result:
@@ -290,7 +296,7 @@ optional, and **bold around the name is optional**
 #'   - value (numeric in [0, Inf[) the (non-negative) value.
 #' - meta (list) pagination metadata:
 #'   - page (scalar<integer in [1, Inf[>) current page.
-#'   - cursor (scalar<character>?) next-page cursor, or NULL at the end.
+#'   - cursor (scalar<character> | NULL) next-page cursor, or NULL at the end.
 ```
 
 A column declared with an **atomic** type is checked for that type, so a
@@ -315,7 +321,7 @@ cells). `list<T>` is also how you write any homogeneous list —
 #' @param symbol (scalar<character>) normalised `BASE/QUOTE` pair.
 #' @param side (scalar<character in c("BUY", "SELL")>) order side.
 #' @param quantity (scalar<numeric in ]0, Inf[>) order size (positive).
-#' @param price_limit (scalar<numeric in ]0, Inf[>?) limit price; `NULL` for market orders.
+#' @param price_limit (scalar<numeric in ]0, Inf[> | NULL) limit price; `NULL` for market orders.
 #' @return (data.table) the accepted order:
 #' - order_id (character) exchange order id.
 #' - status (character) order status.
@@ -346,7 +352,7 @@ submit_order <- function(symbol, side, quantity, price_limit = NULL) {
 #'     - score (numeric in [0, Inf[) rank score.
 #'   - pagination (list) cursor state:
 #'     - page (scalar<integer in [1, Inf[>) current page.
-#'     - cursor (scalar<character>?) next cursor, or NULL at the end.
+#'     - cursor (scalar<character> | NULL) next cursor, or NULL at the end.
 #' - diagnostics (list) run diagnostics:
 #'   - warnings (character) messages (possibly length 0).
 #'   - timings (list) millisecond timings:
@@ -506,11 +512,11 @@ cost. A `@type` may build on another
 (`@type Row (data.table) - score (Score) ...`); cycles, unknown names,
 and duplicate definitions are reported as errors.
 
-Rules: a `@type` defines a *single type* — add `?` / `| NULL` / unions
-at the **use site**, not the definition; references work bare, nullable,
-in a union, and inside `list<…>` / `promise<…>`, but not inside
-`scalar<>` / `vector<>` (define a scalar alias directly, like `Bps`).
-Types are package-local.
+Rules: a `@type` defines a *single type* — add `| NULL` / unions at the
+**use site**, not the definition; references work bare, nullable, in a
+union, and inside `list<…>` / `promise<…>`, but not inside `scalar<>` /
+`vector<>` (define a scalar alias directly, like `Bps`). Types are
+package-local.
 
 ### Deriving one type from another — `extends`, override, `pick` / `omit`
 

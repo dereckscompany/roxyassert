@@ -110,7 +110,9 @@ annotation     ::= "(" slot ")" description? bullets?
 slot           ::= type ( "|" type )*  ( ( "|" "NULL" ) | "?" )?
                    (* a union of >=1 types; the whole argument may be NULL,
                       written EITHER as a "| NULL" alternative OR a trailing "?",
-                      never both *)
+                      never both. The "?" form is DEPRECATED (§14): it still
+                      parses, but the roclet warns once per tag at document()
+                      time — write "| NULL". *)
 
 type           ::= atomic | wildcard | reference | composite | derived | promise | named
 named          ::= ident
@@ -207,9 +209,11 @@ length         ::= int          (* exactly n *)
                  | int ".."     (* at least n *)
 
 bullets        ::= bullet+      (* siblings at one indentation depth *)
-bullet         ::= "- " name " (" slot ")" description? bullets?
+bullet         ::= "- " name "?"? " (" slot ")" description? bullets?
                    (* everything after ) is free-text description; any ":" is
-                      cosmetic. trailing bullets gated by S1. *)
+                      cosmetic. trailing bullets gated by S1. A '?' hugging the
+                      NAME marks the key OPTIONAL (S8) — a different marker from
+                      the deprecated '?' inside the slot. *)
 name           ::= ident | "**" ident "**"   (* bold optional, no semantic effect *)
 
 (* lexical terminals *)
@@ -269,13 +273,15 @@ Tokenizing rules (so the grammar is deterministic in practice):
   length position are lexical errors.
 - **Everything after `)` is free-text description.** roxyassert parses only the
   `(slot)` token; the rest of the line is description it ignores, so any `:`
-  adjacent to it (`(type): desc`, `(type) desc:`) is cosmetic — the canonical
-  style omits it. The `name` of a bullet is the single token before the first
-  ` (` at the bullet's top level; the `slot` is the balanced-parenthesis group
-  opened by that `(`, found with the same string-aware scan as `annotation`.
-  Names contain no spaces. Child `bullets` begin only on a *subsequent* line at
-  strictly greater indentation whose first non-space characters are `- `; a `- `
-  inside description text (same line) is literal.
+   adjacent to it (`(type): desc`, `(type) desc:`) is cosmetic — the canonical
+   style omits it. The `name` of a bullet is the single token before the first
+   ` (` at the bullet's top level; the `slot` is the balanced-parenthesis group
+   opened by that `(`, found with the same string-aware scan as `annotation`.
+   Names contain no spaces. A single `?` trailing the name marks the key
+   optional (S8) and is stripped; a doubled `??` is an error. Child `bullets`
+   begin only on a *subsequent* line at strictly greater indentation whose
+   first non-space characters are `- `; a `- ` inside description text (same
+   line) is literal.
 - **Reference and wildcard shapes** — `function`/`class<Class>` are bare length-1
   references (never `scalar<>`/`vector<>`, never `in`/`| NA`/length); `any` takes
   no `in`/set/`| NA` but does accept `scalar<>`/`vector<>` for a length check.
@@ -399,10 +405,25 @@ These context-sensitive constraints are checked by the generator; they are
   redeclaring a column that `pick`/`omit` removed is an error. Listing a **base**
   twice, declaring a **column** twice, or restating the kind (`data.table extends
   …`) are errors, and the keywords `extends`/`pick`/`omit` may not be `@type` names.
-  Bases resolve through `named` (S6), so an **unknown base** and a **cycle** reuse
-  S6's detection. Works in a `@type` definition and **inline** in a
-  `@param`/`@return`. Column *renaming* and *generic / parameterized* types are out
-  of scope (§12).
+   Bases resolve through `named` (S6), so an **unknown base** and a **cycle** reuse
+   S6's detection. Works in a `@type` definition and **inline** in a
+   `@param`/`@return`. Column *renaming* and *generic / parameterized* types are out
+   of scope (§12).
+- **S8 — optional record keys.** A `?` immediately after a field **name** in a
+  bullet (`- name? (type)`) marks the key **optional**: it may be absent from
+  the record. Only the **required** keys enter the presence assertion
+  (`assert_has_names` / `assert_has_columns`); an optional key's checks are
+  wrapped in a presence guard, `if ("name" %in% names(x))` — `names()` covers
+  list names and table columns alike. The guard must test the **names**, never
+  `!is.null(x[["name"]])`: in R an absent key and a present-`NULL` key both
+  READ as `NULL`, and the grammar's tri-state (absent / present-`NULL` /
+  present-value) depends on telling them apart. When the key **is** present its
+  value must satisfy the slot as usual, including any `| NULL` of its own, so
+  absent ≠ present-`NULL` ≠ present-`NA` (a present `NA` still fails a
+  non-`| NA` type). The marker's **position** is the whole meaning: `name?` =
+  the key may be absent, `(slot?)` = the value may be `NULL` (deprecated —
+  write `| NULL`, §14). Optional keys are inherited through `extends` (S7) like
+  any other column property.
 
 ## 5. Binding & precedence (why `|` is never ambiguous)
 
@@ -469,7 +490,7 @@ element is `T` (e.g. `list<character>`, `list<class<Engine>>`, `list<any>`).
 
 # --- wildcard: any asserts nothing about type ---
 (any)                             # any R object, unchecked
-(any?)                            # anything, or NULL
+(any | NULL)                      # anything, or NULL
 (scalar<any>)                     # a single object of any type
 (vector<any, 3>)                  # length 3, elements of any type(s)
 (vector<any, 1..>)                # at least one element, any type(s)
@@ -485,12 +506,12 @@ element is `T` (e.g. `list<character>`, `list<class<Engine>>`, `list<any>`).
 (count)                           # a vector of counts
 (scalar<count>)                   # one count, 0, 1, 2, ...
 (scalar<count in [1, Inf[>)       # a positive count (>= 1)
-(scalar<count in [1, Inf[>?)      # a positive count, or NULL
+(scalar<count in [1, Inf[> | NULL)  # a positive count, or NULL
 (vector<count, 3>)                # three counts
 
 # --- reference types: bare, length-1 by nature ---
 (function)                        # a single function/closure
-(function?)                       # a function, or NULL
+(function | NULL)                 # a function, or NULL
 (class<Engine>)                      # a single object of class Engine (any system)
 (class<Engine> | NULL)               # an Engine, or NULL
 
@@ -557,9 +578,9 @@ element is `T` (e.g. `list<character>`, `list<class<Engine>>`, `list<any>`).
 (factor in c("low", "med", "high") | NA)   # missing-category factor
 
 # --- nullable slot (whole argument) ---
-(scalar<numeric>?)                # one numeric, or NULL
-(scalar<numeric> | NULL)          # identical to the above (use one, not both)
-(character?)                      # character vector, or NULL
+(scalar<numeric> | NULL)          # one numeric, or NULL
+(scalar<numeric>?)                # DEPRECATED form of the above (warns at document() time, §14)
+(character | NULL)                # character vector, or NULL
 
 # --- type unions (slot level) ---
 (numeric | character)             # a numeric vector OR a character vector
@@ -568,7 +589,7 @@ element is `T` (e.g. `list<character>`, `list<class<Engine>>`, `list<any>`).
 (data.table | NULL)               # a data.table or NULL
 
 # --- everything at once ---
-(vector<numeric in ]0, 1] | NA, 1..100>?)
+(vector<numeric in ]0, 1] | NA, 1..100> | NULL)
 # NULL, OR a numeric vector of length 1..100 whose elements lie in (0,1] and may be NA
 ```
 
@@ -581,15 +602,15 @@ element is `T` (e.g. `list<character>`, `list<class<Engine>>`, `list<any>`).
 #' @param sides (character in c("BUY", "SELL")) one side per order.
 #' @param quantities (vector<numeric in ]0, Inf[, 1..500>) positive sizes, up to 500.
 #' @param limits (vector<numeric in ]0, Inf[ | NA, 1..500>) limit prices; NA = market.
-#' @param leverage (scalar<integer in [1, 125]>?) leverage, or NULL for spot.
+#' @param leverage (scalar<integer in [1, 125]> | NULL) leverage, or NULL for spot.
 #' @param tags (vector<character, 0..>) free-form labels (possibly none).
 #' @param tag (scalar<character> | NULL) optional client tag.
 #' @param venue (scalar<character in VENUES>) a known venue id.
 #' @param tier (scalar<factor in c("retail", "vip")>) account tier.
 #' @param dry_run (scalar<logical | NA>) simulate only; NA = use account default.
-#' @param not_before (scalar<POSIXct>?) earliest send time, or NULL.
-#' @param on_fill (function?) optional fill callback.
-#' @param userdata (any?) opaque payload passed back to `on_fill`, or NULL.
+#' @param not_before (scalar<POSIXct> | NULL) earliest send time, or NULL.
+#' @param on_fill (function | NULL) optional fill callback.
+#' @param userdata (any | NULL) opaque payload passed back to `on_fill`, or NULL.
 #' @param config (list) execution config (a bulleted composite param, S1):
 #' - slippage_bps (scalar<numeric in [0, Inf[>) allowed slippage.
 #' - retries (scalar<integer in [0, 5]>) max retries.
@@ -629,7 +650,7 @@ place_batch <- function(symbol, sides, quantities, limits, leverage = NULL,
 #'   - rejected (data.table | NULL) rows dropped, or NULL if none:
 #'     - symbol (character) the pair.
 #'     - reason (scalar<character in c("liquidity", "filter", "error")>) why.
-#'   - cursor (scalar<character>?) next-page cursor, or NULL at the end.
+#'   - cursor (scalar<character> | NULL) next-page cursor, or NULL at the end.
 #' - audit (data.frame) a flat audit log:
 #'   - at (POSIXct) event time.
 #'   - level (factor in c("info", "warn", "error")) severity.
@@ -663,7 +684,7 @@ AbstractStore <- R6::R6Class(
   public = list(
     #' @description Fetch records by key.
     #' @param keys (character) keys to fetch.
-    #' @param limit (scalar<integer in [1, Inf[>?) optional max rows.
+    #' @param limit (scalar<integer in [1, Inf[> | NULL) optional max rows.
     #' @return (data.table) the records:
     #' - key (character) the key.
     #' - value (numeric | NA) the value, NA if unset.
@@ -712,21 +733,21 @@ AbstractStore <- R6::R6Class(
 
 ```r
 # union mixing a constrained vector, NA permission, and NULL
-(numeric in [0, 1] | NA | character?)
+(numeric in [0, 1] | NA | character | NULL)
 # read: NULL, OR (a numeric vector in [0,1], NAs allowed) OR (a character vector)
-# (the `?` is the slot tail, INSIDE the parens — never `(...)?`)
+# (the `| NULL` is the slot tail, INSIDE the parens — never `(...) | NULL`)
 
 # scalar union, nullable
-(scalar<integer in [1, 6]> | scalar<character in c("d6")>?)
+(scalar<integer in [1, 6]> | scalar<character in c("d6")> | NULL)
 
 # length-pinned, NA-allowed, range-constrained, nullable
-(vector<numeric in [-1, 1] | NA, 3>?)
+(vector<numeric in [-1, 1] | NA, 3> | NULL)
 
 # set from a bare constant, as a vector
 (character in CURRENCIES)
 
 # reference / wildcard, nullable / unioned
-(function?)                       # a function, or NULL
+(function | NULL)                 # a function, or NULL
 (class<Engine> | NULL)               # an Engine, or NULL
 (class<Reader> | class<Writer>)         # either class
 (any)                             # truly polymorphic argument, unchecked
@@ -846,14 +867,59 @@ ticker = function(symbol) {
 }
 ```
 
-## 14. Self-consistency checklist
+## 14. Optional record keys
+
+A `?` immediately after a field **name** in a bullet marks the key **optional**
+— it may be absent from the record entirely. When the key **is** present, its
+value must satisfy the type. Position is the whole meaning: a `?` hugging the
+name concerns the **key**; a `?` inside the type parens concerns the **value**.
+
+```r
+#' @param cfg (list) run configuration:
+#' - a (scalar<character>)          # required, must be character
+#' - b (scalar<character> | NULL)   # required, may be NULL
+#' - c? (scalar<character>)         # may be ABSENT; if present, must be character
+#' - d? (scalar<character> | NULL)  # may be absent; if present, may be NULL
+```
+
+| bullet | key may be absent | value may be `NULL` |
+|---|:---:|:---:|
+| `- a (scalar<character>)` | ❌ | ❌ |
+| `- b (scalar<character> \| NULL)` | ❌ | ✅ |
+| `- c? (scalar<character>)` | ✅ | ❌ |
+| `- d? (scalar<character> \| NULL)` | ✅ | ✅ |
+
+This is the TypeScript distinction: `- c? (scalar<character>)` is `c?: string`
+(an optional **property**), while `| NULL` inside the parens is `| null` (a
+nullable **value**) — and the two compose freely, exactly like
+`d?: string | null`.
+
+The names-vs-`NULL` distinction matters because of how R reads a missing key:
+`x[["c"]]` is `NULL` **both** when `c` is absent and when it is present with a
+`NULL` value, so presence is a property of the **names**, not the value. The
+generated guard is therefore `if ("c" %in% names(x)) { ... }` — never
+`!is.null(x[["c"]])` — and `names()` covers list names and `data.frame` /
+`data.table` columns alike (S8). This is also what makes the tri-state
+observable: an absent optional key skips the check, a present-`NULL` key with
+`| NULL` passes, and a present `NA` on a non-`| NA` type **fails** — absent ≠
+present-`NA`.
+
+**Deprecation.** The type-side `?` null marker (`- b (scalar<character>?)`)
+still works and still means "the value may be `NULL`", but it is deprecated in
+favour of `| NULL`: at `document()` time the roclet emits **one warning per
+annotated tag** that uses it, naming the tag. `| NULL` and the name-side `?`
+produce no warning. (A doubled `name??` is a parse error, not a "more optional"
+key.)
+
+## 15. Self-consistency checklist
 
 - [ ] Every base type sits in exactly one category (§2); every modifier it carries is a ✅ in that category's row — no per-type exceptions.
 - [ ] `in [interval]` appears only on `integer`/`numeric`/`Date`/`POSIXct`; integer bounds are literal whole numbers / `±Inf` (no expression); a `numeric` bound is a number or any expression; a `Date`/`POSIXct` bound must be a class-matching expression, so a bare-number bound (`Date in [0, 1]`) is rejected as a type error (S2); `-Inf` only as the low bound, `Inf` only as the high.
 - [ ] `in c(set)` appears only on ordered + enumerable atomics; never on `complex`/`logical`/`raw`/`any`; exact on `integer`/whole-day `Date`, discouraged on `numeric`/`POSIXct` (`==`); on `factor`/`character` it constrains realised values, not levels, NA-aware under `| NA` (footnote 2).
 - [ ] interval/set bound types match the atom, and intervals are non-empty (S2, S4).
 - [ ] `| NA` appears only after an atom (bare or inside `<>`), never on `raw`, `any`, reference, or composite; binds to the nearest atom on its left; never after a closed `scalar<>`/`vector<>`.
-- [ ] `?` and `| NULL` mean the same thing and never appear together.
+- [ ] `?` and `| NULL` mean the same thing at the slot level and never appear together; the type-side `?` is DEPRECATED in favour of `| NULL` (the roclet warns once per annotated tag at document() time, §14).
+- [ ] a record field bullet's NAME may carry one trailing `?` — an **optional key** (S8, §14): only required keys enter the `assert_has_names`/`assert_has_columns` presence assertion; an optional key's checks run under `if ("name" %in% names(x))`; `- ? (type)` (no name) and `name??` (doubled) are parse errors.
 - [ ] `|` is followed only by `NA` (element), `NULL` (slot), or a type (union); a union member carries its own `| NA`.
 - [ ] `any` carries no `in`/set/`| NA` and emits no type check; only length (`scalar<any>`/`vector<any, n>`) and nullability apply.
 - [ ] intervals use square brackets only (`[`/`]` low, `]`/`[` high — closed/open, any combination); never `( )`/`{ }`; one top-level comma; brackets/commas inside an `rexpr` bound are invisible to the tokenizer.
