@@ -553,7 +553,10 @@ roxy_tag_parse.roxy_tag_exportassert <- function(x) {
   code <- character()
   nms <- character()
   for (tag in type_tags) {
-    name <- .ra_type_def(tag)$name
+    # .ra_type_registry() already parsed this tag once (validating it and
+    # emitting any deprecation warning); re-parsing here is only to recover the
+    # name, so muffle warnings to keep it one warning per tag.
+    name <- suppressWarnings(.ra_type_def(tag))$name
     helper <- .ra_build_type_helper(name, registry[[name]])
     code <- c(if (length(code) > 0L) c(code, "") else code, helper)
     nms <- c(nms, paste0("assert_type_", name))
@@ -610,10 +613,51 @@ roxy_tag_parse.roxy_tag_exportassert <- function(x) {
 }
 
 # Parse one annotation, re-raising any error with the documentation location.
+# After a successful parse, emit ONE deprecation warning per tag if any slot in
+# the annotation used the type-side '?' null marker (rather than '| NULL') —
+# the marker's position is now load-bearing (a '?' after a record field NAME
+# means the key may be absent), so the value-level spelling is canonicalised.
+# parse_annotation() itself stays warning-free: direct callers and tests parse
+# without document()-time policy.
 .ra_parse_or_stop <- function(text, where) {
-  return(tryCatch(parse_annotation(text), error = function(e) {
+  ast <- tryCatch(parse_annotation(text), error = function(e) {
     stop("roxyassert: in ", where, ": ", conditionMessage(e), call. = FALSE)
-  }))
+  })
+  if (!is.null(ast) && .ra_slot_uses_question(ast)) {
+    warning(
+      "roxyassert: the type-side '?' null marker is deprecated; write '| NULL' instead (in ",
+      where,
+      "). A '?' after a record field NAME now means 'the key may be absent'.",
+      call. = FALSE
+    )
+  }
+  return(ast)
+}
+
+# Does any slot in this annotation AST carry the deprecated type-side '?' null
+# marker? Checks the top slot, then recurses into every composite's field slots
+# (a record's columns, to any depth) and, defensively, a list<T>'s element (a
+# type node, which never carries a marker — but a nested composite's fields
+# would).
+.ra_slot_uses_question <- function(ast) {
+  if (identical(ast$null_marker, "question")) {
+    return(TRUE)
+  }
+  return(any(vapply(ast$alternatives, .ra_node_uses_question, logical(1))))
+}
+
+.ra_node_uses_question <- function(node) {
+  if (!is.null(node$element) && .ra_node_uses_question(node$element)) {
+    return(TRUE)
+  }
+  if (!is.null(node$fields)) {
+    for (f in node$fields) {
+      if (.ra_slot_uses_question(f$ast)) {
+        return(TRUE)
+      }
+    }
+  }
+  return(FALSE)
 }
 
 # The documented object's name (a top-level function), or NULL to skip.
