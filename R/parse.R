@@ -372,8 +372,12 @@ parse_annotation <- function(text) {
     .ra_err(
       p,
       paste0(
-        "field name '", nm, "?': the name-side '?' (key may be absent) is written ",
-        "once; a value-level '?' belongs inside the parens: '- ", base, "? (slot?)'"
+        "field name '",
+        nm,
+        "?': the name-side '?' (key may be absent) is written ",
+        "once; a value-level '?' belongs inside the parens: '- ",
+        base,
+        "? (slot?)'"
       )
     )
   }
