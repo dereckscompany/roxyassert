@@ -5,7 +5,7 @@ test_that("the roclet generates arg + return helpers for a typed function", {
     #' Submit.
     #' @param symbol (scalar<character>) the pair.
     #' @param n (scalar<integer in [1, Inf[>) the count.
-    #' @param opt (scalar<numeric>?) optional value.
+    #' @param opt (scalar<numeric> | NULL) optional value.
     #' @return (data.table) the result.
     #' @export
     submit <- function(symbol, n, opt = NULL) NULL
@@ -73,7 +73,7 @@ test_that("R6 methods generate <Class>__<method> helpers", {
       public = list(
         #' @description Get records.
         #' @param keys (character) keys to fetch.
-        #' @param limit (scalar<integer in [1, Inf[>?) optional max rows.
+        #' @param limit (scalar<integer in [1, Inf[> | NULL) optional max rows.
         #' @return (data.table) the records.
         get = function(keys, limit = NULL) NULL,
         #' @description Count records.
@@ -124,7 +124,7 @@ test_that("R6 method contracts generate through the real on-disk document() path
       "  public = list(",
       "    #' @description Get records by key.",
       "    #' @param keys (character) keys to fetch.",
-      "    #' @param limit (scalar<integer in [1, Inf[>?) optional max rows.",
+      "    #' @param limit (scalar<integer in [1, Inf[> | NULL) optional max rows.",
       "    #' @return (data.table) the records.",
       "    get = function(keys, limit = NULL) NULL,",
       "    #' @description Count records.",
@@ -178,7 +178,7 @@ test_that("roclet_output repairs markdown-mangled type fragments in man/*.Rd", {
       "#' Demo",
       "#' @param a (scalar<POSIXct>) bare atomic.",
       "#' @param b (list<class<Engine>>) nested generic.",
-      "#' @param c (scalar<character>?) nullable; incidental foo<bar> and subclass<Widget> in prose.",
+      "#' @param c (scalar<character> | NULL) nullable; incidental foo<bar> and subclass<Widget> in prose.",
       "#' @param d (class<A> | class<B>) union.",
       "#' @param e (scalar<numeric in ]0, Inf[>) interval (never mangled).",
       "#' @param f (list<integer>) bare list (exercises the list branch directly).",
@@ -208,7 +208,7 @@ test_that("roclet_output repairs markdown-mangled type fragments in man/*.Rd", {
   # types render as plain <...>, with no surviving \out wrapper around them
   expect_match(demo, "(scalar<POSIXct>)", fixed = TRUE)
   expect_match(demo, "(list<class<Engine>>)", fixed = TRUE) # nested
-  expect_match(demo, "(scalar<character>?)", fixed = TRUE) # nullable
+  expect_match(demo, "(scalar<character> | NULL)", fixed = TRUE) # nullable
   expect_match(demo, "(class<A> | class<B>)", fixed = TRUE) # union, both legs
   expect_match(demo, "(promise<data.table>)", fixed = TRUE) # @return
   expect_match(demo, "(scalar<numeric in ]0, Inf[>)", fixed = TRUE) # untouched
@@ -363,7 +363,7 @@ test_that("@noassert works on an R6 method param", {
       public = list(
         #' @description Get.
         #' @param keys (character) keys.
-        #' @param limit (scalar<count in [1, Inf[>?) max rows.
+        #' @param limit (scalar<count in [1, Inf[> | NULL) max rows.
         #' @noassert keys
         get = function(keys, limit = NULL) NULL
       )
@@ -373,4 +373,45 @@ test_that("@noassert works on an R6 method param", {
   expect_true(any(grepl("^assert_args_Store__get <- function\\(limit\\)", code)))
   expect_true(any(grepl("assert_scalar_count\\(limit\\)", code)))
   expect_false(any(grepl("assert_character\\(keys\\)", code))) # keys skipped
+})
+
+# ---- deprecation: the type-side '?' null marker ------------------------------
+
+test_that("the type-side '?' null marker warns once per tag, naming the location", {
+  text <- "
+    #' Report.
+    #' @param opt (scalar<numeric>?) optional value.
+    #' @return (list) result:
+    #' - a (scalar<character>?) maybe.
+    #' - b (scalar<character>?) maybe.
+    #' @export
+    report <- function(opt = NULL) NULL
+  "
+  warns <- character()
+  withCallingHandlers(
+    roxygen2::roc_proc_text(contract_roclet(), text),
+    warning = function(w) {
+      warns <<- c(warns, conditionMessage(w))
+      invokeRestart("muffleWarning")
+    }
+  )
+  dep <- warns[grepl("deprecated", warns, fixed = TRUE)]
+  # one for the @param, one for the @return — NOT one per '?' field
+  expect_length(dep, 2L)
+  expect_true(any(grepl("@param 'opt'", dep, fixed = TRUE)))
+  expect_true(any(grepl("@return", dep, fixed = TRUE)))
+  expect_true(any(grepl("key may be absent", dep, fixed = TRUE)))
+})
+
+test_that("'| NULL' and the name-side '?' produce no deprecation warning", {
+  text <- "
+    #' F.
+    #' @param a (scalar<numeric> | NULL) maybe.
+    #' @param cfg (list) config:
+    #' - c? (scalar<character>) may be absent.
+    #' - d? (scalar<character> | NULL) may be absent, or NULL.
+    #' @export
+    f <- function(a = NULL, cfg = list()) NULL
+  "
+  expect_no_warning(roxygen2::roc_proc_text(contract_roclet(), text))
 })

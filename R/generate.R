@@ -188,15 +188,34 @@ generate_checks <- function(ast, expr) {
   return(checks)
 }
 
-# Named-record / typed-column fields (S3): assert the names/columns are present,
-# then check each field's own annotation against `expr[["field"]]` (recursively).
+# Named-record / typed-column fields (S3): assert the REQUIRED names/columns are
+# present, then check each field's own annotation against `expr[["field"]]`
+# (recursively). An optional field (a name-side `?`, vignette §14) skips the
+# presence assertion and is instead wrapped in a `%in% names()` presence guard
+# — `names()` covers list names and table columns alike. The guard must test
+# names(), never `!is.null(expr[["f"]])`: an absent key and a present-NULL key
+# both READ as NULL in R, and the grammar's tri-state (absent / present-NULL /
+# present-value) depends on telling them apart. A field whose annotation emits
+# no checks (`any`) gets no empty guard, mirroring generate_checks().
 .rg_fields <- function(node, expr) {
-  names <- vapply(node$fields, function(f) f$name, character(1))
-  set <- paste0("c(", paste(sprintf('"%s"', names), collapse = ", "), ")")
-  has <- if (node$base == "list") "assert_has_names" else "assert_has_columns"
-  checks <- sprintf("%s(%s, %s)", has, expr, set)
+  required <- Filter(function(f) !isTRUE(f$optional), node$fields)
+  checks <- character()
+  if (length(required) > 0L) {
+    names <- vapply(required, function(f) f$name, character(1))
+    set <- paste0("c(", paste(sprintf('"%s"', names), collapse = ", "), ")")
+    has <- if (node$base == "list") "assert_has_names" else "assert_has_columns"
+    checks <- sprintf("%s(%s, %s)", has, expr, set)
+  }
   for (f in node$fields) {
-    checks <- c(checks, generate_checks(f$ast, sprintf('%s[["%s"]]', expr, f$name)))
+    field_checks <- generate_checks(f$ast, sprintf('%s[["%s"]]', expr, f$name))
+    if (isTRUE(f$optional) && length(field_checks) > 0L) {
+      field_checks <- c(
+        sprintf('if ("%s" %%in%% names(%s)) {', f$name, expr),
+        paste0("  ", field_checks),
+        "}"
+      )
+    }
+    checks <- c(checks, field_checks)
   }
   return(checks)
 }

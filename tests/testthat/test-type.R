@@ -16,7 +16,7 @@ test_that("a @type expands inline wherever it is referenced", {
     #' Submit.
     #' @param ack (OrderAck) the ack.
     #' @param slippage (Bps) allowed slippage.
-    #' @param maybe (OrderAck?) optional ack.
+    #' @param maybe (OrderAck | NULL) optional ack.
     #' @return (promise<OrderAck>) async ack.
     #' @export
     submit <- function(ack, slippage, maybe) NULL
@@ -67,7 +67,7 @@ test_that("@type errors: unknown, duplicate, shadow, non-single-type, cycle", {
   expect_match(err(paste0("#' @type A (numeric)\nNULL\n#' @type A (character)\nNULL\n", use_a)), "duplicate @type")
   expect_match(err("#' @type numeric (character)\nNULL\n#' F.\n#' @export\nf <- function() NULL"), "shadow")
   expect_match(err(paste0("#' @type A (numeric | character)\nNULL\n", use_a)), "single type")
-  expect_match(err(paste0("#' @type A (numeric?)\nNULL\n", use_a)), "single type")
+  expect_match(err(paste0("#' @type A (numeric | NULL)\nNULL\n", use_a)), "single type")
   expect_match(err(paste0("#' @type A (B)\nNULL\n#' @type B (A)\nNULL\n", use_a)), "cyclic")
 })
 

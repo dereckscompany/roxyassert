@@ -159,3 +159,75 @@ test_that("list<numeric> lowers to assert_list_of with the strict \"double\" typ
   expect_equal(gen("list<character>"), c("assert_list(x)", 'assert_list_of(x, "character")'))
   expect_equal(gen("list<integer>"), c("assert_list(x)", 'assert_list_of(x, "integer")'))
 })
+
+# ---- optional record keys ----------------------------------------------------
+
+# Evaluate the generated checks for an annotation against a concrete value. The
+# generated lines call assert::* by bare name (they are meant to run inside a
+# package that imports assert), so the function is closed over assert's
+# namespace.
+run_checks <- function(annotation, value) {
+  skip_if_not_installed("assert")
+  lines <- generate_checks(parse_annotation(annotation), "x")
+  fn <- eval(
+    parse(text = paste(c("function(x) {", lines, "}"), collapse = "\n"), keep.source = FALSE),
+    envir = new.env(parent = asNamespace("assert"))
+  )
+  fn(value)
+  return(invisible(value))
+}
+
+test_that("optional fields skip the presence assertion; required fields keep it", {
+  g <- genf("(list)\n- a (scalar<character>) x.\n- c? (scalar<character>) y.")
+  expect_equal(
+    g,
+    c(
+      "assert_list(x)",
+      'assert_has_names(x, c("a"))',
+      'assert_scalar_character(x[["a"]])',
+      'if ("c" %in% names(x)) {',
+      '  assert_scalar_character(x[["c"]])',
+      "}"
+    )
+  )
+  # tables use assert_has_columns for the required columns only
+  g2 <- genf("(data.table)\n- id (character) i.\n- note? (character) n.")
+  expect_true(any(grepl('assert_has_columns\\(x, c\\("id"\\)\\)', g2)))
+  expect_true(any(grepl('if \\("note" %in% names\\(x\\)\\) \\{', g2)))
+})
+
+test_that("an all-optional record emits no has_names/has_columns call", {
+  g <- genf("(list)\n- c? (scalar<character>) y.\n- d? (scalar<numeric>) z.")
+  expect_false(any(grepl("assert_has_names|assert_has_columns", g)))
+  expect_true(any(grepl('if \\("c" %in% names\\(x\\)\\) \\{', g)))
+  expect_true(any(grepl('if \\("d" %in% names\\(x\\)\\) \\{', g)))
+})
+
+test_that("an optional + nullable field nests the !is.null guard inside the presence guard", {
+  g <- genf("(list)\n- d? (scalar<character> | NULL) y.")
+  expect_equal(
+    g,
+    c(
+      "assert_list(x)",
+      'if ("d" %in% names(x)) {',
+      '  if (!is.null(x[["d"]])) {',
+      '    assert_scalar_character(x[["d"]])',
+      "  }",
+      "}"
+    )
+  )
+})
+
+test_that("optional record keys behave at runtime (the tri-state)", {
+  ann <- "(list)\n- a (scalar<character>) required.\n- c? (scalar<character>) optional."
+  # (a) an absent optional key passes
+  expect_silent(run_checks(ann, list(a = "x")))
+  # (b) a present optional key with the wrong type fails
+  expect_error(run_checks(ann, list(a = "x", c = 1)))
+  # (f) the tri-state: present-NA on a non-`| NA` type FAILS (absent != present-NA)
+  expect_error(run_checks(ann, list(a = "x", c = NA_character_)))
+  # (d) a required key is still enforced by assert_has_names
+  expect_error(run_checks(ann, list(c = "x")))
+  # (c) optional + `| NULL`: a present-NULL key passes
+  expect_silent(run_checks("(list)\n- d? (scalar<character> | NULL) y.", list(d = NULL)))
+})

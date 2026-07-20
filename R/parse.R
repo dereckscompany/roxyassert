@@ -321,11 +321,11 @@ parse_annotation <- function(text) {
   return(list(nodes = nodes, pos = i))
 }
 
-# One bullet -> list(name=, ast=): its `name (slot)` head, plus its own children
-# attached as fields when the slot is a bare composite.
+# One bullet -> list(name=, optional=, ast=): its `name (slot)` head, plus its
+# own children attached as fields when the slot is a bare composite.
 .ra_finalize_bullet <- function(node) {
   bp <- .ra_cursor(node$content)
-  name <- .ra_read_bullet_name(bp)
+  head <- .ra_read_bullet_name(bp)
   .ra_expect(bp, "(")
   inner <- .ra_scan(bp, stops = ")")
   if (.ra_ch(bp) != ")") {
@@ -349,17 +349,39 @@ parse_annotation <- function(text) {
   if (length(node$children) > 0L) {
     ast <- .ra_attach_fields(ast, lapply(node$children, .ra_finalize_bullet))
   }
-  return(list(name = name, ast = ast))
+  return(list(name = head$name, optional = head$optional, ast = ast))
 }
 
 # The field name: the single token before the slot's `(`, with optional **bold**.
+# A `?` hugging the NAME (after any bold is stripped) marks the key OPTIONAL:
+# it may be absent from the record, and is checked only when present. Position
+# is the whole meaning — `name?` = the key may be missing, while a `?` inside
+# the `(slot)` = the value may be NULL. Returns list(name=, optional=).
 .ra_read_bullet_name <- function(p) {
   nm <- trimws(.ra_scan(p, stops = "("))
   nm <- trimws(gsub("^\\*\\*|\\*\\*$", "", nm))
+  optional <- endsWith(nm, "?")
+  if (optional) {
+    nm <- trimws(substr(nm, 1L, nchar(nm) - 1L))
+  }
   if (nm == "") {
     .ra_err(p, "field bullet needs a name before its '(type)'")
   }
-  return(nm)
+  if (endsWith(nm, "?")) {
+    base <- substr(nm, 1L, nchar(nm) - 1L)
+    .ra_err(
+      p,
+      paste0(
+        "field name '",
+        nm,
+        "?': the name-side '?' (key may be absent) is written ",
+        "once; a value-level '?' belongs inside the parens: '- ",
+        base,
+        "? (slot?)'"
+      )
+    )
+  }
+  return(list(name = nm, optional = optional))
 }
 
 # S1: attach field bullets to a slot, which must be a single bare composite.
@@ -393,12 +415,17 @@ parse_annotation <- function(text) {
 .ra_parse_slot <- function(p) {
   alts <- list(.ra_parse_type(p))
   null_ok <- FALSE
+  # Which surface syntax carried the nullability: "question" for the deprecated
+  # type-side '?', "union" for the canonical '| NULL'. Generation reads only
+  # null_ok; the roclet reads null_marker to deprecation-warn on the '?' form.
+  null_marker <- NULL
   repeat {
     .ra_ws(p)
     ch <- .ra_ch(p)
     if (ch == "?") {
       p$pos <- p$pos + 1L
       null_ok <- TRUE
+      null_marker <- "question"
       .ra_ws(p)
       if (!.ra_eof(p)) {
         .ra_err(p, "nothing may follow '?'")
@@ -411,6 +438,7 @@ parse_annotation <- function(text) {
       if (w == "NULL") {
         .ra_read_word(p)
         null_ok <- TRUE
+        null_marker <- "union"
         .ra_ws(p)
         if (!.ra_eof(p)) {
           .ra_err(p, "nothing may follow '| NULL'")
@@ -426,7 +454,7 @@ parse_annotation <- function(text) {
       break
     }
   }
-  return(list(kind = "slot", alternatives = alts, null_ok = null_ok))
+  return(list(kind = "slot", alternatives = alts, null_ok = null_ok, null_marker = null_marker))
 }
 
 # A promise<T> denotes the resolved type T; a union mixing promise<X> with a bare
